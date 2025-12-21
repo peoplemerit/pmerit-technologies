@@ -31,6 +31,7 @@ What You'll Have:
 
 In your project root, create the folders:
 
+**Mac/Linux (Bash):**
 ```bash
 # Create .claude directories
 mkdir -p .claude/scopes
@@ -38,6 +39,23 @@ mkdir -p .claude/scopes
 # Create docs directories
 mkdir -p docs/aados
 mkdir -p docs/handoffs
+```
+
+**Windows (PowerShell):**
+```powershell
+# Create .claude directories
+New-Item -ItemType Directory -Force -Path ".claude\scopes"
+
+# Create docs directories
+New-Item -ItemType Directory -Force -Path "docs\aados"
+New-Item -ItemType Directory -Force -Path "docs\handoffs"
+```
+
+**Windows (Command Prompt):**
+```cmd
+mkdir .claude\scopes
+mkdir docs\aados
+mkdir docs\handoffs
 ```
 
 ---
