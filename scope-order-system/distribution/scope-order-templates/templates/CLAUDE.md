@@ -1,6 +1,6 @@
 # [PROJECT NAME] — Claude Code Instructions
 
-**Version:** 1.0
+**Version:** 3.0
 **Updated:** [DATE]
 
 ---
@@ -36,7 +36,15 @@ Before using this file, replace all `[BRACKETED]` placeholders:
 
 ---
 
-## SCOPE ORDER v2: REALITY-FIRST WORKFLOW
+## SCOPE ORDER v3: LIVING DOCUMENTS
+
+### Core Principles (v3 Changes)
+
+1. **Living Documents** — Scopes and handoffs are continuously updated, not append-only
+2. **Decision Log** — All decisions tracked permanently (ACTIVE/NO-GO/EXPERIMENTAL)
+3. **Lifecycle Archive** — Obsolete content archived based on project phase
+4. **One Scope Per Feature** — Single source of truth, no duplicate specs
+5. **Linked Handoffs** — Each scope has ONE linked handoff (HANDOFF_[NAME].md ↔ SCOPE_[NAME].md)
 
 ### Workflow Steps
 
@@ -52,8 +60,6 @@ Before using this file, replace all `[BRACKETED]` placeholders:
 8. REPEAT until complete
 ```
 
-**Note:** Step 1 is optional when Claude Code is available. Use it as fallback for manual Claude Web workflow.
-
 ### Scope Commands
 
 | Command | Action |
@@ -67,10 +73,75 @@ Before using this file, replace all `[BRACKETED]` placeholders:
 
 ```
 .claude/scopes/
-├── MASTER_SCOPE.md      ← Project vision
-├── SCOPE_[FEATURE].md   ← Per-feature specifications
+├── MASTER_SCOPE.md      ← Project vision (sum of all scopes)
+├── SCOPE_[FEATURE].md   ← Living scope documents
+└── ...
+
+docs/handoffs/
+├── HANDOFF_[FEATURE].md ← Linked to SCOPE_[FEATURE].md
+└── ...
+
+docs/archive/
+├── SCOPE_[NAME]/        ← Archived obsolete content
 └── ...
 ```
+
+---
+
+## DECISION STATUS VALUES
+
+All architectural decisions in scopes use these statuses:
+
+| Status | Meaning | Action |
+|--------|---------|--------|
+| `ACTIVE` | Currently in use | Keep in document, implement |
+| `NO-GO` | Bad idea, won't revisit | Keep for reference, NEVER implement |
+| `EXPERIMENTAL` | Testing, may change | Archive if replaced |
+
+**Rules:**
+- ACTIVE decisions are implemented
+- NO-GO decisions are kept as warnings — avoid re-discussing
+- EXPERIMENTAL decisions may be promoted to ACTIVE or demoted to NO-GO
+
+---
+
+## SCOPE LIFECYCLE & ARCHIVE BEHAVIOR
+
+### Scope Status Levels
+
+| Status | Meaning | Archive Behavior |
+|--------|---------|------------------|
+| `PLANNING` | Ideas, early design | Archive everything (ideas volatile) |
+| `IN_PROGRESS` | Active development | Archive only pivots/reversals |
+| `STABILIZING` | Feature-complete, testing | Suggest archive cleanup |
+| `COMPLETE` | Production-ready, locked | Auto-suggest delete archives |
+
+### Archive Cleanup Trigger
+
+When a scope reaches COMPLETE status, Claude Code prompts:
+
+```
+🧹 SCOPE [NAME] is COMPLETE.
+
+Archive files found:
+- [filename] (X days old)
+
+Suggest: Delete archive files? Feature is stable.
+[YES] [KEEP 30 MORE DAYS] [KEEP FOREVER]
+```
+
+### Living Document Updates
+
+**What Gets Updated (not appended):**
+- AUDIT_REPORT — Replaced each audit
+- HANDOFF_DOCUMENT — Updated with new requirements
+- RESEARCH_FINDINGS — Latest session info (old sessions archived)
+- CURRENT STATE — Task checkboxes updated
+
+**What Is NEVER Deleted:**
+- DECISION LOG — Permanent record of all decisions
+- SCOPE IDENTITY — Feature definition
+- DEPENDENCIES — Relationship map
 
 ---
 
@@ -115,6 +186,29 @@ Expected: `"Your branch is up to date with 'origin/main'."`
 
 ---
 
+## FILE LOCK PROTOCOL
+
+### Pre-Modification Check (MANDATORY)
+
+Before editing ANY file in a COMPLETE scope:
+
+1. **Check if file is in LOCKED FILES section** of the scope
+2. **If locked → STOP and ask:** `"This file is locked by SCOPE_[NAME]. Unlock required."`
+3. **If user grants UNLOCK → proceed with caution**
+4. **After changes → verify original functionality still works**
+5. **Re-lock file after changes verified**
+
+### Lock Commands
+
+| Command | Action |
+|---------|--------|
+| `UNLOCK: [filename]` | Temporary unlock for single file |
+| `UNLOCK SCOPE: [name]` | Unlock all files in scope |
+| `RELOCK: [filename]` | Re-lock after changes verified |
+| `LOCK SCOPE: [name]` | Lock all files in scope |
+
+---
+
 ## COMMANDS
 
 | Command | Action |
@@ -122,6 +216,9 @@ Expected: `"Your branch is up to date with 'origin/main'."`
 | `[PROJECT] CONTINUE` | Full protocol: governance + scopes + resume |
 | `[PROJECT] STATUS` | Quick health check + state (no work) |
 | `SCOPE: [name]` | Load specific scope context |
+| `SCOPE: MASTER` | Load full project vision |
+| `UNLOCK: [file]` | Unlock file for modification |
+| `RELOCK: [file]` | Re-lock file after changes |
 | `ENV: FE` | Switch to Frontend |
 | `ENV: BE` | Switch to Backend |
 | `DONE` | User confirms step complete |
@@ -136,6 +233,9 @@ Expected: `"Your branch is up to date with 'origin/main'."`
 - ❌ Proceed without sync verification
 - ❌ Make changes without verifying against existing code first
 - ❌ Forget to update scope's RESEARCH_FINDINGS after implementation
+- ❌ **Modify LOCKED FILES without explicit UNLOCK command**
+- ❌ Delete DECISION LOG entries (even NO-GO decisions)
+- ❌ Append to AUDIT_REPORT (replace it instead)
 
 ---
 
@@ -148,7 +248,8 @@ As the Implementer, I must:
 3. **Ask** for approval before proceeding with recommendations
 4. **Implement** the approved solution
 5. **Update** the scope's RESEARCH_FINDINGS with what I did
-6. **Report** output for you to share with Claude Web
+6. **Archive** obsolete content when scope phase changes
+7. **Report** output for you to share with Claude Web
 
 ---
 
@@ -156,8 +257,10 @@ As the Implementer, I must:
 
 1. **One command at a time** — wait for "DONE"
 2. **Escalate after 3 failed attempts**
-3. **Document decisions** in project docs
-4. **Update scope files** — After implementation, update RESEARCH_FINDINGS
+3. **Document decisions** in scope's DECISION LOG
+4. **Update scope files** — Living documents, not append-only
+5. **Archive obsolete content** — Based on lifecycle phase
+6. **Respect file locks** — Never modify locked files without UNLOCK
 
 ---
 
@@ -176,4 +279,4 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ---
 
-*Scope Order System v2 — Reality-First Workflow*
+*Scope Order System v3.0 — Living Documents + Lifecycle Archive*
