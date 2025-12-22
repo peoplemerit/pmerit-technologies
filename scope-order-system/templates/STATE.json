@@ -1,8 +1,8 @@
 {
   "_CUSTOMIZE": "Replace all [BRACKETED] values with your project details",
 
-  "schema_version": "2.0",
-  "schema_notes": "Scope Order System v2 - Reality-First Workflow",
+  "schema_version": "3.0",
+  "schema_notes": "Scope Order System v3 - Living Documents + Lifecycle Archive",
 
   "last_updated": "[YYYY-MM-DD]T00:00:00Z",
   "last_updated_by": "claude-code",
@@ -18,10 +18,29 @@
   "requirement_description": "Complete initial Scope Order System setup",
 
   "scope_order": {
-    "version": "2.0",
+    "version": "3.0",
     "location": ".claude/scopes/",
+    "handoffs_location": "docs/handoffs/",
+    "archive_location": "docs/archive/",
     "active_scope": null,
-    "scopes": {}
+    "scopes": {
+      "_example": {
+        "name": "SCOPE_EXAMPLE",
+        "file": ".claude/scopes/SCOPE_EXAMPLE.md",
+        "linked_handoff": "docs/handoffs/HANDOFF_EXAMPLE.md",
+        "status": "PLANNING",
+        "progress": "0/5",
+        "locked_files": [],
+        "last_updated": "[YYYY-MM-DD]"
+      }
+    }
+  },
+
+  "archive": {
+    "enabled": true,
+    "auto_cleanup_prompt": true,
+    "cleanup_after_days": 30,
+    "archived_items": []
   },
 
   "environments": {
@@ -37,6 +56,12 @@
     }
   },
 
+  "decision_log_stats": {
+    "active_decisions": 0,
+    "no_go_decisions": 0,
+    "experimental_decisions": 0
+  },
+
   "blockers": [],
 
   "recent_changes": [
@@ -44,7 +69,7 @@
       "session": 1,
       "date": "[YYYY-MM-DD]",
       "change": "Initial setup",
-      "impact": "Created Scope Order structure"
+      "impact": "Created Scope Order v3 structure"
     }
   ],
 

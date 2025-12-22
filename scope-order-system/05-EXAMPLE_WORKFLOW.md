@@ -1,6 +1,6 @@
-# Scope Order System — Example Workflow
+# Scope Order System — Example Workflow (v3)
 
-**Purpose:** A complete, real-world example of the Scope Order workflow in action.
+**Purpose:** A complete, real-world example of the Scope Order v3 workflow in action, demonstrating living documents, decision logging, and file locking.
 
 ---
 
@@ -10,27 +10,9 @@ You're building **TaskTracker**, a simple task management app. You want to add u
 
 ---
 
-## Step 1: Create Empty Scope File
+## Step 1: Audit Reality (Direct Approach)
 
-**Director Action:** Create the file `.claude/scopes/SCOPE_AUTH.md` with minimal content:
-
-```markdown
-# SCOPE: AUTH
-
-## Status
-- Created: 2025-01-15
-- State: EMPTY
-```
-
-**Commit it:**
-```bash
-git add .claude/scopes/SCOPE_AUTH.md
-git commit -m "feat: Create SCOPE_AUTH for authentication feature"
-```
-
----
-
-## Step 2: Audit Reality
+**v3 Change:** No need to create empty file first — just run the audit directly.
 
 **Director → Claude Code:**
 ```
@@ -39,21 +21,48 @@ AUDIT SCOPE: AUTH
 
 **Claude Code Response:**
 
-After examining the codebase, Claude Code populates the AUDIT_REPORT section:
+Claude Code creates both the scope file and linked handoff, then populates the AUDIT_REPORT:
 
 ```markdown
 # SCOPE: AUTH
 
-## Status
-- Created: 2025-01-15
-- State: AUDITED
-- Audited: 2025-01-15
+**Created:** 2025-01-15
+**Last Updated:** 2025-01-15
+**Status:** PLANNING
+**Progress:** 0/5 tasks
+**Linked Handoff:** HANDOFF_AUTH.md
+
+---
+
+## DECISION LOG (Permanent)
+
+| Decision | Date | Rationale | Status |
+|----------|------|-----------|--------|
+| — | — | — | — |
+
+---
+
+## CURRENT STATE
+
+### Planned Tasks
+- [ ] Create database schema
+- [ ] Implement backend endpoints
+- [ ] Create frontend auth context
+- [ ] Build login/signup pages
+- [ ] Add protected routes
+
+### Identified Gaps
+| Gap | Severity | Status |
+|-----|----------|--------|
+| No users table | HIGH | OPEN |
+| No JWT library | MEDIUM | OPEN |
+| No auth pages | HIGH | OPEN |
 
 ---
 
 ## AUDIT_REPORT
 
-### Current Reality (2025-01-15)
+### Last Audit: 2025-01-15
 
 **Existing Auth-Related Code:**
 - None found — this is a new feature
@@ -80,21 +89,11 @@ After examining the codebase, Claude Code populates the AUDIT_REPORT section:
 1. Need to add `jsonwebtoken` package
 2. Need to create users table in database
 3. Need auth context for React frontend
-
----
-
-## HANDOFF_DOCUMENT
-[To be filled by Claude Web]
-
----
-
-## RESEARCH_FINDINGS
-[To be filled by Claude Code after implementation]
 ```
 
 ---
 
-## Step 3: Share with Claude Web
+## Step 2: Share with Claude Web
 
 **Director Action:** Copy the AUDIT_REPORT section and share it with Claude Web.
 
@@ -108,14 +107,13 @@ Let's brainstorm the auth system. I'm thinking:
 - Email/password signup and login
 - JWT tokens for API auth
 - React context for frontend state
-- Sessions stored in database
 
 What do you think?
 ```
 
 ---
 
-## Step 4: Brainstorm with Claude Web
+## Step 3: Brainstorm with Claude Web
 
 **Claude Web Response:**
 
@@ -135,13 +133,6 @@ CREATE TABLE users (
   password_hash VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT NOW()
 );
-
-CREATE TABLE sessions (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER REFERENCES users(id),
-  token VARCHAR(255) NOT NULL,
-  expires_at TIMESTAMP NOT NULL
-);
 ```
 
 **API Endpoints:**
@@ -150,11 +141,7 @@ CREATE TABLE sessions (
 - POST /api/auth/logout
 - GET /api/auth/me
 
-**Frontend Components:**
-- LoginPage
-- SignupPage
-- AuthContext + useAuth hook
-- ProtectedRoute wrapper
+**Decision:** I recommend JWT over sessions for scalability.
 
 Should I write the full specification?"
 
@@ -162,24 +149,27 @@ Should I write the full specification?"
 
 ---
 
-## Step 5: Claude Web Writes Specification
+## Step 4: Claude Web Writes Specification
 
-**Claude Web** updates the scope file with detailed specs:
+**v3 Change:** Claude Web updates the HANDOFF_DOCUMENT section in place (not appending).
+
+**Claude Web** updates the scope file:
 
 ```markdown
 ## HANDOFF_DOCUMENT
 
+### Last Updated: 2025-01-15
+
 ### Feature: User Authentication
 
 **Priority:** P1 - Critical
-**Estimated Scope:** Medium (2-3 sessions)
 
 ---
 
 ### Requirements
 
 #### R1: Database Schema
-Create users and sessions tables as specified in brainstorm.
+Create users table with email, password_hash, created_at.
 
 #### R2: Backend Endpoints
 | Endpoint | Method | Purpose |
@@ -190,26 +180,16 @@ Create users and sessions tables as specified in brainstorm.
 | /api/auth/me | GET | Get current user |
 
 #### R3: Frontend Components
-- `src/pages/LoginPage.jsx`
-- `src/pages/SignupPage.jsx`
 - `src/context/AuthContext.jsx`
 - `src/hooks/useAuth.js`
+- `src/pages/LoginPage.jsx`
+- `src/pages/SignupPage.jsx`
 - `src/components/ProtectedRoute.jsx`
 
 #### R4: Security Requirements
 - Passwords hashed with bcrypt (cost factor 12)
 - JWT expires in 7 days
 - httpOnly cookies for token storage
-- CSRF protection on auth endpoints
-
----
-
-### Implementation Order
-1. Database schema migration
-2. Backend auth endpoints
-3. Frontend auth context
-4. Login/Signup pages
-5. ProtectedRoute integration
 
 ---
 
@@ -221,15 +201,9 @@ Create users and sessions tables as specified in brainstorm.
 - [ ] Auth state persists on page refresh
 ```
 
-**Director Action:** Copy this into the scope file and commit:
-```bash
-git add .claude/scopes/SCOPE_AUTH.md
-git commit -m "feat: Add HANDOFF_DOCUMENT for auth feature"
-```
-
 ---
 
-## Step 6: Implement with Claude Code
+## Step 5: Implement with Claude Code
 
 **Director → Claude Code:**
 ```
@@ -238,144 +212,210 @@ SCOPE UPDATED: AUTH
 
 **Claude Code reads the spec and responds:**
 
-"I've reviewed the HANDOFF_DOCUMENT for AUTH. Here's my implementation plan:
-
-**Phase 1: Database (This Session)**
-1. Create migration for users table
-2. Create migration for sessions table
-3. Run migrations
-
-**Phase 2: Backend (Next Session)**
-1. Install jsonwebtoken
-2. Create auth middleware
-3. Implement 4 endpoints
-
-**Phase 3: Frontend (Following Session)**
-1. Create AuthContext
-2. Create useAuth hook
-3. Create pages and ProtectedRoute
+"I've reviewed the HANDOFF_DOCUMENT for AUTH.
 
 **Recommendation:** I suggest adding rate limiting to the auth endpoints to prevent brute force attacks. This wasn't in the spec but is best practice.
 
-Should I proceed with Phase 1, and should I add rate limiting?"
+**Decision to Log:**
+| Decision | Rationale | Suggested Status |
+|----------|-----------|------------------|
+| Rate limiting on auth | Prevent brute force | EXPERIMENTAL |
+
+Should I add rate limiting, and should I log this decision as EXPERIMENTAL?"
 
 **Director:** "Yes to both."
 
-**Claude Code implements Phase 1...**
+**Claude Code implements and updates the DECISION LOG:**
+
+```markdown
+## DECISION LOG (Permanent)
+
+| Decision | Date | Rationale | Status |
+|----------|------|-----------|--------|
+| JWT over sessions | 2025-01-15 | Stateless, scalable | ACTIVE |
+| Rate limiting 3/min | 2025-01-15 | Prevent brute force | EXPERIMENTAL |
+| bcrypt cost 12 | 2025-01-15 | Security standard | ACTIVE |
+```
 
 ---
 
-## Step 7: Update Research Findings
+## Step 6: Living Document Updates
 
-After implementation, Claude Code updates the scope:
+**v3 Change:** RESEARCH_FINDINGS is replaced each session, not appended.
+
+After Session 1 implementation, Claude Code updates:
 
 ```markdown
 ## RESEARCH_FINDINGS
 
-### Session 1 — 2025-01-15
+### Latest Session: 1 — 2025-01-15
 
 **Completed:**
 - [x] Created users table migration
-- [x] Created sessions table migration
 - [x] Ran migrations successfully
+- [x] Installed jsonwebtoken
 
 **Files Created:**
 - `migrations/001_create_users.sql`
-- `migrations/002_create_sessions.sql`
-
-**Decisions Made:**
-- Added `email_verified` boolean for future email verification
-- Added index on `sessions.token` for faster lookups
-
-**Next Session:**
-- Install jsonwebtoken
-- Create auth middleware
-- Implement endpoints
-
----
-
-### Session 2 — 2025-01-16
-
-**Completed:**
-- [x] Installed jsonwebtoken
-- [x] Created auth middleware
-- [x] Implemented all 4 endpoints
-- [x] Added rate limiting (3 attempts per minute)
-
-**Files Created:**
 - `src/middleware/auth.js`
-- `src/routes/auth.js`
-- `src/utils/rateLimit.js`
 
-**Decisions Made:**
-- Used express-rate-limit for rate limiting
-- Token stored in httpOnly cookie as planned
+**Next Steps:**
+- [ ] Implement endpoints
+- [ ] Create frontend components
+```
 
-**Next Session:**
-- Frontend components
+After Session 2, the RESEARCH_FINDINGS is **replaced** (not appended):
 
----
+```markdown
+## RESEARCH_FINDINGS
 
-### Session 3 — 2025-01-17
+### Latest Session: 2 — 2025-01-16
 
 **Completed:**
+- [x] Implemented all 4 endpoints
+- [x] Added rate limiting (3/min)
 - [x] Created AuthContext
-- [x] Created useAuth hook
-- [x] Created LoginPage and SignupPage
-- [x] Created ProtectedRoute
-- [x] All acceptance criteria passing
 
 **Files Created:**
+- `src/routes/auth.js`
 - `src/context/AuthContext.jsx`
 - `src/hooks/useAuth.js`
-- `src/pages/LoginPage.jsx`
-- `src/pages/SignupPage.jsx`
-- `src/components/ProtectedRoute.jsx`
 
-**Feature Status:** COMPLETE
+**Next Steps:**
+- [ ] Create login/signup pages
+- [ ] Add ProtectedRoute
+```
+
+**Old session content is archived:**
+```
+docs/archive/SCOPE_AUTH/
+└── 2025-01-15_session1_research.md
 ```
 
 ---
 
-## Step 8: Report Back to Claude Web
+## Step 7: Feature Complete — Lock Files
 
-**Director → Claude Web:**
+After Session 3, all acceptance criteria pass. Claude Code:
 
-"Auth feature is complete! Claude Code implemented it over 3 sessions.
+1. Updates scope status to COMPLETE
+2. Logs final decision
+3. Adds locked files
 
-Additional work:
-- Added rate limiting (3 attempts/min)
-- Added email_verified field for future use
-- Added index on sessions.token
+```markdown
+## DECISION LOG (Permanent)
 
-All acceptance criteria passing. Ready for review."
-
-**Claude Web:** "Excellent! Let's update the MASTER_SCOPE to mark this complete and plan the next feature."
+| Decision | Date | Rationale | Status |
+|----------|------|-----------|--------|
+| JWT over sessions | 2025-01-15 | Stateless, scalable | ACTIVE |
+| Rate limiting 3/min | 2025-01-15 | Prevent brute force | ACTIVE |
+| bcrypt cost 12 | 2025-01-15 | Security standard | ACTIVE |
+| MD5 for passwords | 2025-01-15 | Insecure | NO-GO |
 
 ---
 
-## Summary: The Complete Cycle
+## LOCKED FILES
+
+| File | Last Working Commit | Lock Date | Verified By |
+|------|---------------------|-----------|-------------|
+| src/middleware/auth.js | a1b2c3d | 2025-01-17 | Session 3 |
+| src/routes/auth.js | a1b2c3d | 2025-01-17 | Session 3 |
+| src/context/AuthContext.jsx | a1b2c3d | 2025-01-17 | Session 3 |
+```
+
+---
+
+## Step 8: Archive Cleanup Prompt
+
+**v3 Change:** When scope reaches COMPLETE, Claude Code prompts:
 
 ```
-1. DIRECTOR: Created SCOPE_AUTH.md (empty)
-2. CLAUDE CODE: "AUDIT SCOPE: AUTH" → populated AUDIT_REPORT
-3. DIRECTOR → CLAUDE WEB: Shared audit, brainstormed requirements
-4. CLAUDE WEB: Wrote HANDOFF_DOCUMENT with specifications
-5. DIRECTOR → CLAUDE CODE: "SCOPE UPDATED: AUTH"
-6. CLAUDE CODE: Reviewed, recommended rate limiting, implemented
-7. CLAUDE CODE: Updated RESEARCH_FINDINGS per session
-8. DIRECTOR → CLAUDE WEB: Shared completion status
+🧹 SCOPE AUTH is COMPLETE.
+
+Archive files found:
+- 2025-01-15_session1_research.md (2 days old)
+- 2025-01-16_session2_research.md (1 day old)
+
+Suggest: Delete archive files? Feature is stable.
+[YES] [KEEP 30 MORE DAYS] [KEEP FOREVER]
+```
+
+**Director:** "Delete them."
+
+**Claude Code:** Archives deleted. Scope fully cleaned.
+
+---
+
+## Step 9: Future Modification (Locked File)
+
+A month later, you need to change the auth middleware.
+
+**Director → Claude Code:**
+```
+Update the auth middleware to add refresh tokens.
+```
+
+**Claude Code Response:**
+```
+⚠️ FILE LOCKED: src/middleware/auth.js
+
+This file is protected by SCOPE_AUTH.md
+Last working commit: a1b2c3d
+Lock date: 2025-01-17
+
+To proceed, please issue: UNLOCK: src/middleware/auth.js
+```
+
+**Director:**
+```
+UNLOCK: src/middleware/auth.js
+```
+
+**Claude Code:**
+1. Makes changes
+2. Verifies original auth still works
+3. Updates UNLOCK HISTORY in scope
+4. Prompts: "Changes verified. RELOCK: src/middleware/auth.js?"
+
+**Director:** "Yes"
+
+**Claude Code:** File re-locked. UNLOCK HISTORY updated:
+
+```markdown
+### Unlock History
+
+| Date | File | Reason | Outcome | Session |
+|------|------|--------|---------|---------|
+| 2025-02-15 | auth.js | Add refresh tokens | ✅ Success | 15 |
 ```
 
 ---
 
-## Key Takeaways
+## Summary: The Complete v3 Cycle
 
-1. **Reality First** — The audit revealed bcrypt was installed but no JWT library
-2. **Quality Review** — Claude Code recommended rate limiting (not in original spec)
-3. **Session Continuity** — RESEARCH_FINDINGS preserved progress across 3 sessions
-4. **Clear Communication** — Each role knew exactly what to do and when
+```
+1. CLAUDE CODE: "AUDIT SCOPE: AUTH" → created scope + handoff, populated AUDIT_REPORT
+2. DIRECTOR → CLAUDE WEB: Shared audit, brainstormed requirements
+3. CLAUDE WEB: Updated HANDOFF_DOCUMENT (replaced, not appended)
+4. DIRECTOR → CLAUDE CODE: "SCOPE UPDATED: AUTH"
+5. CLAUDE CODE: Recommended rate limiting, logged decision as EXPERIMENTAL
+6. CLAUDE CODE: Implemented, updated RESEARCH_FINDINGS (replaced each session)
+7. CLAUDE CODE: Archived old session content
+8. CLAUDE CODE: Marked COMPLETE, locked critical files
+9. CLAUDE CODE: Prompted archive cleanup
+10. FUTURE: UNLOCK → modify → RELOCK cycle for changes
+```
 
 ---
 
-*This is how Scope Order v2 works in practice.*
+## Key v3 Takeaways
+
+1. **Living Documents** — AUDIT_REPORT and RESEARCH_FINDINGS replaced, not appended
+2. **Decision Log** — NO-GO decisions prevent circular discussions ("We tried MD5, it's insecure")
+3. **File Locking** — Critical files protected after COMPLETE
+4. **Lifecycle Archive** — Old content cleaned up automatically
+5. **Linked Handoffs** — One HANDOFF_AUTH.md paired with SCOPE_AUTH.md
+
+---
+
+*This is how Scope Order v3 works in practice — living documents, permanent decisions, protected code.*

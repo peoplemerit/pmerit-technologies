@@ -1,7 +1,20 @@
-# Scope Order System — Quick Start Guide
+# Scope Order System — Quick Start Guide (v3)
 
 **Time to Setup:** 30 minutes
 **Prerequisites:** Git repo, Claude Pro subscription, text editor
+**Version:** 3.0 — Living Documents + Lifecycle Archive
+
+---
+
+## What's New in v3
+
+| Feature | Description |
+|---------|-------------|
+| **Living Documents** | Scopes update in place, not append-only |
+| **Decision Log** | Track all choices (ACTIVE/NO-GO/EXPERIMENTAL) |
+| **Linked Handoffs** | One handoff per scope (HANDOFF_AUTH.md ↔ SCOPE_AUTH.md) |
+| **File Locking** | Protect complete features from regression |
+| **Lifecycle Archive** | Auto-cleanup of obsolete content |
 
 ---
 
@@ -12,16 +25,18 @@ This guide gets you from zero to a working Scope Order System in 30 minutes.
 ```
 What You'll Have:
 ├── .claude/
-│   ├── CLAUDE.md                ← Claude Code instructions
+│   ├── CLAUDE.md                ← Claude Code instructions (v3)
 │   ├── CLAUDE_WEB_SYNC.md       ← Claude Web sync
 │   ├── SYSTEM_GUIDE.md          ← Complete reference
 │   └── scopes/
 │       ├── MASTER_SCOPE.md      ← Your project vision
-│       └── SCOPE_TEMPLATE.md    ← Template for new scopes
+│       └── SCOPE_TEMPLATE.md    ← Template for new scopes (v3)
 ├── docs/aados/
-│   ├── STATE.json               ← State tracking
-│   ├── GOVERNANCE.md            ← Workflow rules
+│   ├── STATE.json               ← State tracking (v3)
+│   ├── GOVERNANCE.md            ← Workflow rules (v3)
 │   └── TASK_TRACKER.md          ← Task status
+├── docs/handoffs/               ← One per scope (NEW)
+├── docs/archive/                ← Obsolete content (NEW)
 └── Ready to use three-way workflow!
 ```
 
@@ -39,6 +54,7 @@ mkdir -p .claude/scopes
 # Create docs directories
 mkdir -p docs/aados
 mkdir -p docs/handoffs
+mkdir -p docs/archive
 ```
 
 **Windows (PowerShell):**
@@ -49,6 +65,7 @@ New-Item -ItemType Directory -Force -Path ".claude\scopes"
 # Create docs directories
 New-Item -ItemType Directory -Force -Path "docs\aados"
 New-Item -ItemType Directory -Force -Path "docs\handoffs"
+New-Item -ItemType Directory -Force -Path "docs\archive"
 ```
 
 **Windows (Command Prompt):**
@@ -56,6 +73,7 @@ New-Item -ItemType Directory -Force -Path "docs\handoffs"
 mkdir .claude\scopes
 mkdir docs\aados
 mkdir docs\handoffs
+mkdir docs\archive
 ```
 
 ---
@@ -157,6 +175,7 @@ You'll create scope files as you work.
 |---------|--------|
 | [PROJECT] CONTINUE | Full startup protocol |
 | SCOPE: [name] | Load scope context |
+| UNLOCK: [file] | Unlock file for changes |
 | DONE | Confirm step complete |
 ```
 
@@ -167,15 +186,16 @@ You'll create scope files as you work.
 ## Step 6: Initial Commit
 
 ```bash
-git add .claude/ docs/aados/
-git commit -m "chore: Setup Scope Order System
+git add .claude/ docs/aados/ docs/handoffs/ docs/archive/
+git commit -m "chore: Setup Scope Order System v3
 
-- Added Claude Code instructions
+- Added Claude Code instructions (living documents)
 - Added Claude Web sync file
 - Added Master Scope
-- Added governance files
+- Added governance files with archive lifecycle
+- Added handoffs and archive directories
 
-🤖 Scope Order System v2"
+🤖 Scope Order System v3"
 ```
 
 ---
@@ -195,15 +215,48 @@ Claude Code should:
 
 ### Create Your First Scope:
 
+**Option A — Recommended (Direct Audit):**
+```
+AUDIT SCOPE: AUTH
+```
+Claude Code creates the scope and populates it.
+
+**Option B — Manual:**
 1. Create empty file: `.claude/scopes/SCOPE_AUTH.md`
-2. Commit it
-3. Tell Claude Code: `AUDIT SCOPE: AUTH`
-4. Claude Code audits your codebase for auth-related code
-5. Share the audit with Claude Web
-6. Brainstorm with Claude Web
-7. Claude Web fills HANDOFF_DOCUMENT
-8. Tell Claude Code: `SCOPE UPDATED: AUTH`
-9. Claude Code implements!
+2. Create linked handoff: `docs/handoffs/HANDOFF_AUTH.md`
+3. Commit them
+4. Tell Claude Code: `AUDIT SCOPE: AUTH`
+
+### Continue Workflow:
+5. Claude Code audits your codebase for auth-related code
+6. Share the audit with Claude Web
+7. Brainstorm with Claude Web
+8. Claude Web fills HANDOFF_DOCUMENT
+9. Tell Claude Code: `SCOPE UPDATED: AUTH`
+10. Claude Code implements!
+11. Claude Code updates RESEARCH_FINDINGS (replaces, not appends)
+
+---
+
+## v3 Living Document Updates
+
+### What Changes from v2
+
+| v2 Behavior | v3 Behavior |
+|-------------|-------------|
+| Append new audits | Replace AUDIT_REPORT |
+| Multiple handoffs | One linked HANDOFF per scope |
+| Session logs accumulate | Latest session only, old archived |
+| No decision tracking | DECISION LOG (NEVER deleted) |
+| No file protection | LOCKED FILES for complete features |
+
+### When to Archive
+
+| Content | Archive When |
+|---------|--------------|
+| Old audit reports | Replaced by new audit |
+| Session research | > 5 sessions old |
+| Rejected approaches | Marked NO-GO |
 
 ---
 
@@ -217,16 +270,19 @@ Claude Code should:
 | `AUDIT SCOPE: [name]` | Audit reality for new feature |
 | `SCOPE UPDATED: [name]` | Implement after specs written |
 | `SCOPE: [name]` | Load existing feature context |
+| `UNLOCK: [file]` | Unlock file for changes (NEW) |
+| `RELOCK: [file]` | Re-lock after verification (NEW) |
 
 ### Workflow Summary:
 
 ```
-1. Create empty scope file
-2. AUDIT SCOPE → Claude Code checks reality
-3. Share with Claude Web
-4. Brainstorm specs
-5. SCOPE UPDATED → Claude Code implements
-6. Repeat
+1. AUDIT SCOPE → Claude Code checks reality
+2. Share with Claude Web
+3. Brainstorm specs
+4. SCOPE UPDATED → Claude Code implements
+5. Claude Code updates RESEARCH_FINDINGS (replaces)
+6. Repeat until complete
+7. Lock files, prompt archive cleanup
 ```
 
 ---
@@ -235,8 +291,9 @@ Claude Code should:
 
 1. **Read the full System Guide:** `.claude/SYSTEM_GUIDE.md`
 2. **Create scopes as needed:** One per major feature
-3. **Keep CLAUDE_WEB_SYNC.md updated:** When Claude Web instructions change
-4. **Use RESEARCH_FINDINGS:** To track progress between sessions
+3. **Track decisions:** Add to DECISION LOG in each scope
+4. **Use linked handoffs:** One HANDOFF_[NAME].md per scope
+5. **Archive obsolete content:** When scope reaches COMPLETE
 
 ---
 
@@ -258,6 +315,14 @@ Claude Code should:
 
 **A:** That's the quality review! Discuss with Claude Web if needed, then decide.
 
+### Q: What's the difference between NO-GO and EXPERIMENTAL?
+
+**A:** NO-GO means "never implement" (bad idea, security risk, etc.). EXPERIMENTAL means "testing, may work out." NO-GO is permanent, EXPERIMENTAL may become ACTIVE.
+
+### Q: What happens when a scope is COMPLETE?
+
+**A:** Claude Code locks critical files and prompts you to clean up archive files. You can choose to delete them, keep them, or keep them forever.
+
 ---
 
 ## Troubleshooting
@@ -274,6 +339,10 @@ Check `docs/aados/STATE.json` → `scope_order.scopes` has the scope listed.
 
 Ensure RESEARCH_FINDINGS is updated before ending each session.
 
+### Can't modify a locked file
+
+Use `UNLOCK: path/to/file.js` to temporarily unlock. Re-lock after verification.
+
 ---
 
-*Scope Order System v2 — You're ready to collaborate!*
+*Scope Order System v3.0 — Living Documents + Lifecycle Archive*
