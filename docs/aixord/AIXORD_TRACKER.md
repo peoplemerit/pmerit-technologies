@@ -34,9 +34,10 @@
 - [x] Create AIXORD_KDP_REVIEWER.md template for ChatGPT/Gemini
 - [x] ChatGPT KDP review (Phase 1 & 2 PASSED)
 - [x] Apply founder review feedback (v1.1 methodology hardening)
-- [ ] Update QUICK_START_GUIDE.md
-- [ ] Update SALES_PAGE.md
-- [ ] Create new Amazon description
+- [x] Update QUICK_START_GUIDE.md
+- [x] Update SALES_PAGE.md
+- [x] Create new Amazon description
+- [x] Create KDP_REPUBLISH_CHECKLIST.md
 - [ ] Create new cover design
 - [ ] Unpublish old Amazon listing
 - [ ] Republish with AIXORD title
