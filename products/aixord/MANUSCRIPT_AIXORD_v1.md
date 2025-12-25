@@ -6,8 +6,9 @@
 
 ---
 
-**Version:** 1.0
+**Version:** 1.0 (First Edition)
 **Author:** Idowu J Gabriel, Sr.
+**Publisher:** PMERIT LLC
 **Published:** December 2025
 
 ---
@@ -17,6 +18,10 @@
 Copyright 2025 PMERIT LLC. All Rights Reserved.
 
 This book and its accompanying templates are protected by copyright. You may use the templates in your own projects but may not redistribute or resell them.
+
+**AI Usage Disclosure:** This book was developed with the assistance of AI tools (Claude, ChatGPT) used for drafting, iteration, and refinement. All final decisions, structure, methodology design, and intellectual ownership remain solely with the author.
+
+**Trademark Notice:** All third-party product names and trademarks mentioned in this book (including Claude, ChatGPT, GitHub Copilot, Amazon KDP) are the property of their respective owners and are used for identification and descriptive purposes only.
 
 ---
 
