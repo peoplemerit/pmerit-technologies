@@ -1,25 +1,31 @@
-# Scope Order System — Sales Page Copy
+# AIXORD — Sales Page Copy
 
-*Use this copy for Gumroad, Lemon Squeezy, or your own landing page.*
+*Use this copy for Amazon KDP, Gumroad, or your own landing page.*
 
 ---
 
 ## HEADLINE OPTIONS
 
-**Option A (Problem-focused):**
+**Option A (Authority-focused):**
+> Stop Asking Your AI for Suggestions. Start Giving It Orders.
+
+**Option B (Problem-focused):**
 > Stop Re-Explaining Your Project to AI Every Single Session
 
-**Option B (Solution-focused):**
-> The System That Makes Claude Web + Claude Code Actually Work Together
-
-**Option C (Benefit-focused):**
-> Ship Features 2x Faster with AI That Remembers Your Architecture
+**Option C (Transformation-focused):**
+> Turn AI Chaos into AI Doctrine
 
 ---
 
 ## SUBHEADLINE
 
-> A methodology and template pack for developers who use multiple AI assistants and are tired of context limits, lost progress, and specs that don't match reality.
+> AIXORD: A complete methodology for developers who want AI that follows orders, remembers decisions, and executes without re-negotiation.
+
+---
+
+## TAGLINE
+
+**Authority. Execution. Confirmation.**
 
 ---
 
@@ -28,11 +34,10 @@
 ### Sound familiar?
 
 - You explain your project architecture to Claude... **again**
-- You wrote specs last week, but the codebase has changed since then
-- Claude Web knows your strategy but can't see your code
-- Claude Code can implement but doesn't understand the big picture
-- You waste the first 10 minutes of every session rebuilding context
-- Progress notes are scattered across 47 chat logs
+- You ask for help and get 5 different suggestions instead of clear steps
+- Your AI "forgets" decisions you already made
+- You debate implementation approaches during execution (instead of just executing)
+- Context is lost, progress is scattered, and every session feels like starting over
 
 ### The real cost:
 
@@ -41,93 +46,135 @@ Every time you re-explain context, you're burning:
 - **Time** (your most valuable resource)
 - **Mental energy** (context switching kills productivity)
 
+And the deeper problem:
+- AI treats you like the decision-maker **and** the executor
+- You negotiate with AI mid-task instead of following a plan
+- No clear boundary between "deciding what to do" and "doing it"
+
 ---
 
 ## THE SOLUTION
 
-### Scope Order System
+### AIXORD: AI Execution Order Framework
 
-A **Reality-First** methodology that creates structured collaboration between you, Claude Web, and Claude Code.
+A methodology inspired by military OPORD (Operations Order) doctrine that creates structured, authoritative AI-human collaboration.
 
 ```
 ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
 │ CLAUDE WEB  │◄────►│     YOU     │◄────►│ CLAUDE CODE │
-│ (Architect) │      │ (Director)  │      │(Implementer)│
+│ (Architect) │      │ (Director)  │      │ (Commander) │
 └─────────────┘      └─────────────┘      └─────────────┘
+    Research            Decisions           Execution
+    Strategy            Approvals            Orders
+    Specs               Coordination         Steps
 ```
 
-**Claude Web** handles strategy and specifications.
-**You** make decisions and coordinate.
-**Claude Code** audits reality and implements.
+### The Core Principle
 
-### The Key Innovation: Reality-First
+> **The human decides WHAT should be done; the AI decides HOW it is executed.**
 
-Traditional workflow:
+During brainstorming: AI is your analyst.
+After decisions are approved: AI becomes your commander.
+
+### The Role Transition
+
+This is the key innovation:
+
 ```
-Write Spec → Implement → Discover spec was wrong → Redo work
+Phase 1: BRAINSTORMING
+├── AI operates as analyst/architect
+├── You discuss, debate, explore
+└── Decisions are made and approved
+
+↓ ROLE TRANSITION (Explicit) ↓
+
+Phase 2: EXECUTION
+├── AI switches to command mode
+├── AI issues orders, not suggestions
+├── Decisions are FROZEN
+└── You execute and confirm
 ```
 
-Scope Order workflow:
-```
-Audit Reality → Write Spec Based on Facts → Implement → Done
-```
+No more negotiating during execution. No more revisiting decisions mid-task.
 
-No more outdated specs. No more wasted implementation cycles.
+---
+
+## AIXORD POWER RULES
+
+Memorize these. They change everything:
+
+1. **"If it's not documented, it doesn't exist."**
+2. **"Completion is a locked state, not a feeling."**
+3. **"Decisions are frozen before execution begins."**
+4. **"Scopes open only when prerequisites are verified."**
+5. **"Execution enforces decisions; it does not revisit them."**
+6. **"Only one AI may issue execution orders at a time."**
 
 ---
 
 ## WHAT'S INCLUDED
 
-### 7 Ready-to-Use Templates
+### 8 Ready-to-Use Templates
 
 | Template | Purpose |
 |----------|---------|
-| `CLAUDE.md` | Claude Code instructions (Implementer role) |
-| `CLAUDE_WEB_SYNC.md` | Mirror of Claude Web instructions |
+| `CLAUDE.md` | Claude Code instructions (AIXORD protocol) |
+| `CLAUDE_WEB_SYNC.md` | Mirror for Architect AI |
 | `MASTER_SCOPE.md` | Project vision template |
 | `SCOPE_TEMPLATE.md` | Per-feature scope template |
-| `STATE.json` | Machine-readable state tracking |
-| `GOVERNANCE.md` | Workflow rules and protocols |
+| `AIXORD_STATE.json` | Machine-readable state tracking |
+| `AIXORD_GOVERNANCE.md` | Workflow rules and protocols |
+| `AIXORD_TRACKER.md` | Task tracking |
 | `SYSTEM_GUIDE.md` | Complete operational reference |
 
 ### Comprehensive Documentation
 
-- **Quick Start Guide** — Setup in 15 minutes
+- **Complete Methodology Book** — Full AIXORD principles and implementation
+- **Quick Start Guide** — Setup in 30 minutes
 - **System Guide** — Deep reference for all workflows
 - **Troubleshooting** — Common issues and solutions
+
+### Authority Rules (New in v1.1)
+
+- Decision Authority vs Execution Authority (formally separated)
+- Scope Locking Rule (dependency-gated execution)
+- Completed Task Locking (prevents regression)
+- Failure Handling Loop (failure is signal, not error)
+- AI Compliance Enforcement (protocol imposed, not suggested)
 
 ### Command System
 
 ```
 MYPROJECT CONTINUE    → Full session startup
-AUDIT SCOPE: AUTH     → Claude Code audits reality
-SCOPE UPDATED: AUTH   → Claude Code implements specs
-SCOPE: DASHBOARD      → Load existing context
+AUDIT SCOPE: AUTH     → AI audits reality
+SCOPE UPDATED: AUTH   → AI issues execution orders
+UNLOCK: file.js       → Unlock protected file
+DONE                  → Confirm step complete
 ```
 
 ---
 
 ## BENEFITS
 
-### Before Scope Order
+### Before AIXORD
 
 | Problem | Impact |
 |---------|--------|
-| Re-explain context every session | Wasted tokens and time |
-| Specs become outdated | Implementation rework |
-| Unclear who does what | Chaotic workflow |
-| Progress lost in chat logs | Starting over repeatedly |
-| Context window overload | Incomplete AI responses |
+| AI gives suggestions, not orders | You have to figure out HOW |
+| Decisions keep getting revisited | Endless negotiation |
+| Context lost every session | Re-explaining everything |
+| No clear role boundaries | Chaotic workflow |
+| "Done" is subjective | Regressions and scope creep |
 
-### After Scope Order
+### After AIXORD
 
 | Solution | Result |
 |----------|--------|
+| AI issues step-by-step orders | Just execute and confirm |
+| Decisions frozen after approval | No mid-task debates |
 | Context persists in scope files | Instant session starts |
-| Reality-first prevents drift | No wasted work |
-| Clear role separation | Smooth collaboration |
-| RESEARCH_FINDINGS captures everything | Never lose progress |
-| Load only active scope | Full context, every time |
+| Clear role transition | Architect → Commander |
+| Completion is a locked state | No regressions |
 
 ---
 
@@ -135,84 +182,91 @@ SCOPE: DASHBOARD      → Load existing context
 
 ### Perfect for you if:
 
-- You use Claude Web AND Claude Code (or similar AI tools)
-- You work on projects with multiple features
-- You're frustrated with AI context limits
-- You value documentation and structured workflows
-- You want to stop re-explaining your architecture
+- You use AI assistants in development (Claude, ChatGPT, Copilot)
+- You work on complex projects with multiple features
+- You're frustrated with AI that "forgets" or re-negotiates
+- You want clear authority structure, not collaborative chaos
+- You value documentation and systematic workflows
 
 ### Not for you if:
 
-- You don't use AI assistants in development
+- You prefer fully autonomous AI (AIXORD is human-in-the-loop)
 - You work only on tiny one-off scripts
-- You already have robust project management
+- You prefer unstructured, ad-hoc AI conversations
+- You're allergic to documentation
 
 ---
 
 ## HOW IT WORKS
 
-### The 15-Minute Setup
+### The 30-Minute Setup
 
 1. Create the directory structure
 2. Copy the templates
 3. Customize with your project name
-4. Setup Claude Web instructions
-5. Commit to git
-6. Start using!
+4. Fill out MASTER_SCOPE with your vision
+5. Setup Claude Web instructions
+6. Commit to git
+7. Start using!
 
 ### The Daily Workflow
 
 ```
 1. Start session: "MYPROJECT CONTINUE"
-2. Claude Code reads state, outputs status
-3. Create new scope or load existing
-4. Work with clear context
-5. RESEARCH_FINDINGS updated automatically
-6. Repeat tomorrow with full context
+2. AI reads state, outputs status
+3. Load active scope
+4. Work with clear authority boundaries
+5. AI issues orders, you execute
+6. Confirm completion with evidence
+7. Context saved for next session
 ```
 
 ### The Feature Workflow
 
 ```
-1. Create empty scope file
-2. "AUDIT SCOPE: FEATURE" → Claude Code checks reality
-3. Share audit with Claude Web
-4. Brainstorm specs together
-5. "SCOPE UPDATED: FEATURE" → Claude Code implements
-6. Repeat until feature complete
+1. "AUDIT SCOPE: FEATURE" → AI checks reality
+2. Share audit with Architect AI
+3. Brainstorm specs together (AI = analyst)
+4. Approve decisions
+5. "SCOPE UPDATED: FEATURE" → AI switches to commander
+6. AI issues execution orders (decisions FROZEN)
+7. Execute each step, confirm with evidence
+8. Feature complete → scope LOCKED
 ```
 
 ---
 
 ## TESTIMONIAL SECTION
 
-*[Add testimonials as you get them]*
+*[Placeholder for testimonials]*
 
-> "Finally, a system that makes my AI assistants work together instead of fighting each other."
+> "I used to negotiate with my AI on every task. Now I just execute. It's like having a commander instead of a consultant."
 > — [Customer Name]
 
-> "I used to spend 15 minutes every session rebuilding context. Now I just type 'CONTINUE' and I'm working."
+> "The role transition concept changed everything. Clear boundaries between deciding and doing."
 > — [Customer Name]
 
 ---
 
 ## PRICING
 
-### Starter Pack — $29
+### Complete Package — $29
 
-Everything you need to get started:
-- All 7 templates
+Everything you need:
+- Complete methodology book
+- All 8 templates
 - Quick Start Guide
 - System Guide
 - Email support
+- Future updates
 
 ### Team License — $79
 
 For teams up to 5 developers:
-- Everything in Starter
+- Everything in Complete Package
 - Team customization guide
 - Priority email support
-- Future updates included
+- Multi-seat license
 
 ---
 
@@ -220,23 +274,23 @@ For teams up to 5 developers:
 
 ### Q: Do I need Claude Pro?
 
-**A:** Yes, for Claude Code. Claude Web works with free tier but Pro is recommended.
-
-### Q: Does this work with GPT/Copilot?
-
-**A:** The templates are Claude-focused, but the methodology works with any AI assistant. You may need to adapt the commands.
-
-### Q: How long does setup take?
-
-**A:** 15 minutes for basic setup. Most users are fully productive within their first session.
+**A:** Recommended but not required. The methodology works with any AI that accepts file uploads (ChatGPT, Gemini, etc.).
 
 ### Q: Is this just documentation templates?
 
-**A:** It's a complete methodology with templates, workflows, and a command system. The magic is in how they work together.
+**A:** It's a complete methodology with templates, workflows, and a command system. The innovation is the formal separation of decision authority from execution authority.
 
-### Q: What if I already have project docs?
+### Q: What if my AI doesn't follow the AIXORD rules?
 
-**A:** The system complements existing documentation. Your project docs feed into the MASTER_SCOPE.
+**A:** AIXORD is a protocol imposed on the AI, not a suggestion. You enforce compliance by resetting context and reloading governance files. The human controls the context.
+
+### Q: Can I still discuss options with AI?
+
+**A:** Yes — during the brainstorming phase. But once decisions are approved, execution begins and decisions are frozen. If execution reveals problems, you halt and return to decision phase.
+
+### Q: How is this different from just writing good prompts?
+
+**A:** AIXORD is a complete governance system, not a prompt technique. It includes state tracking, scope management, dependency locking, and formal role transitions. Prompts are part of it, but it's much more.
 
 ---
 
@@ -244,81 +298,125 @@ For teams up to 5 developers:
 
 **30-Day Money Back Guarantee**
 
-If the Scope Order System doesn't improve your AI-assisted development workflow within 30 days, email me for a full refund. No questions asked.
+If AIXORD doesn't improve your AI-assisted development workflow within 30 days, email for a full refund. No questions asked.
 
 ---
 
 ## CTA
 
-### Ready to stop fighting your AI assistants?
+### Ready to give your AI orders instead of requests?
 
 **[Buy Now — $29]**
 
 - Instant download
-- All templates included
-- Quick Start Guide
+- Complete methodology + all templates
 - 30-day guarantee
 
 ---
 
 ## FOOTER
 
-Questions? Email [your-email@domain.com]
+Questions? Email support@pmerit.com
 
 Built by developers, for developers.
 
-*Scope Order System — Stop re-explaining. Start shipping.*
+*AIXORD — Authority. Execution. Confirmation.*
 
 ---
 
 # SHORT-FORM COPY (for social media, ads)
 
+## Amazon KDP Description
+
+**AIXORD: AI Execution Order Framework**
+*A Methodology for AI-Human Collaboration*
+
+Stop asking your AI for suggestions. Start giving it orders.
+
+AIXORD is a complete methodology for developers who want structured, authoritative AI-human collaboration. Inspired by military OPORD doctrine, it creates clear boundaries between deciding what to do (your job) and deciding how to do it (AI's job).
+
+**What You'll Learn:**
+- The role transition from AI-as-analyst to AI-as-commander
+- How to freeze decisions before execution begins
+- Scope locking and dependency management
+- Failure handling that treats problems as signal, not error
+- AI compliance enforcement (you control the context)
+
+**What's Included:**
+- Complete methodology with 8 parts
+- Ready-to-use templates (CLAUDE.md, STATE.json, scopes)
+- Quick Start Guide (30-minute setup)
+- System Guide for deep reference
+
+**The Core Insight:**
+*The human decides WHAT should be done; the AI decides HOW it is executed.*
+
+Perfect for solo developers, small teams, and anyone frustrated with AI that forgets, re-negotiates, or suggests when it should command.
+
+Authority. Execution. Confirmation.
+
 ## Twitter/X (280 chars)
 
-> Using Claude Web + Claude Code together? Stop re-explaining your architecture every session.
+> Stop asking AI for suggestions.
 >
-> Scope Order System: Reality-first methodology + templates for AI collaboration.
+> AIXORD: AI Execution Order Framework
 >
-> Setup in 15 min. Never lose context again.
+> You decide WHAT. AI decides HOW.
+> Decisions freeze before execution.
+> No mid-task negotiation.
+>
+> Methodology + templates. 30 min setup.
 >
 > [link]
 
 ## LinkedIn
 
-> I was wasting 15 minutes every session re-explaining my project to AI assistants.
+> I was negotiating with my AI on every single task.
 >
-> So I built a system to fix it.
+> "What do you think we should do?"
+> "Here are 5 options..."
+> "Actually, let's reconsider..."
 >
-> The Scope Order System creates structured collaboration between Claude Web (strategy) and Claude Code (implementation).
+> Endless loops. No progress.
 >
-> Key insight: Audit reality BEFORE writing specs. Prevents all the wasted work from outdated specifications.
+> So I built AIXORD: AI Execution Order Framework.
 >
-> Now I type "MYPROJECT CONTINUE" and I'm instantly productive.
+> The key insight: Separate decision authority from execution authority.
+>
+> Phase 1: Brainstorm (AI = analyst, you decide)
+> Phase 2: Execute (AI = commander, decisions frozen)
+>
+> No more mid-task debates. You execute what was decided, and confirm completion with evidence.
+>
+> It's based on military OPORD doctrine. Clear. Structured. Authoritative.
 >
 > Templates + methodology: [link]
 
 ## Reddit (r/ClaudeAI, r/programming)
 
-**Title:** I built a system to make Claude Web + Claude Code actually work together
+**Title:** I built AIXORD: A system where AI gives orders, not suggestions
 
 **Body:**
-After 50+ development sessions using both Claude Web and Claude Code, I was frustrated:
+After 75+ development sessions with Claude, I noticed a pattern:
 
-- Claude Web knew my strategy but couldn't see code
-- Claude Code could implement but didn't know the big picture
-- I was re-explaining context every single session
-- Specs became outdated before implementation
+I kept negotiating with the AI during execution. We'd already decided what to do, but mid-task I'd ask "what do you think?" and get 5 new options. Hours lost.
 
-So I built the Scope Order System:
+The problem: No clear boundary between deciding and doing.
 
-1. **Reality-First Workflow** — Claude Code audits what actually exists before you write specs
-2. **Scope Files** — Per-feature documentation with context that persists
-3. **Three-Way Collaboration** — Clear roles for Claude Web (architect), you (director), Claude Code (implementer)
+So I built AIXORD (AI Execution Order):
 
-The key innovation is auditing reality first. No more writing specs based on assumptions, then discovering the codebase is different.
+1. **Role Transition** — AI switches from "analyst" to "commander" after decisions are approved
+2. **Frozen Decisions** — Once execution begins, decisions are locked. No revisiting.
+3. **Sequential Orders** — AI issues one step at a time. You execute and confirm with evidence.
+4. **Scope Locking** — Completed features are locked. Dependencies must be verified before opening new scopes.
 
-It's a methodology + template pack. 15 minutes to setup.
+The core principle:
+> The human decides WHAT should be done; the AI decides HOW it is executed.
+
+It's inspired by military OPORD doctrine. Structured. Authoritative. No ambiguity.
+
+Methodology + templates. 30 minutes to setup.
 
 [link]
 
-Happy to answer questions about the workflow.
+Happy to explain the workflow.

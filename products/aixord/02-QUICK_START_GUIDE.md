@@ -1,43 +1,56 @@
-# Scope Order System — Quick Start Guide (v3)
+# AIXORD — Quick Start Guide
 
 **Time to Setup:** 30 minutes
-**Prerequisites:** Git repo, Claude Pro subscription, text editor
-**Version:** 3.0 — Living Documents + Lifecycle Archive
+**Prerequisites:** Git repo, AI assistant (Claude/ChatGPT), text editor
+**Version:** 1.0 — AI Execution Order Framework
 
 ---
 
-## What's New in v3
+## What is AIXORD?
 
-| Feature | Description |
-|---------|-------------|
-| **Living Documents** | Scopes update in place, not append-only |
-| **Decision Log** | Track all choices (ACTIVE/NO-GO/EXPERIMENTAL) |
-| **Linked Handoffs** | One handoff per scope (HANDOFF_AUTH.md ↔ SCOPE_AUTH.md) |
-| **File Locking** | Protect complete features from regression |
-| **Lifecycle Archive** | Auto-cleanup of obsolete content |
+AIXORD (AI Execution Order) is a structured methodology for AI-human collaboration:
+
+| Principle | Description |
+|-----------|-------------|
+| **Authority** | AI issues orders, not suggestions |
+| **Execution** | Sequential, confirmable tasks |
+| **Confirmation** | Evidence before proceeding |
+
+**The human decides *what* should be done; the AI decides *how* it is executed.**
+
+---
+
+## AIXORD Power Rules (Memorize These)
+
+1. **"If it's not documented, it doesn't exist."**
+2. **"Completion is a locked state, not a feeling."**
+3. **"Decisions are frozen before execution begins."**
+4. **"Scopes open only when prerequisites are verified."**
+5. **"Execution enforces decisions; it does not revisit them."**
+6. **"Only one AI may issue execution orders at a time."**
 
 ---
 
 ## Overview
 
-This guide gets you from zero to a working Scope Order System in 30 minutes.
+This guide gets you from zero to a working AIXORD system in 30 minutes.
 
 ```
 What You'll Have:
 ├── .claude/
-│   ├── CLAUDE.md                ← Claude Code instructions (v3)
-│   ├── CLAUDE_WEB_SYNC.md       ← Claude Web sync
+│   ├── CLAUDE.md                ← AI instructions (AIXORD protocol)
+│   ├── CLAUDE_WEB_SYNC.md       ← Architect sync file
 │   ├── SYSTEM_GUIDE.md          ← Complete reference
 │   └── scopes/
 │       ├── MASTER_SCOPE.md      ← Your project vision
-│       └── SCOPE_TEMPLATE.md    ← Template for new scopes (v3)
-├── docs/aados/
-│   ├── STATE.json               ← State tracking (v3)
-│   ├── GOVERNANCE.md            ← Workflow rules (v3)
-│   └── TASK_TRACKER.md          ← Task status
-├── docs/handoffs/               ← One per scope (NEW)
-├── docs/archive/                ← Obsolete content (NEW)
-└── Ready to use three-way workflow!
+│       └── SCOPE_TEMPLATE.md    ← Template for new scopes
+├── docs/aixord/
+│   ├── AIXORD_STATE.json        ← State tracking
+│   ├── AIXORD_GOVERNANCE.md     ← Workflow rules
+│   └── AIXORD_TRACKER.md        ← Task status
+├── docs/handoffs/               ← One per scope
+├── docs/archive/                ← Obsolete content
+└── Ready to use AIXORD workflow!
 ```
 
 ---
@@ -52,7 +65,7 @@ In your project root, create the folders:
 mkdir -p .claude/scopes
 
 # Create docs directories
-mkdir -p docs/aados
+mkdir -p docs/aixord
 mkdir -p docs/handoffs
 mkdir -p docs/archive
 ```
@@ -63,7 +76,7 @@ mkdir -p docs/archive
 New-Item -ItemType Directory -Force -Path ".claude\scopes"
 
 # Create docs directories
-New-Item -ItemType Directory -Force -Path "docs\aados"
+New-Item -ItemType Directory -Force -Path "docs\aixord"
 New-Item -ItemType Directory -Force -Path "docs\handoffs"
 New-Item -ItemType Directory -Force -Path "docs\archive"
 ```
@@ -71,7 +84,7 @@ New-Item -ItemType Directory -Force -Path "docs\archive"
 **Windows (Command Prompt):**
 ```cmd
 mkdir .claude\scopes
-mkdir docs\aados
+mkdir docs\aixord
 mkdir docs\handoffs
 mkdir docs\archive
 ```
@@ -89,9 +102,9 @@ Copy these files from the templates folder:
 | `templates/SYSTEM_GUIDE.md` | `.claude/SYSTEM_GUIDE.md` |
 | `templates/MASTER_SCOPE.md` | `.claude/scopes/MASTER_SCOPE.md` |
 | `templates/SCOPE_TEMPLATE.md` | `.claude/scopes/SCOPE_TEMPLATE.md` |
-| `templates/STATE.json` | `docs/aados/STATE.json` |
-| `templates/GOVERNANCE.md` | `docs/aados/GOVERNANCE.md` |
-| `templates/TASK_TRACKER.md` | `docs/aados/TASK_TRACKER.md` |
+| `templates/STATE.json` | `docs/aixord/AIXORD_STATE.json` |
+| `templates/GOVERNANCE.md` | `docs/aixord/AIXORD_GOVERNANCE.md` |
+| `templates/TASK_TRACKER.md` | `docs/aixord/AIXORD_TRACKER.md` |
 
 **Note:** Keep `SCOPE_TEMPLATE.md` in your scopes folder — copy it when creating new feature scopes.
 
@@ -152,11 +165,13 @@ You'll create scope files as you work.
 | Hosting | Vercel | Cost effective | 2025-01-01 |
 ```
 
+**Remember:** Your vision and objectives must be on paper before you start.
+
 ---
 
-## Step 5: Setup Claude Web (2 min)
+## Step 5: Setup Claude Web / Architect AI (2 min)
 
-### In Claude.ai:
+### In Claude.ai (or ChatGPT):
 
 1. Go to your project
 2. Click "Set project instructions"
@@ -169,6 +184,11 @@ You'll create scope files as you work.
 - Production: [URL]
 - Repository: [GitHub URL]
 - Local Path: [Path]
+
+## AIXORD Protocol
+This project uses AIXORD (AI Execution Order) methodology.
+- During brainstorming: You are the Architect
+- After decisions approved: Claude Code becomes execution authority
 
 ## Quick Commands
 | Command | Action |
@@ -186,16 +206,16 @@ You'll create scope files as you work.
 ## Step 6: Initial Commit
 
 ```bash
-git add .claude/ docs/aados/ docs/handoffs/ docs/archive/
-git commit -m "chore: Setup Scope Order System v3
+git add .claude/ docs/aixord/ docs/handoffs/ docs/archive/
+git commit -m "chore: Setup AIXORD framework
 
-- Added Claude Code instructions (living documents)
+- Added Claude Code instructions (AIXORD protocol)
 - Added Claude Web sync file
 - Added Master Scope
-- Added governance files with archive lifecycle
+- Added governance files
 - Added handoffs and archive directories
 
-🤖 Scope Order System v3"
+🤖 AIXORD: Authority. Execution. Confirmation."
 ```
 
 ---
@@ -209,8 +229,8 @@ git commit -m "chore: Setup Scope Order System v3
 ```
 
 Claude Code should:
-1. Read STATE.json
-2. Read GOVERNANCE.md
+1. Read AIXORD_STATE.json
+2. Read AIXORD_GOVERNANCE.md
 3. Output a status response
 
 ### Create Your First Scope:
@@ -219,7 +239,7 @@ Claude Code should:
 ```
 AUDIT SCOPE: AUTH
 ```
-Claude Code creates the scope and populates it.
+Claude Code creates the scope and populates it with current reality.
 
 **Option B — Manual:**
 1. Create empty file: `.claude/scopes/SCOPE_AUTH.md`
@@ -229,40 +249,37 @@ Claude Code creates the scope and populates it.
 
 ### Continue Workflow:
 5. Claude Code audits your codebase for auth-related code
-6. Share the audit with Claude Web
-7. Brainstorm with Claude Web
+6. Share the audit with Claude Web (Architect)
+7. Brainstorm specifications with Claude Web
 8. Claude Web fills HANDOFF_DOCUMENT
 9. Tell Claude Code: `SCOPE UPDATED: AUTH`
-10. Claude Code implements!
-11. Claude Code updates RESEARCH_FINDINGS (replaces, not appends)
+10. **Role Transition:** Claude Code switches from advisory to instruction mode
+11. Claude Code issues step-by-step execution orders
+12. You execute each order and confirm completion
+13. Claude Code updates RESEARCH_FINDINGS
 
 ---
 
-## v3 Living Document Updates
+## AIXORD Workflow Summary
 
-### What Changes from v2
+```
+Phase 1: BRAINSTORMING (AI = Analyst/Architect)
+├── Research
+├── Specifications
+└── Decisions approved by Human (Director)
 
-| v2 Behavior | v3 Behavior |
-|-------------|-------------|
-| Append new audits | Replace AUDIT_REPORT |
-| Multiple handoffs | One linked HANDOFF per scope |
-| Session logs accumulate | Latest session only, old archived |
-| No decision tracking | DECISION LOG (NEVER deleted) |
-| No file protection | LOCKED FILES for complete features |
+↓ ROLE TRANSITION ↓
 
-### When to Archive
-
-| Content | Archive When |
-|---------|--------------|
-| Old audit reports | Replaced by new audit |
-| Session research | > 5 sessions old |
-| Rejected approaches | Marked NO-GO |
+Phase 2: EXECUTION (AI = Commander)
+├── AI issues orders (not suggestions)
+├── Human executes one step at a time
+├── Human confirms with evidence
+└── Decisions are FROZEN (no revisiting)
+```
 
 ---
 
-## You're Done!
-
-### What You Can Now Do:
+## Key Commands
 
 | Command | Effect |
 |---------|--------|
@@ -270,24 +287,34 @@ Claude Code creates the scope and populates it.
 | `AUDIT SCOPE: [name]` | Audit reality for new feature |
 | `SCOPE UPDATED: [name]` | Implement after specs written |
 | `SCOPE: [name]` | Load existing feature context |
-| `UNLOCK: [file]` | Unlock file for changes (NEW) |
-| `RELOCK: [file]` | Re-lock after verification (NEW) |
-
-### Workflow Summary:
-
-```
-1. AUDIT SCOPE → Claude Code checks reality
-2. Share with Claude Web
-3. Brainstorm specs
-4. SCOPE UPDATED → Claude Code implements
-5. Claude Code updates RESEARCH_FINDINGS (replaces)
-6. Repeat until complete
-7. Lock files, prompt archive cleanup
-```
+| `UNLOCK: [file]` | Unlock file for changes |
+| `RELOCK: [file]` | Re-lock after verification |
+| `DONE` | Confirm step complete |
 
 ---
 
-## Next Steps
+## Scope Dependency Rules
+
+Scopes are **locked by default**. A scope only unlocks when:
+1. All prerequisite scopes are COMPLETE
+2. Those scopes have passed audit
+3. Production requirements are verified
+
+**Example:** AUTH must be complete before PAYMENTS can open.
+
+---
+
+## You're Done!
+
+### What You Can Now Do:
+
+- Issue `[PROJECT] CONTINUE` to start sessions with full context
+- Create scopes for features with reality-first auditing
+- Track decisions permanently in DECISION LOG
+- Lock complete features to prevent regression
+- Let AI issue execution orders while you retain decision authority
+
+### Next Steps
 
 1. **Read the full System Guide:** `.claude/SYSTEM_GUIDE.md`
 2. **Create scopes as needed:** One per major feature
@@ -297,7 +324,7 @@ Claude Code creates the scope and populates it.
 
 ---
 
-## Common First-Week Questions
+## Common Questions
 
 ### Q: How many scopes should I create?
 
@@ -307,21 +334,17 @@ Claude Code creates the scope and populates it.
 
 **A:** When you change Claude Web's project instructions, or monthly.
 
-### Q: Can I skip the audit step?
-
-**A:** For existing features with good documentation, yes. For new features, never skip — it prevents wasted work.
-
 ### Q: What if Claude Code recommends something different?
 
-**A:** That's the quality review! Discuss with Claude Web if needed, then decide.
+**A:** That's the quality review! Discuss with Claude Web if needed, then decide. But once decisions are approved, they're frozen during execution.
 
-### Q: What's the difference between NO-GO and EXPERIMENTAL?
+### Q: Can the AI revisit decisions during execution?
 
-**A:** NO-GO means "never implement" (bad idea, security risk, etc.). EXPERIMENTAL means "testing, may work out." NO-GO is permanent, EXPERIMENTAL may become ACTIVE.
+**A:** No. **Decisions are frozen before execution begins.** If execution reveals problems, you must halt execution and return to decision phase.
 
-### Q: What happens when a scope is COMPLETE?
+### Q: What if the AI ignores AIXORD rules?
 
-**A:** Claude Code locks critical files and prompts you to clean up archive files. You can choose to delete them, keep them, or keep them forever.
+**A:** Reset context, reload governance files, and explicitly state: "You are operating under AIXORD protocol. Sequential execution only. Wait for my confirmation."
 
 ---
 
@@ -333,7 +356,7 @@ Make sure `.claude/CLAUDE.md` exists and has the correct project name in command
 
 ### Scope file not loading
 
-Check `docs/aados/STATE.json` → `scope_order.scopes` has the scope listed.
+Check `docs/aixord/AIXORD_STATE.json` → `scope_order.scopes` has the scope listed.
 
 ### Lost context between sessions
 
@@ -345,4 +368,4 @@ Use `UNLOCK: path/to/file.js` to temporarily unlock. Re-lock after verification.
 
 ---
 
-*Scope Order System v3.0 — Living Documents + Lifecycle Archive*
+*AIXORD v1.0 — Authority. Execution. Confirmation.*
