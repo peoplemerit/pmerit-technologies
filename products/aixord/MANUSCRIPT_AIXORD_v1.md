@@ -1,0 +1,657 @@
+# AIXORD
+
+## AI Execution Order Framework
+
+**A Complete Methodology for Structured AI-Human Collaboration**
+
+---
+
+**Version:** 1.0
+**Author:** Idowu J Gabriel, Sr.
+**Published:** December 2025
+
+---
+
+## Copyright
+
+Copyright 2025 PMERIT LLC. All Rights Reserved.
+
+This book and its accompanying templates are protected by copyright. You may use the templates in your own projects but may not redistribute or resell them.
+
+---
+
+## Template Access
+
+Your purchase includes downloadable templates.
+
+**Access your templates at:**
+https://meritwise0.gumroad.com/l/aixord
+
+Use your Amazon order confirmation email to verify your purchase.
+
+---
+
+## What is AIXORD?
+
+**AIXORD (AI Execution Order)** is a structured methodology for AI-human collaboration, inspired by military OPORD (Operations Order) doctrine.
+
+> **Definition:** A guardrailed execution order issued by an AI system to a human operator, requiring sequential action, single-task focus, and explicit confirmation before proceeding.
+
+**Core Principles:**
+- **Authority** — Orders, not suggestions
+- **Execution** — Sequential, confirmable tasks
+- **Confirmation** — Evidence before proceeding
+
+---
+
+## Table of Contents
+
+1. [Introduction](#introduction)
+2. [Part I: The Problem and Solution](#part-i-the-problem-and-solution)
+3. [Part II: AIXORD Principles](#part-ii-aixord-principles)
+4. [Part III: Complete Setup Guide](#part-iii-complete-setup-guide)
+5. [Part IV: Living Documents System](#part-iv-living-documents-system)
+6. [Part V: Template Reference](#part-v-template-reference)
+7. [Part VI: Example Workflow](#part-vi-example-workflow)
+8. [Part VII: Tiered Consent Model](#part-vii-tiered-consent-model)
+9. [Part VIII: AIXORD Variants](#part-viii-aixord-variants)
+10. [Troubleshooting](#troubleshooting)
+11. [About the Author](#about-the-author)
+
+---
+
+# Introduction
+
+## What's In This Book
+
+**AIXORD** is a methodology and template pack for developers who use AI assistants and need:
+
+- Structured execution orders from AI to human
+- Sequential, confirmable workflows
+- Reality-first auditing before specifications
+- Session continuity without losing progress
+- Clear role separation (Architect vs Implementer)
+- Decision tracking for architectural choices
+- Risk mitigation through tiered consent
+
+## Who This Book Is For
+
+- Solo developers using AI-augmented development
+- Small teams coordinating multiple AI tools
+- Freelancers managing complex client projects
+- Anyone frustrated with AI context limits
+- Teams who want AI governance, not AI chaos
+
+## What You'll Learn
+
+By the end of this book, you'll have:
+
+1. A complete understanding of AIXORD principles
+2. A working AIXORD setup in your project
+3. Templates ready to use immediately
+4. Knowledge to maintain context across unlimited sessions
+5. A system for tracking and preserving decisions
+6. Risk mitigation frameworks for edge-case features
+
+---
+
+# Part I: The Problem and Solution
+
+## The Problem
+
+Developers using AI assistants face critical challenges:
+
+### 1. Context Fragmentation
+
+- Claude Web knows your strategy but can't see your code
+- Claude Code can implement but doesn't know the big picture
+- GitHub Copilot suggests code without understanding your architecture
+- **Result:** Inconsistent implementations, repeated explanations
+
+### 2. Specification Drift
+
+- You write specs, then implement
+- Implementation reveals issues with specs
+- Specs become outdated
+- Next session, you work from wrong assumptions
+- **Result:** Wasted work, regressions, confusion
+
+### 3. Session Continuity Loss
+
+- AI assistants forget everything between sessions
+- You re-explain context every time
+- Progress notes scattered across chat logs
+- **Result:** Slow startups, lost decisions, repeated work
+
+### 4. Role Confusion
+
+- When should AI plan vs implement?
+- Who approves changes?
+- Where do decisions get recorded?
+- **Result:** Chaotic workflow, unclear ownership
+
+### 5. No Execution Discipline
+
+- AI provides suggestions, not orders
+- No confirmation gates
+- No evidence requirements
+- **Result:** Missed steps, incomplete implementations
+
+---
+
+## The Solution: AIXORD
+
+A **methodology + template pack** that creates structured execution orders between you and your AI assistants.
+
+### How AIXORD Differs from Prompts
+
+| Prompt | AIXORD |
+|--------|--------|
+| Suggestive | Directive |
+| Stateless | State-aware |
+| Multi-output | Single-action |
+| Informational | Executable |
+| AI-centered | Human-executed |
+
+### Core Concept: Reality-First Workflow
+
+```
+Traditional (Spec-First):
+  Write Spec → Implement → Discover spec was wrong → Redo
+
+AIXORD (Reality-First):
+  Audit Reality → Write Spec Based on Facts → Implement → Update Findings
+```
+
+### Three-Way Team Structure
+
+```
+┌─────────────┐      ┌─────────────┐      ┌─────────────┐
+│ CLAUDE WEB  │◄────►│     YOU     │◄────►│ CLAUDE CODE │
+│ (Architect) │      │ (Director)  │      │(Implementer)│
+└─────────────┘      └─────────────┘      └─────────────┘
+     │                     │                     │
+     │ Strategy            │ Decisions           │ Execution
+     │ Brainstorming       │ Approvals           │ Quality Review
+     │ Specifications      │ Coordination        │ Implementation
+```
+
+### Hierarchical Scope Management
+
+```
+MASTER_SCOPE.md          ← Project vision (single source of truth)
+    │
+    ├── SCOPE_AUTH.md        ← Authentication feature
+    │       └── HANDOFF_AUTH.md   ← Linked handoff
+    │
+    ├── SCOPE_DASHBOARD.md   ← Dashboard feature
+    │       └── HANDOFF_DASHBOARD.md
+    │
+    └── SCOPE_PAYMENTS.md    ← Payments feature
+            └── HANDOFF_PAYMENTS.md
+```
+
+Each scope contains:
+- **DECISION LOG** — Permanent record (NEVER deleted)
+- **AUDIT_REPORT** — Current reality (replaced each audit)
+- **HANDOFF_DOCUMENT** — Specifications (updated in place)
+- **RESEARCH_FINDINGS** — Latest session notes
+- **LOCKED FILES** — Protection for complete features
+
+---
+
+# Part II: AIXORD Principles
+
+## The Military Analogy
+
+AIXORD is inspired by military OPORD (Operations Order) doctrine:
+
+| OPORD Concept | AIXORD Equivalent |
+|---------------|-------------------|
+| Situation | System Context |
+| Mission | Objective |
+| Execution | Step-by-Step Tasks |
+| Constraints | Guardrails |
+| Command & Signal | Confirmation Rules |
+
+## The Five AIXORD Principles
+
+### 1. Authority
+
+AIXORD issues **orders**, not suggestions. The AI tells you what to do, not options to consider.
+
+```
+❌ "You might want to consider checking the database connection..."
+✅ "STEP 1: Verify database connection. Run: npm run db:check"
+```
+
+### 2. Directionality
+
+AIXORD flows AI → Human. The AI is the commander; you are the executor.
+
+```
+AI issues order → Human executes → Human confirms completion
+```
+
+### 3. Sequential Execution
+
+One action at a time. Never multiple steps in parallel.
+
+```
+❌ "Do steps 1, 2, and 3..."
+✅ "STEP 1: [action]. WAIT FOR CONFIRMATION."
+```
+
+### 4. Explicit Confirmation
+
+No progress without evidence. Every step requires confirmation.
+
+```
+"STEP 1 complete. Evidence: [screenshot/output/confirmation]"
+```
+
+### 5. State Awareness
+
+AIXORD tracks progress across sessions. No re-explaining.
+
+```
+Session 1: Steps 1-5 complete
+Session 2: Resumes at Step 6 (not Step 1)
+```
+
+---
+
+## AIXORD Structure
+
+### Canonical AIXORD Format
+
+```
+## AIXORD HEADER
+- AIXORD ID: [unique identifier]
+- Mission Name: [what we're doing]
+- Operator: [human name]
+- System/Platform: [what we're working on]
+- Environment: Prod / Staging / Dev
+
+## SITUATION
+Current system state (what exists, what must not change)
+
+## MISSION
+One clear objective (end condition, not steps)
+
+## EXECUTION RULES (GUARDRAILS)
+1. Sequential only
+2. One action at a time
+3. Explicit confirmation required
+4. No look-ahead or summarization
+
+## PHASE / STEP
+STEP #: [Action Title]
+
+Action:
+What the operator must do
+
+Expected Outcome:
+What success looks like
+
+Evidence Required:
+Screenshot / log / confirmation
+
+WAIT FOR CONFIRMATION
+```
+
+---
+
+# Part III: Complete Setup Guide
+
+## Step 1: Create Directory Structure
+
+```bash
+mkdir -p .claude/scopes
+mkdir -p docs/aixord
+mkdir -p docs/handoffs
+mkdir -p docs/archive
+```
+
+## Step 2: Copy Templates
+
+Place the template files:
+
+```
+.claude/
+├── CLAUDE.md              ← Claude Code instructions
+├── CLAUDE_WEB_SYNC.md     ← Claude Web mirror
+└── scopes/
+    └── MASTER_SCOPE.md    ← Project vision
+
+docs/
+├── aixord/
+│   ├── AIXORD_STATE.json  ← State tracking
+│   ├── AIXORD_GOVERNANCE.md ← Workflow rules
+│   └── AIXORD_TRACKER.md  ← Task status
+├── handoffs/              ← One per scope
+└── archive/               ← Obsolete content
+```
+
+## Step 3: Customize Templates
+
+Replace all `[BRACKETED]` placeholders:
+
+| Placeholder | Replace With | Example |
+|-------------|--------------|---------|
+| `[PROJECT NAME]` | Your project name | MyApp |
+| `[PROJECT]` | Short command prefix | MYAPP |
+| `[DATE]` | Today's date | 2025-01-15 |
+
+## Step 4: Fill Out MASTER_SCOPE.md
+
+Define your project vision:
+
+- Project identity and mission
+- Technical architecture decisions
+- Track/phase structure
+- Dependencies
+
+## Step 5: Create First Scope
+
+Prompt Claude Code directly:
+```
+AUDIT SCOPE: AUTH
+```
+
+Claude Code will:
+1. Check existing code
+2. Document current state
+3. Identify gaps
+4. Populate AUDIT_REPORT
+
+## Step 6: Start Working
+
+```
+MYAPP CONTINUE
+```
+
+Claude Code will:
+1. Read governance files (AIXORD_STATE.json first)
+2. Check active scope
+3. Verify git sync
+4. Output status
+5. Resume work
+
+---
+
+# Part IV: Living Documents System
+
+## The Problem with Append-Only
+
+Traditional documentation appends new content:
+
+```markdown
+## Session 1 - Jan 1
+Audit findings...
+
+## Session 2 - Jan 5
+New audit findings...
+
+## Session 3 - Jan 10
+Even more audit findings...
+```
+
+**Problems:**
+- Which audit is current?
+- 90% of content is outdated
+- Context window bloated
+- Contradictions between sections
+
+## Living Document Approach
+
+Update in place:
+
+```markdown
+## AUDIT_REPORT
+Last Audit: Jan 10
+
+[Current findings only]
+```
+
+**Benefits:**
+- Always current
+- Minimal context needed
+- No contradictions
+- Easy to find information
+
+## What Gets Updated vs Archived
+
+| Section | Update Behavior |
+|---------|-----------------|
+| DECISION LOG | **NEVER** deleted or archived |
+| AUDIT_REPORT | Replaced each audit |
+| HANDOFF_DOCUMENT | Updated with new requirements |
+| RESEARCH_FINDINGS | Latest session only |
+
+---
+
+# Part V: Template Reference
+
+## What's Included
+
+### Templates (8 Files)
+
+| File | Purpose |
+|------|---------|
+| `CLAUDE.md` | Instructions for Claude Code (Implementer role) |
+| `CLAUDE_WEB_SYNC.md` | Mirror for Claude Web (Architect role) |
+| `MASTER_SCOPE.md` | Project vision template |
+| `SCOPE_TEMPLATE.md` | Per-feature scope template |
+| `AIXORD_STATE.json` | Machine-readable state tracking |
+| `AIXORD_GOVERNANCE.md` | Workflow rules and protocols |
+| `AIXORD_TRACKER.md` | Task tracking |
+| `SYSTEM_GUIDE.md` | Complete operational documentation |
+
+### AIXORD Commands
+
+| Command | Effect |
+|---------|--------|
+| `[PROJECT] CONTINUE` | Full session startup protocol |
+| `AUDIT SCOPE: [name]` | Claude Code audits reality |
+| `SCOPE UPDATED: [name]` | Claude Code implements specs |
+| `SCOPE: [name]` | Load existing scope context |
+| `DONE` | Confirm task completion |
+| `UNLOCK: [file]` | Unlock file for modification |
+| `RELOCK: [file]` | Re-lock file after changes |
+
+---
+
+# Part VI: Example Workflow
+
+## Scenario: Adding User Authentication
+
+### Day 1: Audit
+
+**You:** `AUDIT SCOPE: AUTH`
+
+**Claude Code:**
+1. Checks existing code
+2. Documents current state
+3. Identifies gaps
+4. Populates AUDIT_REPORT
+
+**Result:** SCOPE_AUTH.md has reality-based findings
+
+### Day 2: Specification
+
+**You → Claude Web:** Share audit report
+
+**Claude Web:**
+1. Reviews findings
+2. Proposes approach
+3. Documents requirements
+4. Updates HANDOFF_DOCUMENT
+
+**Result:** SCOPE_AUTH.md has specifications
+
+### Day 3: Implementation
+
+**You:** `SCOPE UPDATED: AUTH`
+
+**Claude Code:**
+1. Reviews specifications
+2. Recommends improvements
+3. Implements approved solution
+4. Updates RESEARCH_FINDINGS
+5. Records decisions in DECISION LOG
+
+**Result:** Feature implemented, documented
+
+### Day 4: Completion
+
+**You:** Mark scope COMPLETE
+
+**Claude Code:**
+1. Locks critical files
+2. Updates AIXORD_STATE.json
+3. Prompts for archive cleanup
+
+**Result:** Feature protected, docs cleaned
+
+---
+
+# Part VII: Tiered Consent Model
+
+## Philosophy
+
+> *"There's no perfection in life, but we walk around fire rather than walking through it. Just because something doesn't work for one person doesn't mean it will not work for others."*
+
+AIXORD includes a risk mitigation framework for products that might venture into sensitive territory (legal guidance, tax assistance, etc.).
+
+## The Three Tiers
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  TIER 1: OPEN ACCESS                                        │
+│  General information, templates, education                  │
+│  No special consent needed                                  │
+├─────────────────────────────────────────────────────────────┤
+│  TIER 2: INFORMED CONSENT ZONE                              │
+│  Edge services with full disclosure                         │
+│  User acknowledges limitations + signs waiver               │
+├─────────────────────────────────────────────────────────────┤
+│  TIER 3: HARD BOUNDARY                                      │
+│  Truly prohibited services                                  │
+│  System blocks regardless of consent                        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## When to Apply
+
+The Tiered Consent Model applies when building:
+- Professional service assistants (Tax, Legal)
+- Products with liability risk
+- Tools that could be misused
+
+## The Fool Filter
+
+The consent process itself filters users:
+
+```
+Sophisticated User → Reads disclaimer → Benefits from tool
+         vs.
+Fool → Ignores warnings → BUT: Signed waiver limits liability
+```
+
+---
+
+# Part VIII: AIXORD Variants
+
+## VA-AIXORD (Visual Audit)
+
+For platform audits with visual evidence:
+
+```
+STEP #: [Plain English Action]
+
+Action:
+What the user does (one action only)
+
+Expected Outcome:
+What the system SHOULD do
+
+Evidence Required:
+Screenshot(s) or screen recording
+
+Observed Outcome:
+What actually happened
+
+Gaps Identified:
+- GAP-ID
+- Category
+- Description
+- Severity
+```
+
+## Chatbot Edition
+
+For ChatGPT/Gemini users without folder access:
+- Single-file template system
+- Token-aware handoff tracking
+- All context in one uploadable file
+
+## Professional Service Variants
+
+- **TAX-AIXORD** — Tax preparation workflows
+- **LEGAL-AIXORD** — Legal document preparation
+- **PROJECT-AIXORD** — Project management
+
+---
+
+# Troubleshooting
+
+## Q: What if I need to modify a locked file?
+
+**A:** Use the unlock command:
+```
+UNLOCK: path/to/file.js
+```
+
+Make changes, verify functionality, then:
+```
+RELOCK: path/to/file.js
+```
+
+## Q: How do I handle multiple features in parallel?
+
+**A:** Each feature gets its own scope. Set `active_scope` in AIXORD_STATE.json to switch context.
+
+## Q: Can I use AIXORD with ChatGPT instead of Claude?
+
+**A:** Yes. Upload the templates as files. The methodology works with any AI that accepts file uploads.
+
+## Q: What if the AI ignores the AIXORD rules?
+
+**A:** Remind it: "You are operating under AIXORD protocol. Sequential execution only. Wait for my confirmation before proceeding."
+
+---
+
+# About the Author
+
+**Idowu J Gabriel, Sr.** is the founder of PMERIT LLC, a nonprofit-LLC hybrid focused on accessible global education.
+
+AIXORD was developed while building the PMERIT AI Educational Platform from scratch with just 2 semesters of Java experience and AI assistance. After 75+ sessions of AI-augmented development, the need for structured governance became clear.
+
+The name "AIXORD" emerged from connecting the workflow to military OPORD (Operations Order) doctrine — emphasizing authority, execution discipline, and confirmation gates.
+
+**What started as survival became methodology. What became methodology became product.**
+
+---
+
+## Support
+
+For questions or issues:
+- Website: https://pmerit.com
+- GitHub: https://github.com/peoplemerit
+- Email: support@pmerit.com
+
+---
+
+*AIXORD v1.0 — Authority. Execution. Confirmation.*
+*Copyright 2025 PMERIT LLC. All Rights Reserved.*
