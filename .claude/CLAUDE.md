@@ -1,8 +1,21 @@
 # PMERIT Product Development — Claude Code Instructions
 
-**Version:** 2.0
+**Version:** 2.1
 **Updated:** December 25, 2025
 **Purpose:** Product design, development, and Amazon launch workflows
+**Governance:** AIXORD (AI Execution Order)
+
+---
+
+## MANDATORY STARTUP PROTOCOL
+
+When you receive "PRODUCT CONTINUE" or start any session:
+
+1. **Read** `docs/aixord/AIXORD_STATE.json` — Current state and active product
+2. **Read** `docs/aixord/AIXORD_TRACKER.md` — Task status and decisions
+3. **Check** active scope in `.claude/scopes/`
+4. **Output** status summary and next action
+5. **Wait** for user direction
 
 ---
 
@@ -71,12 +84,12 @@ Pmerit_Product_Development/
 ├── .claude/
 │   ├── CLAUDE.md                    <- This file
 │   └── scopes/
-│       ├── SCOPE_ScopeOrderSystem.md
+│       ├── SCOPE_AIXORD.md
 │       ├── SCOPE_AIForCuriousMinds.md
 │       └── SCOPE_[ProductName].md
 │
 ├── products/                        <- ALL product folders
-│   ├── scope-order-system/          <- Published product
+│   ├── aixord/                      <- AIXORD Framework (rebrand)
 │   │   ├── MANUSCRIPT_*.md
 │   │   ├── templates/
 │   │   ├── distribution/
@@ -93,6 +106,10 @@ Pmerit_Product_Development/
 │   └── *.txt                        <- Raw chat exports
 │
 ├── docs/
+│   ├── aixord/                      <- AIXORD governance
+│   │   ├── AIXORD_STATE.json        <- Current state
+│   │   ├── AIXORD_GOVERNANCE.md     <- Workflow rules
+│   │   └── AIXORD_TRACKER.md        <- Task tracking
 │   ├── methodology/                 <- Frameworks & concepts
 │   │   ├── AIXORD_FRAMEWORK.md      <- AI Execution Order system
 │   │   └── TIERED_CONSENT_MODEL.md  <- Risk mitigation for services
@@ -110,11 +127,10 @@ Pmerit_Product_Development/
 
 | Product | Phase | Location |
 |---------|-------|----------|
-| Scope Order System | Published (v1), v3 in dev | `products/scope-order-system/` |
-| AI for Curious Minds | Development (ready for KDP) | `products/ai-for-curious-minds/` |
+| AIXORD: AI Execution Order Framework | Rebrand in progress | `products/aixord/` |
+| AI for Curious Minds | Published | `products/ai-for-curious-minds/` |
 | Tax Assistant | Conceptual | `products/tax-assistant/` (future) |
 | Legal Assistant | Conceptual | `products/legal-assistant/` (future) |
-| AIXORD Framework | Conceptual | `docs/methodology/AIXORD_FRAMEWORK.md` |
 
 ---
 
@@ -265,10 +281,13 @@ All products point back to pmerit.com for:
 
 | Document | Location |
 |----------|----------|
+| **AIXORD State** | `docs/aixord/AIXORD_STATE.json` |
+| **AIXORD Governance** | `docs/aixord/AIXORD_GOVERNANCE.md` |
+| **AIXORD Tracker** | `docs/aixord/AIXORD_TRACKER.md` |
 | Brainstorm Sessions | `Chat-Histories/Brainstorm/` |
-| Product Methodology | `Chat-Histories/Turning_prompt_engineering_into_product.md` |
-| AIXORD Framework | `docs/methodology/AIXORD_FRAMEWORK.md` |
+| AIXORD Framework Doc | `docs/methodology/AIXORD_FRAMEWORK.md` |
 | Tiered Consent Model | `docs/methodology/TIERED_CONSENT_MODEL.md` |
+| Brand Style Guide | `docs/BRAND_STYLE_GUIDE.md` |
 | Platform Sales Docs | `docs/reference/sales/` |
 
 ---
@@ -299,5 +318,6 @@ This repo is for **PRODUCTS ONLY**. Platform code lives in `pmerit-ai-platform/`
 
 ---
 
-*PMERIT Product Development Environment v2.0*
+*PMERIT Product Development Environment v2.1*
 *Updated: December 25, 2025*
+*Governance: AIXORD (AI Execution Order)*

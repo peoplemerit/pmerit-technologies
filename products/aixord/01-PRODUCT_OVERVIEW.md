@@ -1,4 +1,17 @@
-# Scope Order System — Product Overview
+# AIXORD: AI Execution Order Framework — Product Overview
+
+---
+
+## What is AIXORD?
+
+**AIXORD (AI Execution Order)** is a structured methodology for AI-human collaboration, inspired by military OPORD (Operations Order) doctrine.
+
+> **AIXORD Definition:** A guardrailed execution order issued by an AI system to a human operator, requiring sequential action, single-task focus, and explicit confirmation before proceeding.
+
+**Core Principles:**
+- **Authority** — Orders, not suggestions
+- **Execution** — Sequential, confirmable tasks
+- **Confirmation** — Evidence before proceeding
 
 ---
 
@@ -33,9 +46,9 @@ Developers using AI assistants face critical challenges:
 
 ---
 
-## The Solution: Scope Order System
+## The Solution: AIXORD Framework
 
-A **methodology + template pack** that creates structured collaboration between you and your AI assistants.
+A **methodology + template pack** that creates structured execution orders between you and your AI assistants.
 
 ### Core Concept: Reality-First Workflow
 
@@ -43,9 +56,19 @@ A **methodology + template pack** that creates structured collaboration between 
 Traditional (Spec-First):
   Write Spec → Implement → Discover spec was wrong → Redo
 
-Scope Order (Reality-First):
+AIXORD (Reality-First):
   Audit Reality → Write Spec Based on Facts → Implement → Update Findings
 ```
+
+### How AIXORD Differs from Prompts
+
+| Prompt | AIXORD |
+|--------|--------|
+| Suggestive | Directive |
+| Stateless | State-aware |
+| Multi-output | Single-action |
+| Informational | Executable |
+| AI-centered | Human-executed |
 
 ### Three-Way Team Structure
 
@@ -75,11 +98,11 @@ Each scope contains:
 - **AUDIT_REPORT** — Current reality (populated by Claude Code)
 - **HANDOFF_DOCUMENT** — Specifications (populated by Claude Web)
 - **RESEARCH_FINDINGS** — Implementation notes (populated by Claude Code)
-- **DEPENDENCIES** — How scopes relate
+- **DECISION_LOG** — Decisions with ACTIVE/NO-GO/EXPERIMENTAL states
 
 ---
 
-## How It Works
+## AIXORD Execution Flow
 
 ### Step 1: Director Creates Empty Scope
 ```
@@ -115,10 +138,9 @@ Claude Code: Reads specs, recommends alternatives if better, implements
 Claude Code: Updates RESEARCH_FINDINGS with what was done
 ```
 
-### Step 7: Repeat
+### Step 7: Confirm and Repeat
 ```
-You → Claude Web: Share implementation output
-Claude Web: Provides follow-up requirements
+You: Verify completion, provide "DONE" confirmation
 REPEAT until feature complete
 ```
 
@@ -136,32 +158,35 @@ REPEAT until feature complete
 | `STATE.json` | Machine-readable state tracking |
 | `GOVERNANCE.md` | Workflow rules and protocols |
 | `SYSTEM_GUIDE.md` | Complete operational documentation |
+| `TASK_TRACKER.md` | Task tracking template |
 
-### Commands
+### AIXORD Commands
 | Command | Effect |
 |---------|--------|
-| `PMERIT CONTINUE` | Full session startup protocol |
+| `[PROJECT] CONTINUE` | Full session startup protocol |
 | `AUDIT SCOPE: [name]` | Claude Code audits reality |
 | `SCOPE UPDATED: [name]` | Claude Code implements specs |
 | `SCOPE: [name]` | Load existing scope context |
+| `DONE` | Confirm task completion |
 
 ### Documentation
 - Quick Start Guide (15 minutes to setup)
 - Complete System Guide (deep reference)
-- Workflow diagrams (visual learners)
+- Example Workflow (real-world usage)
 
 ---
 
 ## Benefits
 
-| Before Scope Order | After Scope Order |
-|--------------------|-------------------|
+| Before AIXORD | After AIXORD |
+|---------------|--------------|
 | Re-explain context every session | Context persists in scope files |
 | Specs become outdated | Reality-first prevents drift |
 | Unclear who does what | Clear role separation |
 | Progress lost in chat logs | RESEARCH_FINDINGS captures everything |
 | Context window overload | Load only active scope |
 | Random implementations | Architectural decisions locked |
+| Chaotic multi-tool workflows | Structured execution orders |
 
 ---
 
@@ -173,6 +198,7 @@ REPEAT until feature complete
 - Works on projects with multiple features/components
 - Frustrated with AI context limits and session resets
 - Values documentation and structured workflows
+- Wants AI governance, not AI chaos
 
 ### Not For
 - Teams with existing robust project management
@@ -194,7 +220,7 @@ REPEAT until feature complete
 
 ## Origin Story
 
-This system was developed through **50+ real development sessions** on the PMERIT AI Educational Platform — a production web application with:
+AIXORD was developed through **75+ real development sessions** on the PMERIT AI Educational Platform — a production web application with:
 - Frontend (HTML/CSS/JS)
 - Backend API (Cloudflare Workers)
 - Database (Neon PostgreSQL)
@@ -202,7 +228,7 @@ This system was developed through **50+ real development sessions** on the PMERI
 
 The methodology evolved from necessity: managing complex features across multiple AI assistants without losing context or creating duplicate work.
 
-The **Reality-First** improvement (v2) came from discovering that specs written before auditing reality were often wrong, leading to wasted implementation cycles.
+The name "AIXORD" emerged from connecting the workflow to military OPORD (Operations Order) doctrine — emphasizing authority, execution discipline, and confirmation gates.
 
 ---
 
@@ -211,7 +237,8 @@ The **Reality-First** improvement (v2) came from discovering that specs written 
 1. **[Quick Start Guide](./02-QUICK_START_GUIDE.md)** — Setup in 15 minutes
 2. **[Templates](./templates/)** — Ready-to-use files
 3. **[System Guide](./templates/SYSTEM_GUIDE.md)** — Complete reference
+4. **[Example Workflow](./05-EXAMPLE_WORKFLOW.md)** — See it in action
 
 ---
 
-*Scope Order System — Stop fighting your AI assistants. Start collaborating.*
+*AIXORD — Authority. Execution. Confirmation.*
