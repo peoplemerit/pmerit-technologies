@@ -30,7 +30,7 @@ This book and its accompanying templates are protected by copyright. You may use
 Your purchase includes downloadable templates.
 
 **Access your templates at:**
-https://meritwise0.gumroad.com/l/aixord
+https://meritwise0.gumroad.com/l/nbkkha
 
 Use your Amazon order confirmation email to verify your purchase.
 
@@ -772,7 +772,7 @@ You now have everything you need to implement AIXORD in your projects.
 
 ## Deploy AIXORD Today
 
-**Step 1:** Download templates from https://meritwise0.gumroad.com/l/aixord
+**Step 1:** Download templates from https://meritwise0.gumroad.com/l/nbkkha
 
 **Step 2:** Create your directory structure:
 ```
