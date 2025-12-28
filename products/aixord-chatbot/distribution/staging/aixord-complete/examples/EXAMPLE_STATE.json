@@ -1,0 +1,160 @@
+{
+  "_comment": "AIXORD State File v2.0-enhanced — Example with filled values",
+  "_schema_version": "2.0-enhanced",
+  "_docs": "See AIXORD_GOVERNANCE_V2.md for field definitions",
+
+  "governance": {
+    "doc_id": "AIXORD_GOVERNANCE_V2.md",
+    "version": "2.0",
+    "effective": "2025-12-27",
+    "hash_sha256": "abc123def456...",
+    "source": "governance/AIXORD_GOVERNANCE_V2.md",
+    "pin_required": true
+  },
+
+  "project": {
+    "name": "Email Archive Dashboard",
+    "repository": "https://github.com/example/email-archive",
+    "created": "2025-12-20"
+  },
+
+  "session": {
+    "number": 5,
+    "started": "2025-12-27T10:30:00Z",
+    "last_updated": "2025-12-27T14:15:00Z"
+  },
+
+  "authority": {
+    "decision": "human",
+    "execution": "ai_commander",
+    "transfer_log": [
+      {
+        "timestamp": "2025-12-27T10:35:00Z",
+        "from": "human",
+        "to": "ai_commander",
+        "trigger": "ENTER EXECUTION MODE",
+        "scope": "SCOPE_SEARCH_UI"
+      }
+    ]
+  },
+
+  "mode": {
+    "current": "EXECUTION",
+    "previous": "DECISION",
+    "entered_at": "2025-12-27T10:35:00Z",
+    "entered_by": "human",
+    "reason": "Approved HANDOFF for search UI implementation",
+    "allowed": ["DECISION", "EXECUTION", "AUDIT", "VISUAL_AUDIT"]
+  },
+
+  "scope": {
+    "active": "SCOPE_SEARCH_UI",
+    "queue": ["SCOPE_EXPORT_PDF", "SCOPE_ADMIN_PANEL"],
+    "status": {
+      "SCOPE_DATABASE": "LOCKED",
+      "SCOPE_AUTH": "COMPLETE",
+      "SCOPE_SEARCH_UI": "IN_PROGRESS",
+      "SCOPE_EXPORT_PDF": "SPECIFIED",
+      "SCOPE_ADMIN_PANEL": "AUDITED"
+    }
+  },
+
+  "halt": {
+    "is_halted": false,
+    "reason": null,
+    "halted_at": null,
+    "blockers": [],
+    "types_allowed": [
+      "ambiguous_requirement",
+      "missing_specification",
+      "scope_conflict",
+      "prerequisite_not_met",
+      "three_attempts_exceeded",
+      "locked_file_modification",
+      "authority_violation",
+      "human_issued",
+      "visual_discrepancy_unresolved",
+      "unexpected_error",
+      "scope_creep_detected"
+    ]
+  },
+
+  "confirmations": {
+    "pending": [],
+    "history": [
+      {
+        "id": "CONF-001",
+        "timestamp": "2025-12-27T10:35:00Z",
+        "action": "Enter EXECUTION mode",
+        "approved_by": "human",
+        "response": "Approved"
+      }
+    ]
+  },
+
+  "attempts": {
+    "rule": {
+      "default_max": 3,
+      "extend_to": 5,
+      "extend_command": "EXTEND ATTEMPTS: [task]"
+    },
+    "by_scope": {
+      "SCOPE_SEARCH_UI": {
+        "current_task": "Implement search filters",
+        "attempts": 1,
+        "max": 3
+      }
+    }
+  },
+
+  "visual_audit": {
+    "pending_scopes": ["SCOPE_SEARCH_UI"],
+    "last_audit": "2025-12-26T16:00:00Z",
+    "last_audit_scope": "SCOPE_AUTH"
+  },
+
+  "continuity": {
+    "last_handoff": "handoffs/HANDOFF_SESSION_4.md",
+    "carryforward_items": [
+      "Complete search filter implementation",
+      "Add date range picker"
+    ],
+    "incomplete_tasks": [
+      "Pagination for search results"
+    ]
+  },
+
+  "roots": {
+    "_comment": "v3.0 feature — disabled in v2.0",
+    "aixord_root": {
+      "enabled": false,
+      "path": null,
+      "read_only": true
+    },
+    "execution_sandbox": {
+      "enabled": false,
+      "path": null,
+      "allowed_commands": [],
+      "prohibited_patterns": ["sudo", "rm -rf", "curl", "wget"],
+      "audit_log_path": null
+    }
+  },
+
+  "adapter": {
+    "_comment": "v3.0 feature — disabled in v2.0",
+    "enabled": false,
+    "adapter_id": null,
+    "capabilities": {
+      "filesystem_read": false,
+      "filesystem_write": false,
+      "cli_execute": false,
+      "network_access": false
+    },
+    "command_policy": {
+      "allowlist": [],
+      "denylist": [],
+      "requires_confirmation": true,
+      "log_every_command": true
+    }
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "_comment": "AIXORD State File v2.0-enhanced — Single source of truth for project state",
+  "_schema_version": "2.0-enhanced",
+  "_docs": "See AIXORD_GOVERNANCE_V2.md for field definitions",
+
+  "governance": {
+    "doc_id": "AIXORD_GOVERNANCE_V2.md",
+    "version": "2.0",
+    "effective": "[YYYY-MM-DD]",
+    "hash_sha256": null,
+    "source": "[path/to/AIXORD_GOVERNANCE_V2.md]",
+    "pin_required": true
+  },
+
+  "project": {
+    "name": "[PROJECT_NAME]",
+    "repository": "[repo-path-or-url]",
+    "created": "[YYYY-MM-DD]"
+  },
+
+  "session": {
+    "number": 1,
+    "started": null,
+    "last_updated": null
+  },
+
+  "authority": {
+    "decision": "human",
+    "execution": "none",
+    "transfer_log": []
+  },
+
+  "mode": {
+    "current": "DECISION",
+    "previous": null,
+    "entered_at": null,
+    "entered_by": "human",
+    "reason": "session_start",
+    "allowed": ["DECISION", "EXECUTION", "AUDIT", "VISUAL_AUDIT"]
+  },
+
+  "scope": {
+    "active": null,
+    "queue": [],
+    "status": {}
+  },
+
+  "halt": {
+    "is_halted": false,
+    "reason": null,
+    "halted_at": null,
+    "blockers": [],
+    "types_allowed": [
+      "ambiguous_requirement",
+      "missing_specification",
+      "scope_conflict",
+      "prerequisite_not_met",
+      "three_attempts_exceeded",
+      "locked_file_modification",
+      "authority_violation",
+      "human_issued",
+      "visual_discrepancy_unresolved",
+      "unexpected_error",
+      "scope_creep_detected"
+    ]
+  },
+
+  "confirmations": {
+    "pending": [],
+    "history": []
+  },
+
+  "attempts": {
+    "rule": {
+      "default_max": 3,
+      "extend_to": 5,
+      "extend_command": "EXTEND ATTEMPTS: [task]"
+    },
+    "by_scope": {}
+  },
+
+  "visual_audit": {
+    "pending_scopes": [],
+    "last_audit": null,
+    "last_audit_scope": null
+  },
+
+  "continuity": {
+    "last_handoff": null,
+    "carryforward_items": [],
+    "incomplete_tasks": []
+  },
+
+  "roots": {
+    "_comment": "v3.0 feature — disabled in v2.0",
+    "aixord_root": {
+      "enabled": false,
+      "path": null,
+      "read_only": true
+    },
+    "execution_sandbox": {
+      "enabled": false,
+      "path": null,
+      "allowed_commands": [],
+      "prohibited_patterns": ["sudo", "rm -rf", "curl", "wget"],
+      "audit_log_path": null
+    }
+  },
+
+  "adapter": {
+    "_comment": "v3.0 feature — disabled in v2.0",
+    "enabled": false,
+    "adapter_id": null,
+    "capabilities": {
+      "filesystem_read": false,
+      "filesystem_write": false,
+      "cli_execute": false,
+      "network_access": false
+    },
+    "command_policy": {
+      "allowlist": [],
+      "denylist": [],
+      "requires_confirmation": true,
+      "log_every_command": true
+    }
+  }
+}
