@@ -6,7 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useApi';
+import { useAuth } from '../contexts/AuthContext';
 
 type LoginMethod = 'email' | 'apikey';
 
@@ -33,7 +33,7 @@ export function Login() {
       } else {
         await login(apiKey);
       }
-      navigate('/dashboard');
+      // Navigation handled by useEffect when user becomes truthy
     } catch {
       // Error is handled by useAuth
     }
