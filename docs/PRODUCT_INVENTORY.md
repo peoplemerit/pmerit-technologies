@@ -33,7 +33,7 @@
 | # | Product | Status | Description | Platform |
 |---|---------|--------|-------------|----------|
 | 1 | **AIXORD: AI Execution Order Framework** | Rebrand in progress | Full methodology for Claude Code Pro users | Amazon KDP |
-| 2 | **AIXORD Chatbot Edition** | Conceptual | Simplified version for ChatGPT/Gemini free users | Amazon KDP |
+| 2 | **AIXORD Chatbot Edition** | Manuscript Complete | Single-file system for ChatGPT/Gemini free users | Amazon KDP |
 | 3 | **AIXORD Visual Audit Playbook** | Conceptual | VA-AIXORD for platform audits | Amazon KDP |
 | 4 | **AI for Curious Minds** | Published | Beginner AI education book | Amazon KDP |
 
@@ -213,10 +213,12 @@ Amazon (Discovery) → Gumroad (Delivery) → GitHub (Source)
 
 1. [ ] Complete AIXORD rebrand (Amazon republish)
 2. [ ] Create FOOL_FILTER_DOCTRINE.md
-3. [ ] Create AIXORD Chatbot Edition manuscript
-4. [ ] Create ChatGPT/Gemini AIXORD review template
-5. [ ] Design Tax Assistant workflow
-6. [ ] Design Legal Assistant workflow
+3. [x] Create AIXORD Chatbot Edition manuscript ✓
+4. [x] Create AIXORD Chatbot Edition template ✓
+5. [ ] Format AIXORD Chatbot Edition for KDP (DOCX/PDF)
+6. [ ] Create Gumroad listing for AIXORD Chatbot Edition
+7. [ ] Design Tax Assistant workflow
+8. [ ] Design Legal Assistant workflow
 
 ---
 

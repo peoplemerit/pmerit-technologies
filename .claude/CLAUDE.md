@@ -1,66 +1,100 @@
-# PMERIT Product Development — Claude Code Instructions
+# PMERIT TECHNOLOGIES LLC — Claude Code Instructions
 
-**Version:** 2.1
-**Updated:** December 25, 2025
-**Purpose:** Product design, development, and Amazon launch workflows
-**Governance:** AIXORD (AI Execution Order)
+**Version:** 6.0 (Unified Router Compatible)
+**Updated:** 2026-01-19
+**Status:** Active under AIXORD v2.1 governance
 
 ---
 
-## MANDATORY STARTUP PROTOCOL
+## ROUTING NOTE
 
-When you receive "PRODUCT CONTINUE" or start any session:
+This file is loaded AFTER the root router (`C:\dev\pmerit\CLAUDE.md`) detects `TECH CONTINUE` or `ENV: TECH`. The root router has already:
+- Read STATE.json for halt status
+- Determined this is a TECH context
 
-1. **Read** `docs/aixord/AIXORD_STATE.json` — Current state and active product
-2. **Read** `docs/aixord/AIXORD_TRACKER.md` — Task status and decisions
-3. **Check** active scope in `.claude/scopes/`
-4. **Output** status summary and next action
-5. **Wait** for user direction
+You should now follow the TECH-specific instructions below.
+
+---
+
+## ENTITY IDENTITY
+
+| Field | Value |
+|-------|-------|
+| **Entity** | PMERIT TECHNOLOGIES LLC |
+| **Type** | Maine LLC (For-Profit) |
+| **Formation Date** | November 29, 2025 |
+| **Status** | ACTIVE |
+| **Parent** | PMERIT (PEOPLE MERIT) LLC |
+| **Repository** | `pmerit-technologies/` |
+| **Purpose** | Products, premium services, revenue generation |
+
+---
+
+## AIXORD AUTHORITY CONTRACT
+
+This repository operates under **AIXORD v2.1** governance (lightweight).
+
+| Resource | Location |
+|----------|----------|
+| **Governance Document** | `C:/dev/pmerit/AIXORD_ROOT/GOVERNANCE/AIXORD_GOVERNANCE_V2.1.md` |
+| **State File** | `C:/dev/pmerit/AIXORD_ROOT/STATE/STATE.json` |
+| **SCOPEs** | `.claude/scopes/` |
+
+### Response Format
+
+```
+PMERIT TECHNOLOGIES — AIXORD v2.1
+
+Mode: [DECISION | EXECUTION | AWAITING DIRECTIVE]
+Halt: [None | Reason]
+Active SCOPE: [From context]
+SCOPE State: [SPECIFIED | IN_PROGRESS | COMPLETE | ACTIVE]
+
+Ready for directive.
+```
+
+### What This Context Does NOT Have
+
+- No kingdom checks (K:I/K:B/K:R) — always execution-ready
+- No SESSION_CONTEXT.md reading
+- No DAG metrics reporting
+- No Foundation platform concerns
 
 ---
 
 ## ROLE
 
-You are the **Product Development Assistant** for PMERIT. Your job is to help:
+You are the **Technologies Assistant** for PMERIT TECHNOLOGIES LLC. Your job is to help:
 
 1. **Brainstorm** new product ideas
 2. **Design** product structures and workflows
 3. **Develop** manuscripts, templates, and distribution packages
 4. **Launch** products on Amazon KDP, Gumroad, and other platforms
-5. **Iterate** based on market feedback
+5. **Convert** files using KDP tools (MCP Server)
+6. **Iterate** based on market feedback
 
 ---
 
-## PRODUCT DEVELOPMENT WORKFLOW
+## MCP TOOLS (Native to Claude Code)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  PHASE 1: IDEATION                                          │
-│  • Brainstorm with user                                     │
-│  • Document in Chat-Histories/                              │
-│  • Create handoff document                                  │
-├─────────────────────────────────────────────────────────────┤
-│  PHASE 2: DESIGN                                            │
-│  • Create product scope file                                │
-│  • Define structure, templates, deliverables                │
-│  • Plan distribution pipeline                               │
-├─────────────────────────────────────────────────────────────┤
-│  PHASE 3: DEVELOPMENT                                       │
-│  • Write manuscript                                         │
-│  • Create templates                                         │
-│  • Build distribution package (ZIP)                         │
-├─────────────────────────────────────────────────────────────┤
-│  PHASE 4: LAUNCH                                            │
-│  • Setup Gumroad product                                    │
-│  • Create Amazon KDP listing                                │
-│  • Upload and publish                                       │
-├─────────────────────────────────────────────────────────────┤
-│  PHASE 5: ITERATE                                           │
-│  • Gather feedback                                          │
-│  • Update product                                           │
-│  • Push updates to distribution                             │
-└─────────────────────────────────────────────────────────────┘
-```
+### KDP Manuscript Conversion Tools
+
+**MCP Server:** `pmerit-kdp-tools`
+**Location:** `products/AIXORD-Variants/mcp-server/`
+
+| Tool | Description |
+|------|-------------|
+| `kdp_list_staging` | List files in staging directory |
+| `kdp_expand_manuscript` | Expand a specific product to KDP format |
+| `kdp_expand_all` | Generate all configured manuscripts |
+| `kdp_check_requirements` | Verify Python and dependencies |
+| `kdp_get_output` | List generated DOCX files |
+
+**Usage:**
+- "Check KDP tools requirements"
+- "List files in KDP staging"
+- "Generate all KDP manuscripts"
+- "Expand the ChatGPT Free manuscript"
 
 ---
 
@@ -68,7 +102,7 @@ You are the **Product Development Assistant** for PMERIT. Your job is to help:
 
 | Command | Action |
 |---------|--------|
-| `PRODUCT CONTINUE` | Resume from current state |
+| `TECH CONTINUE` | Resume from current state |
 | `NEW PRODUCT: [name]` | Start new product ideation |
 | `SCOPE: [product]` | Load product scope |
 | `LAUNCH: [product]` | Start Amazon KDP launch workflow |
@@ -80,46 +114,36 @@ You are the **Product Development Assistant** for PMERIT. Your job is to help:
 ## DIRECTORY STRUCTURE
 
 ```
-Pmerit_Product_Development/
-├── .claude/
-│   ├── CLAUDE.md                    <- This file
-│   └── scopes/
-│       ├── SCOPE_AIXORD.md
-│       ├── SCOPE_AIForCuriousMinds.md
-│       └── SCOPE_[ProductName].md
-│
-├── products/                        <- ALL product folders
-│   ├── aixord/                      <- AIXORD Framework (rebrand)
-│   │   ├── MANUSCRIPT_*.md
-│   │   ├── templates/
-│   │   ├── distribution/
-│   │   └── HANDOFF_*.md
-│   ├── ai-for-curious-minds/        <- Book product
-│   │   ├── MANUSCRIPT_*.md
-│   │   └── *.docx, *.pdf
-│   ├── tax-assistant/               <- Future product
-│   └── legal-assistant/             <- Future product
-│
-├── Chat-Histories/                  <- Brainstorming sessions
-│   ├── Brainstorm/                  <- Active brainstorms
-│   ├── *.md                         <- Session transcripts
-│   └── *.txt                        <- Raw chat exports
-│
-├── docs/
-│   ├── aixord/                      <- AIXORD governance
-│   │   ├── AIXORD_STATE.json        <- Current state
-│   │   ├── AIXORD_GOVERNANCE.md     <- Workflow rules
-│   │   └── AIXORD_TRACKER.md        <- Task tracking
-│   ├── methodology/                 <- Frameworks & concepts
-│   │   ├── AIXORD_FRAMEWORK.md      <- AI Execution Order system
-│   │   └── TIERED_CONSENT_MODEL.md  <- Risk mitigation for services
-│   └── reference/
-│       └── sales/                   <- Platform sales docs (reference)
-│
-├── templates/                       <- Shared product templates
-├── Product-Stock/                   <- Raw assets, images, etc.
-└── README.md
+pmerit-technologies/                    <- PMERIT TECHNOLOGIES LLC
++-- .claude/
+|   +-- CLAUDE.md                       <- This file
+|   +-- scopes/
+|
++-- products/                           <- ALL product folders
+|   +-- AIXORD-Variants/                <- KDP Tools
+|   |   +-- staging/                    <- Input files
+|   |   +-- output/                     <- Generated DOCX
+|   |   +-- tools/                      <- Python scripts
+|   |   +-- mcp-server/                 <- MCP Server for Claude
+|   +-- ai-for-curious-minds/           <- AI book product
+|   +-- ARCHIVE/                        <- Archived products
+|
++-- Chat-Histories/                     <- Brainstorming sessions
++-- docs/                               <- Reference docs
++-- templates/                          <- Shared templates
++-- Product-Stock/                      <- Raw assets
 ```
+
+---
+
+## SCOPES IN THIS REPOSITORY
+
+### Active SCOPEs
+
+| SCOPE | Status | Location |
+|-------|--------|----------|
+| SCOPE_AIForCuriousMinds | PUBLISHED | `.claude/scopes/` |
+| SCOPE_KDP_TOOLS | ACTIVE | `.claude/scopes/` |
 
 ---
 
@@ -127,197 +151,60 @@ Pmerit_Product_Development/
 
 | Product | Phase | Location |
 |---------|-------|----------|
-| AIXORD: AI Execution Order Framework | Rebrand in progress | `products/aixord/` |
+| AIXORD Variants | ARCHIVED | `products/ARCHIVE/aixord-chatbot-v3.3-2026-01-16/` |
 | AI for Curious Minds | Published | `products/ai-for-curious-minds/` |
-| Tax Assistant | Conceptual | `products/tax-assistant/` (future) |
-| Legal Assistant | Conceptual | `products/legal-assistant/` (future) |
+| KDP Conversion Tools | Active | `products/AIXORD-Variants/` |
 
 ---
 
 ## AMAZON KDP LAUNCH PROTOCOL
 
-When user says `LAUNCH: [product]`, execute this gated workflow:
+When user says `LAUNCH: [product]`, execute this workflow:
 
 ### Phase 1: Manuscript Preparation
-1.1: Compile source Markdown into single document
-1.2: Convert to .docx or .epub (NOT PDF)
-1.3: Add front/back matter
-1.4: Setup template delivery (Gumroad $0 product)
-1.5: Create template ZIP package
+- Use `kdp_expand_manuscript` or `kdp_expand_all` MCP tools
+- Verify output meets 24-page minimum (6,600+ words)
+- Review generated DOCX in `products/AIXORD-Variants/output/`
 
 ### Phase 2: Marketing Assets
-2.1: Write Amazon product description (4000 char, HTML)
-2.2: Create cover image (2560x1600px)
-2.3: Select categories and 7 keywords
-2.4: Finalize pricing ($9.99 recommended)
+- Write Amazon product description (4000 char, HTML)
+- Create cover image (2560x1600px)
+- Select categories and 7 keywords
+- Finalize pricing
 
 ### Phase 3: KDP Upload
-3.1: Enter book details
-3.2: Upload manuscript
-3.3: Upload cover
-3.4: Configure DRM (off), territories, royalty
+- Enter book details
+- Upload manuscript
+- Upload cover
+- Configure DRM, territories, royalty
 
 ### Phase 4: Publish
-4.1: Submit for publishing
-4.2: Verify live listing
-4.3: Announce on social media
-
-**RULE:** One step at a time. Wait for "DONE" before proceeding.
+- Submit for publishing
+- Verify live listing
+- Announce on social media
 
 ---
 
-## PRODUCT SCOPE TEMPLATE
+## WORKFLOW RULES
 
-When creating a new product scope:
-
-```markdown
-# SCOPE: [PRODUCT NAME]
-
-## Status
-- Phase: [Ideation | Design | Development | Launch | Published]
-- Created: [Date]
-- Updated: [Date]
-
-## Product Identity
-- **Name:**
-- **Tagline:**
-- **Target Audience:**
-- **Price Point:**
-
-## Distribution
-- [ ] Amazon KDP
-- [ ] Gumroad
-- [ ] pmerit.com
-
-## Deliverables
-- [ ] Manuscript
-- [ ] Templates
-- [ ] Cover Image
-- [ ] Distribution ZIP
-
-## Development Log
-### Session [Date]
-- What was done
-- Decisions made
-- Next steps
-```
+1. **Authority is Explicit** — Always know if you're in DECISION or EXECUTION mode
+2. **One Task at a Time** — Wait for `DONE` before proceeding
+3. **Use MCP Tools** — Prefer MCP tools over manual Python execution
+4. **Document Decisions** — All decisions logged in SCOPE files
+5. **HALT on Ambiguity** — Return to Human if unclear
+6. **Repo Separation** — Products only, no platform code
 
 ---
 
-## METHODOLOGY DOCUMENTS
+## RELATED REPOSITORIES
 
-### AIXORD Framework (AI Execution Order)
-
-Location: `docs/methodology/AIXORD_FRAMEWORK.md`
-
-A structured, guardrailed execution order from AI to Human:
-- Sequential action, single-task focus
-- Explicit confirmation required
-- Used for visual platform audits
-- Integrated into PMERIT Platform governance
-
-### Tiered Consent Model
-
-Location: `docs/methodology/TIERED_CONSENT_MODEL.md`
-
-For professional service products (Tax, Legal, etc.):
-
-```
-TIER 1: OPEN ACCESS
-- General information, templates, education
-- No special consent needed
-
-TIER 2: INFORMED CONSENT ZONE
-- Edge services with full disclosure
-- User signs waiver, accepts limitations
-
-TIER 3: HARD BOUNDARY
-- System blocks regardless of consent
-- Court representation, filing on behalf, guarantees
-```
+| Repository | Entity | Purpose |
+|------------|--------|---------|
+| `pmerit-ai-platform/` | Foundation | Free educational platform (Frontend) |
+| `pmerit-api-worker/` | Foundation | Free educational platform (Backend) |
 
 ---
 
-## GUARDRAIL ARCHITECTURE
-
-For products that could be misconstrued as professional advice:
-
-**Permitted:**
-- General information
-- Template assembly
-- Process explanations
-- Learning materials
-
-**Prohibited:**
-- Specific legal/tax advice
-- Representing as professional
-- Guaranteeing outcomes
-- Filing on user's behalf
-
-**Positioning Language:**
-- "Legal Information Guide"
-- "Document Preparation Assistant"
-- NOT "AI Lawyer" or "Robot Attorney"
-
----
-
-## DISTRIBUTION PIPELINE
-
-```
-Amazon (Discovery) → Gumroad (Delivery) → GitHub (Source)
-     ↓                    ↓                    ↓
-  Finds product      Gets download link    Downloads ZIP
-```
-
-All products point back to pmerit.com for:
-- Updates and new versions
-- Community/support
-- Cross-promotion
-- Nonprofit donations
-
----
-
-## REFERENCE DOCUMENTS
-
-| Document | Location |
-|----------|----------|
-| **AIXORD State** | `docs/aixord/AIXORD_STATE.json` |
-| **AIXORD Governance** | `docs/aixord/AIXORD_GOVERNANCE.md` |
-| **AIXORD Tracker** | `docs/aixord/AIXORD_TRACKER.md` |
-| Brainstorm Sessions | `Chat-Histories/Brainstorm/` |
-| AIXORD Framework Doc | `docs/methodology/AIXORD_FRAMEWORK.md` |
-| Tiered Consent Model | `docs/methodology/TIERED_CONSENT_MODEL.md` |
-| Brand Style Guide | `docs/BRAND_STYLE_GUIDE.md` |
-| Platform Sales Docs | `docs/reference/sales/` |
-
----
-
-## STARTUP PROTOCOL
-
-When starting a session with `PRODUCT CONTINUE`:
-
-1. Read this file
-2. Check for active product scopes in `.claude/scopes/`
-3. Review recent Chat-Histories/Brainstorm/ if relevant
-4. Check products/ for in-progress work
-5. Output status and next action
-
----
-
-## REPO SEPARATION RULE
-
-This repo is for **PRODUCTS ONLY**. Platform code lives in `pmerit-ai-platform/`.
-
-| This Repo | Platform Repo |
-|-----------|---------------|
-| Manuscripts | Source code |
-| Templates (for sale) | Platform templates |
-| Distribution packages | API workers |
-| Brainstorms | Governance docs |
-| Product scopes | Feature scopes |
-
----
-
-*PMERIT Product Development Environment v2.1*
-*Updated: December 25, 2025*
-*Governance: AIXORD (AI Execution Order)*
+*AIXORD v2.1 — Authority. Execution. Confirmation. Genesis.*
+*PMERIT TECHNOLOGIES LLC*
+*Updated: 2026-01-19*
