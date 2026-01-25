@@ -1,0 +1,114 @@
+Chapter: Your First AIXORD Session
+
+Let's walk through a complete AIXORD session step by step, applicable to any AI platform.
+
+Step 1: Establish Governance
+
+Open your AI assistant and set the context:
+
+"We are operating under AIXORD governance. You are in DECISION mode as Architect. I am the Director with supreme authority. Confirm you understand the roles."
+
+The AI should acknowledge DECISION mode and confirm understanding of the authority model.
+
+Step 2: Define Your Goal
+
+State what you want to accomplish:
+
+"I want to build a simple todo list application with the ability to add, complete, and delete tasks."
+
+The AI should ask clarifying questions:
+- What technology stack?
+- Where should tasks be stored?
+- What interface—web, mobile, or command line?
+- Any specific features beyond the basics?
+
+This is correct Architect behavior—exploring requirements before committing.
+
+Step 3: Make Decisions
+
+Answer the AI's questions. Be specific:
+
+"Decision: Use plain HTML, CSS, and JavaScript—no frameworks."
+"Decision: Store tasks in browser localStorage."
+"Decision: Web interface with a simple form and task list."
+"Decision: Tasks have text and a completed status."
+
+Each decision gets documented. The AI should confirm what's been decided.
+
+Step 4: Freeze Decisions
+
+When requirements are clear:
+
+"Decisions are complete. Document the full specification."
+
+The AI produces a specification summarizing everything decided. Review it carefully.
+
+Step 5: Enter Execution Mode
+
+When ready to build:
+
+"ENTER EXECUTION MODE."
+
+The AI should explicitly confirm the mode transition. From this point, decisions are frozen. The AI is now Commander.
+
+Step 6: Execute Step by Step
+
+The AI implements exactly what was specified:
+
+"Step 1: Creating index.html with basic structure."
+"Step 2: Adding CSS for layout and styling."
+"Step 3: Implementing JavaScript for task management."
+
+Review each step. If something doesn't match the spec, speak up.
+
+Step 7: Handle HALT Conditions
+
+If the AI encounters ambiguity:
+
+"HALT: The specification doesn't define what happens when localStorage is full. How should I handle this?"
+
+You decide: "Display an error message asking user to delete old tasks. Update specification."
+
+The AI resumes with your clarification.
+
+Step 8: Audit the Result
+
+When implementation is complete:
+
+"AUDIT: Compare the implementation against our specification."
+
+The AI reviews what was built versus what was specified, reporting any discrepancies.
+
+Step 9: Visual Audit (if applicable)
+
+For UI work:
+
+"VISUAL AUDIT: I will provide screenshots for verification."
+
+Share screenshots. The AI compares them against the specification and reports PASS or DISCREPANCY for each element.
+
+Step 10: End the Session
+
+Before closing:
+
+"Generate HANDOFF for session continuity."
+
+The AI produces a document capturing:
+- What was built
+- Decisions made
+- Any pending work
+- Current state
+
+Save this document. Use it to resume in your next session.
+
+Key Takeaways
+
+The flow is always: DECISION → EXECUTION → AUDIT
+
+Mode transitions are explicit. The AI confirms each transition.
+
+HALT is not failure—it's the system working correctly.
+
+Documents are the system. If it's not written down, it doesn't exist.
+
+You are always the Director. You make the final calls.

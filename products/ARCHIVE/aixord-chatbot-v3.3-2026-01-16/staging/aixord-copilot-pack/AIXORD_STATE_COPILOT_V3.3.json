@@ -1,0 +1,138 @@
+{
+  "aixord_version": "3.3.0",
+  "platform": "COPILOT",
+  "disclaimer": {
+    "accepted": false,
+    "accepted_by": null,
+    "accepted_date": null
+  },
+  "project": {
+    "name": "[Your Project Name]",
+    "objective": "",
+    "objective_set_date": "",
+    "scope_expansions": [],
+    "created": "[Date]",
+    "description": "[One-line description]",
+    "status": "active"
+  },
+  "environment": {
+    "tier": "[A|B|C]",
+    "copilot_pro": false,
+    "workspace_enabled": false,
+    "microsoft_365": false,
+    "context": "web",
+    "aixord_root": "",
+    "aixord_project": "",
+    "aixord_shell": "powershell",
+    "environment_configured": false
+  },
+  "workspace_context": {
+    "current_context": "web",
+    "workspace_path": "",
+    "files_in_scope": [],
+    "m365_scope_enabled": false
+  },
+  "two_kingdoms": {
+    "current_kingdom": "IDEATION",
+    "ideation_gate_passed": false,
+    "gate_passed_date": null,
+    "gate_override_reason": null
+  },
+  "ideation_gate": {
+    "structural_completeness": {
+      "master_scope_defined": false,
+      "deliverables_enumerated": false,
+      "steps_defined": false,
+      "dag_dependencies_mapped": false,
+      "acceptance_criteria_defined": false
+    },
+    "quality_dimensions": {
+      "best_practices": null,
+      "completeness": null,
+      "accuracy": null,
+      "sustainability": null,
+      "reliability": null,
+      "user_friendliness": null,
+      "accessibility": null
+    },
+    "mosa_compliance": {
+      "modularity": null,
+      "open_standards": null,
+      "replaceability": null,
+      "interoperability": null,
+      "scalability": null
+    },
+    "cost_optimization": {
+      "oss_prioritized": false,
+      "paid_solutions_justified": true
+    },
+    "gate_status": "BLOCKED"
+  },
+  "dag": {
+    "nodes": [],
+    "edges": [],
+    "execution_order": [],
+    "eligible_scopes": []
+  },
+  "phase": "DECISION",
+  "session": {
+    "number": 1,
+    "start_time": null,
+    "message_count": 0,
+    "message_threshold": 25,
+    "extend_used": false,
+    "last_updated": "[Timestamp]"
+  },
+  "multi_signal_handoff": {
+    "message_count": 0,
+    "elapsed_minutes": 0,
+    "scopes_touched": 0,
+    "character_estimate": 0,
+    "warning_issued": false,
+    "handoff_required": false
+  },
+  "purpose_bound": {
+    "enabled": true,
+    "enforcement_level": "standard",
+    "redirects_issued": 0,
+    "scope_expansions_approved": 0
+  },
+  "behavioral_firewalls": {
+    "default_suppression": true,
+    "choice_elimination": true,
+    "expansion_triggers_only": true,
+    "hard_stop": true
+  },
+  "reasoning": {
+    "trace_required": true,
+    "assumption_disclosure": true,
+    "recency_flags": true
+  },
+  "decisions": [],
+  "status_ledger": {
+    "scopes": []
+  },
+  "carryforward": [],
+  "decomposition": {
+    "master_scope": "",
+    "scopes": [],
+    "sub_scopes": []
+  },
+  "locking": {
+    "state": "PLANNED",
+    "locked_at": null,
+    "locked_by": null
+  },
+  "visual_audit": {
+    "pending_scopes": [],
+    "last_audit": null,
+    "last_audit_scope": null,
+    "screenshots_reviewed": 0
+  },
+  "cost_tracking": {
+    "solutions": [],
+    "total_monthly_cost": 0,
+    "oss_preferred_count": 0,
+    "paid_justified_count": 0
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "aixord_version": "3.3.0",
+  "platform": "MASTER",
+  "product_type": "complete-bundle",
+  "disclaimer": {
+    "accepted": false,
+    "accepted_by": null,
+    "accepted_date": null
+  },
+  "project": {
+    "name": "[Your Project Name]",
+    "objective": "",
+    "status": "active"
+  },
+  "environment": {
+    "tier": "[A|B|C]",
+    "platform_selected": null
+  },
+  "session": {
+    "number": 1,
+    "message_count": 0,
+    "last_updated": ""
+  }
+}

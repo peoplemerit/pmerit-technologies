@@ -1,0 +1,75 @@
+{
+  "aixord_version": "3.2.1",
+  "platform": "UNIVERSAL",
+  "project": {
+    "name": "[Your Project Name]",
+    "objective": "",
+    "objective_set_date": "",
+    "scope_expansions": [],
+    "created": "[Date]",
+    "description": "[One-line description]",
+    "status": "active"
+  },
+  "environment": {
+    "tier": "[A|B|C]",
+    "detected_model": "",
+    "detected_provider": "",
+    "capabilities": {
+      "file_uploads": false,
+      "code_execution": false,
+      "image_analysis": false,
+      "extended_context": false,
+      "persistent_memory": false
+    }
+  },
+  "phase": "DISCOVERY",
+  "session": {
+    "number": 1,
+    "last_updated": "[Timestamp]",
+    "model_used": ""
+  },
+  "purpose_bound": {
+    "enabled": true,
+    "enforcement_level": "standard",
+    "redirects_issued": 0,
+    "scope_expansions_approved": 0
+  },
+  "behavioral_firewalls": {
+    "default_suppression": true,
+    "choice_elimination": true,
+    "expansion_triggers_only": true,
+    "hard_stop": true
+  },
+  "reasoning": {
+    "trace_required": true,
+    "assumption_disclosure": true,
+    "recency_flags": true
+  },
+  "decisions": [],
+  "status_ledger": {
+    "scopes": []
+  },
+  "carryforward": [],
+  "decomposition": {
+    "master_scope": "",
+    "scopes": [],
+    "sub_scopes": []
+  },
+  "locking": {
+    "state": "PLANNED",
+    "locked_at": null,
+    "locked_by": null
+  },
+  "visual_audit": {
+    "pending_scopes": [],
+    "last_audit": null,
+    "last_audit_scope": null,
+    "screenshots_reviewed": 0
+  },
+  "build_upon": {
+    "foundation_verified": false,
+    "foundation_scope": null,
+    "verification_date": null
+  },
+  "cross_model_history": []
+}

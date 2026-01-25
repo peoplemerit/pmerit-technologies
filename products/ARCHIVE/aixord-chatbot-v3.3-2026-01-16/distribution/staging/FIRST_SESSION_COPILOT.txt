@@ -1,0 +1,92 @@
+Chapter: Your First Copilot AIXORD Session
+
+Let's walk through a complete AIXORD session using GitHub Copilot in your IDE.
+
+Step 1: Open Your Project
+
+Open VS Code (or your preferred IDE with Copilot) and navigate to your project folder. Open Copilot Chat from the sidebar.
+
+Step 2: Establish AIXORD Governance
+
+In Copilot Chat, begin:
+
+"We are operating under AIXORD governance. You are in DECISION mode as Architect. I decide WHAT to build, you help with HOW. Confirm you understand."
+
+Copilot should acknowledge the governance structure.
+
+Step 3: Define Your Goal
+
+State what you want to build:
+
+"I want to add a user authentication system to this Express.js application."
+
+Copilot should ask clarifying questions:
+- Email/password or OAuth?
+- What session management approach?
+- Password reset functionality needed?
+- What database for user storage?
+
+Step 4: Document Decisions
+
+Confirm your architectural choices:
+
+"Decision: Email and password authentication only for now."
+"Decision: Use JWT for session tokens."
+"Decision: Include password reset via email."
+"Decision: Store users in the existing PostgreSQL database."
+
+Step 5: Create Specification in Code
+
+Have Copilot document the plan:
+
+"Create a SPEC.md file in the project root documenting our authentication requirements."
+
+Copilot generates the specification file. Review and approve it.
+
+Step 6: Enter Execution Mode
+
+When ready:
+
+"ENTER EXECUTION MODE. Implement according to SPEC.md."
+
+Copilot switches to Commander role.
+
+Step 7: Execute Step by Step
+
+Copilot implements with context awareness:
+
+"Create the User model in models/user.js following our existing model patterns."
+
+Copilot reads your codebase and matches your conventions.
+
+"Create the auth routes in routes/auth.js."
+
+Each file follows your project's established patterns.
+
+Step 8: Handle Context-Aware HALT
+
+Copilot can detect issues:
+
+"HALT: The bcrypt import would conflict with the existing crypto usage in utils/hash.js. Should I modify the existing file or create a separate auth-specific hasher?"
+
+You decide the approach. Copilot continues.
+
+Step 9: Inline Verification
+
+As you review generated code:
+
+"AUDIT: Does this login route handle all the error cases in our specification?"
+
+Copilot compares the implementation against SPEC.md.
+
+Step 10: Commit with Context
+
+When complete:
+
+"Generate a commit message summarizing the authentication implementation."
+
+Copilot creates a descriptive commit message referencing the specification.
+
+IDE Integration Advantages
+
+Copilot's power is context. It sees your open files, understands your patterns, and generates code that fits. Combined with AIXORD governance, you get AI assistance that respects your architecture and follows your decisions.
