@@ -461,10 +461,17 @@ export class AIXORDSDKClient {
       };
     }
 
-    // 5. Build SDK response
+    // 5. Build SDK response — map backend status to SDK status vocabulary
+    const sdkStatus: AIXORDSDKResponse['status'] =
+      routerResponse.status === 'OK' || routerResponse.status === 'RETRIED'
+        ? 'SUCCESS'
+        : routerResponse.status === 'BLOCKED'
+          ? 'BLOCKED'
+          : 'ERROR';
+
     return {
       content: routerResponse.content,
-      status: routerResponse.status,
+      status: sdkStatus,
       error: routerResponse.error,
       model: {
         provider: routerResponse.model_used.provider,

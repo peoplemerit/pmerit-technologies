@@ -905,7 +905,7 @@ export interface RouterRequest {
 }
 
 export interface RouterResponse {
-  status: 'SUCCESS' | 'ERROR';
+  status: 'OK' | 'BLOCKED' | 'RETRIED' | 'ERROR';
   content: string;
   model_used: {
     provider: string;
