@@ -1,0 +1,31 @@
+name = "aixord-router-worker"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+ENVIRONMENT = "production"
+AUTH_SALT = "aixord-d4-backend-salt-2026"
+
+# GitHub OAuth (PATCH-GITHUB-01, PATCH-CORS-01)
+GITHUB_REDIRECT_URI = "https://aixord-router-worker.peoplemerit.workers.dev/api/v1/github/callback"
+FRONTEND_URL = "https://aixord.pmerit.com"
+
+# Secrets (set via wrangler secret put):
+# ANTHROPIC_API_KEY
+# OPENAI_API_KEY
+# GOOGLE_API_KEY
+# DEEPSEEK_API_KEY
+# STRIPE_SECRET_KEY
+# STRIPE_WEBHOOK_SECRET
+# GUMROAD_PRODUCT_ID
+# KDP_CODE_SECRET
+# GITHUB_CLIENT_ID
+# GITHUB_CLIENT_SECRET
+# GITHUB_TOKEN_ENCRYPTION_KEY
+# RESEND_API_KEY - for transactional emails (verification, password reset)
+
+# D1 Database binding (shared with webapp for subscription/usage data)
+[[d1_databases]]
+binding = "DB"
+database_name = "aixord-db"
+database_id = "4222a800-ec94-479b-94d2-f1beaa7d01d9"

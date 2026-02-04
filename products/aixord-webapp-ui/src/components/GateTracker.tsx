@@ -1,15 +1,20 @@
 /**
- * Gate Tracker Component
+ * Gate Tracker Component (D4)
  *
- * Displays and manages AIXORD gates (13 gates per v4.2).
- * Uses canonical gate definitions from @aixord/core.
+ * Displays and manages AIXORD gates (17 gates per v4.3).
+ *
+ * Features:
+ * - Visual gate chips with pass/pending states
+ * - Setup vs Work gate categories
+ * - Progress bar
+ * - Router integration ready
+ *
+ * v4.3 Update: Added FLD, CIT, CON, DC gates per AIXORD governance spec
  */
 
-import { GATE_DEFINITIONS } from '@aixord/core';
-
-// UI-specific gate type (simplified subset for display)
+// UI-specific gate type (v4.3 complete set)
 type GateID =
-  | 'LIC' | 'DIS' | 'TIR' | 'ENV' | 'OBJ' | 'RA'
+  | 'LIC' | 'DIS' | 'TIR' | 'ENV' | 'FLD' | 'CIT' | 'CON' | 'OBJ' | 'RA' | 'DC'
   | 'FX' | 'PD' | 'PR' | 'BP' | 'MS' | 'VA' | 'HO';
 
 interface GateDefinition {
@@ -18,27 +23,33 @@ interface GateDefinition {
   phase: 'SETUP' | 'WORK';
 }
 
-// Map canonical definitions to UI display format
+// AIXORD Gate Definitions (v4.3)
+// Inlined to avoid dependency on @aixord/core until package is built
 const GATES: Record<GateID, GateDefinition> = {
-  // SETUP GATES
-  LIC: { name: GATE_DEFINITIONS.LIC.name, description: GATE_DEFINITIONS.LIC.description, phase: 'SETUP' },
-  DIS: { name: GATE_DEFINITIONS.DIS.name, description: GATE_DEFINITIONS.DIS.description, phase: 'SETUP' },
-  TIR: { name: GATE_DEFINITIONS.TIR.name, description: GATE_DEFINITIONS.TIR.description, phase: 'SETUP' },
-  ENV: { name: GATE_DEFINITIONS.ENV.name, description: GATE_DEFINITIONS.ENV.description, phase: 'SETUP' },
-  OBJ: { name: GATE_DEFINITIONS.OBJ.name, description: GATE_DEFINITIONS.OBJ.description, phase: 'SETUP' },
-  RA: { name: GATE_DEFINITIONS.RA.name, description: GATE_DEFINITIONS.RA.description, phase: 'SETUP' },
+  // SETUP GATES (10-step per v4.3)
+  LIC: { name: 'License', description: 'Director has accepted governance terms', phase: 'SETUP' },
+  DIS: { name: 'Disclosure', description: 'AI limitations and risks acknowledged', phase: 'SETUP' },
+  TIR: { name: 'Tier', description: 'Subscription tier selected and validated', phase: 'SETUP' },
+  ENV: { name: 'Environment', description: 'Working environment configured', phase: 'SETUP' },
+  FLD: { name: 'Folder', description: 'Project folder/workspace established', phase: 'SETUP' },
+  CIT: { name: 'Citation', description: 'Citation and source requirements defined', phase: 'SETUP' },
+  CON: { name: 'Constraints', description: 'Project constraints and boundaries documented', phase: 'SETUP' },
+  OBJ: { name: 'Objective', description: 'Project objective clearly defined', phase: 'SETUP' },
+  RA: { name: 'Reality Assessment', description: 'Reality classification completed', phase: 'SETUP' },
+  DC: { name: 'Data Classification', description: 'Data sensitivity classification completed', phase: 'SETUP' },
 
-  // WORK GATES
-  FX: { name: GATE_DEFINITIONS.FX.name, description: GATE_DEFINITIONS.FX.description, phase: 'WORK' },
-  PD: { name: GATE_DEFINITIONS.PD.name, description: GATE_DEFINITIONS.PD.description, phase: 'WORK' },
-  PR: { name: GATE_DEFINITIONS.PR.name, description: GATE_DEFINITIONS.PR.description, phase: 'WORK' },
-  BP: { name: GATE_DEFINITIONS.BP.name, description: GATE_DEFINITIONS.BP.description, phase: 'WORK' },
-  MS: { name: GATE_DEFINITIONS.MS.name, description: GATE_DEFINITIONS.MS.description, phase: 'WORK' },
-  VA: { name: GATE_DEFINITIONS.VA.name, description: GATE_DEFINITIONS.VA.description, phase: 'WORK' },
-  HO: { name: GATE_DEFINITIONS.HO.name, description: GATE_DEFINITIONS.HO.description, phase: 'WORK' },
+  // WORK GATES (7)
+  FX: { name: 'Fix', description: 'Issue or requirement identified for resolution', phase: 'WORK' },
+  PD: { name: 'Project Document', description: 'Project document artifact created', phase: 'WORK' },
+  PR: { name: 'Progress', description: 'Meaningful progress checkpoint reached', phase: 'WORK' },
+  BP: { name: 'Blueprint', description: 'Technical blueprint artifact locked', phase: 'WORK' },
+  MS: { name: 'Master Scope', description: 'Master scope artifact approved', phase: 'WORK' },
+  VA: { name: 'Validation', description: 'Output validated against requirements', phase: 'WORK' },
+  HO: { name: 'Handoff', description: 'Handoff artifact created for transition', phase: 'WORK' },
 };
 
-const SETUP_GATES: GateID[] = ['LIC', 'DIS', 'TIR', 'ENV', 'OBJ', 'RA'];
+// v4.3: 10 Setup Gates + 7 Work Gates = 17 total
+const SETUP_GATES: GateID[] = ['LIC', 'DIS', 'TIR', 'ENV', 'FLD', 'CIT', 'CON', 'OBJ', 'RA', 'DC'];
 const WORK_GATES: GateID[] = ['FX', 'PD', 'PR', 'BP', 'MS', 'VA', 'HO'];
 
 interface GateTrackerProps {

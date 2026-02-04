@@ -4,7 +4,7 @@
  * Connects to D4 Web App at https://aixord-webapp.peoplemerit.workers.dev
  */
 
-const API_BASE = 'https://aixord-webapp.peoplemerit.workers.dev/api/v1';
+const API_BASE = 'https://aixord-router-worker.peoplemerit.workers.dev/api/v1';
 
 /**
  * API Error class for structured error handling
@@ -88,6 +88,46 @@ export interface Project {
   updatedAt: string;
 }
 
+// AIXORD v4.3 Data Classification Value
+export type DataClassificationValue = 'YES' | 'NO' | 'UNKNOWN';
+
+// AIXORD v4.3 AI Exposure Level (L-SPG3, L-SPG4)
+export type AIExposureLevel = 'PUBLIC' | 'INTERNAL' | 'CONFIDENTIAL' | 'RESTRICTED' | 'PROHIBITED';
+
+// AIXORD v4.3 Data Classification (SPG-01) - Full interface
+export interface DataClassification {
+  projectId: string;
+  pii: DataClassificationValue;
+  phi: DataClassificationValue;
+  financial: DataClassificationValue;
+  legal: DataClassificationValue;
+  minorData: DataClassificationValue;
+  jurisdiction: string;
+  regulations: string[];
+  aiExposure: AIExposureLevel;
+  declared: boolean;
+  declaredBy?: string;
+  declaredAt?: string;
+}
+
+// AIXORD v4.3 Reconciliation Triad (GCP-01)
+export interface ReconciliationTriad {
+  planned: string[];
+  claimed: string[];
+  verified: string[];
+  divergences: string[];
+}
+
+// AIXORD v4.3 Security Gates (SPG-01)
+export interface SecurityGates {
+  GS_DC: boolean;  // Data Classification declared
+  GS_DP: boolean;  // Data Protection requirements satisfiable
+  GS_AC: boolean;  // Access Controls appropriate
+  GS_AI: boolean;  // AI usage complies with classification
+  GS_JR: boolean;  // Jurisdiction compliance confirmed
+  GS_RT: boolean;  // Retention/deletion policy compliant
+}
+
 export interface AIXORDState {
   project: {
     name: string;
@@ -105,16 +145,65 @@ export interface AIXORDState {
     class: string;
     constraints: string[];
   };
+  // AIXORD v4.3 additions (optional for backward compatibility)
+  dataClassification?: DataClassification;
+  securityGates?: SecurityGates;
+  reconciliation?: ReconciliationTriad;
+  enhancement?: {
+    fs: number;
+    hr: number;
+    oa: number;
+    '2m': number;
+  };
+  sessionSeq?: {
+    seq: number;
+    prev: string;
+    drift: number;
+  };
 }
 
+/**
+ * Decision record from the governance audit ledger.
+ * Uses frontend-friendly camelCase with proper typing.
+ */
 export interface Decision {
   id: string;
-  type: string;
-  description: string;
-  rationale: string;
-  approved: boolean;
-  locked: boolean;
+  projectId: string;
+  type: 'APPROVAL' | 'REJECTION' | 'DEFERRAL' | 'SCOPE_CHANGE';
+  summary: string;
+  actor: string;
+  phase?: 'B' | 'P' | 'E' | 'R';
+  rationale?: string;
   createdAt: string;
+}
+
+/**
+ * Backend decision response type (snake_case from D1 database)
+ */
+interface BackendDecision {
+  id: string;
+  project_id: string;
+  decision_type: string;
+  description: string;
+  actor: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+/**
+ * Transform backend decision to frontend Decision format
+ */
+function transformDecision(raw: BackendDecision): Decision {
+  return {
+    id: raw.id,
+    projectId: raw.project_id,
+    type: raw.decision_type as Decision['type'],
+    summary: raw.description,
+    actor: raw.actor,
+    phase: raw.metadata?.phase as Decision['phase'],
+    rationale: raw.metadata?.rationale as string | undefined,
+    createdAt: raw.created_at,
+  };
 }
 
 // ============================================================================
@@ -124,47 +213,81 @@ export interface Decision {
 export const authApi = {
   /**
    * Register a new user
+   * Backend returns: { user: { id, email, emailVerified }, token, expires_at, message }
    */
-  async register(email: string, password: string, name?: string): Promise<User> {
-    const response = await request<{ user: { id: string; email: string; name: string | null }; api_key: string }>('/auth/register', {
+  async register(email: string, password: string, name?: string, username?: string): Promise<User> {
+    const response = await request<{
+      user: { id: string; email: string; emailVerified?: boolean };
+      token: string;
+      expires_at: string;
+      message?: string;
+    }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({ email, password, username }),
     });
     return {
       id: response.user.id,
       email: response.user.email,
-      name: response.user.name || undefined,
-      apiKey: response.api_key,
+      name: name,
+      apiKey: response.token,
     };
   },
 
   /**
    * Login with email and password
+   * Backend returns: { user: { id, email }, token, expires_at }
    */
   async login(email: string, password: string): Promise<User> {
-    const response = await request<{ id: string; email: string; name: string | null; apiKey: string }>('/auth/login', {
+    const response = await request<{
+      user: { id: string; email: string };
+      token: string;
+      expires_at: string;
+    }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
     return {
-      id: response.id,
-      email: response.email,
-      name: response.name || undefined,
-      apiKey: response.apiKey,
+      id: response.user.id,
+      email: response.user.email,
+      name: undefined,
+      apiKey: response.token,
     };
   },
 
   /**
    * Get current user info (validates API key)
+   * Backend returns: { user: { id, email } }
    */
   async me(token: string): Promise<User> {
-    const response = await request<{ id: string; email: string; name: string | null }>('/auth/me', {}, token);
+    const response = await request<{
+      user: { id: string; email: string };
+    }>('/auth/me', {}, token);
     return {
-      id: response.id,
-      email: response.email,
-      name: response.name || undefined,
-      apiKey: token, // We already have the token/apiKey
+      id: response.user.id,
+      email: response.user.email,
+      name: undefined,
+      apiKey: token,
     };
+  },
+
+  /**
+   * Get current user's subscription from backend
+   * Returns subscription tier, status, and billing info
+   */
+  async getSubscription(token: string): Promise<{
+    tier: string;
+    status: string;
+    keyMode: 'PLATFORM' | 'BYOK';
+    periodEnd: string | null;
+    stripeCustomerId: string | null;
+  }> {
+    return request<{
+      tier: string;
+      status: string;
+      keyMode: 'PLATFORM' | 'BYOK';
+      periodEnd: string | null;
+      stripeCustomerId: string | null;
+    }>('/auth/subscription', {}, token);
   },
 };
 
@@ -172,25 +295,77 @@ export const authApi = {
 // Projects API
 // ============================================================================
 
+/**
+ * Backend project response type (snake_case from D1 database)
+ */
+interface BackendProject {
+  id: string;
+  name: string;
+  objective: string;
+  owner_id?: string;
+  reality_classification: string;
+  conserved_scopes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Validate and normalize a date string
+ * Returns ISO string if valid, undefined otherwise
+ */
+function normalizeDate(dateStr: string | null | undefined): string | undefined {
+  if (!dateStr) return undefined;
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return undefined;
+    return date.toISOString();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Transform backend project (snake_case) to frontend Project (camelCase)
+ */
+function transformProject(raw: BackendProject): Project {
+  // Normalize reality classification - handle empty strings, whitespace, and case
+  const normalizedReality = raw.reality_classification?.trim()?.toUpperCase() || 'GREENFIELD';
+  const validRealities = ['GREENFIELD', 'BROWNFIELD', 'LEGACY'];
+  const finalReality = validRealities.includes(normalizedReality)
+    ? normalizedReality as Project['realityClassification']
+    : 'GREENFIELD';
+
+  return {
+    id: raw.id,
+    name: raw.name || 'Untitled Project',
+    objective: raw.objective || '',
+    realityClassification: finalReality,
+    createdAt: normalizeDate(raw.created_at) || new Date().toISOString(),
+    updatedAt: normalizeDate(raw.updated_at) || new Date().toISOString(),
+  };
+}
+
 export const projectsApi = {
   /**
    * List all projects for the authenticated user
    */
   async list(token: string): Promise<Project[]> {
-    const response = await request<{ projects: Project[] }>('/projects', {}, token);
-    return response.projects;
+    const response = await request<{ projects: BackendProject[] }>('/projects', {}, token);
+    return response.projects.map(transformProject);
   },
 
   /**
    * Get a specific project
+   * Note: Backend returns flat project (not wrapped in { project: ... })
    */
   async get(id: string, token: string): Promise<Project> {
-    const response = await request<{ project: Project }>(`/projects/${id}`, {}, token);
-    return response.project;
+    const response = await request<BackendProject>(`/projects/${id}`, {}, token);
+    return transformProject(response);
   },
 
   /**
    * Create a new project
+   * Note: Backend expects snake_case (reality_classification)
    */
   async create(
     data: {
@@ -200,11 +375,18 @@ export const projectsApi = {
     },
     token: string
   ): Promise<Project> {
-    const response = await request<{ project: Project }>('/projects', {
+    // Transform to backend format (snake_case)
+    const backendData = {
+      name: data.name,
+      objective: data.objective,
+      reality_classification: data.realityClassification,
+    };
+    // Backend returns flat project response (not wrapped in { project: ... })
+    const response = await request<BackendProject>('/projects', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(backendData),
     }, token);
-    return response.project;
+    return transformProject(response);
   },
 
   /**
@@ -239,59 +421,252 @@ export const projectsApi = {
 // State API
 // ============================================================================
 
+/**
+ * Backend state response type (from D1 database)
+ * Supports both v4.2 (minimal) and v4.3 (full) capsule structures
+ */
+interface BackendState {
+  project_id: string;
+  phase: string;
+  gates: Record<string, boolean>;
+  capsule: {
+    // v4.2 fields
+    session?: { number: number; phase: string; messageCount: number; startedAt: string; lastCheckpoint?: string | null };
+    project?: { name: string; objective: string | null };
+    reality?: { class: string; constraints: string[] };
+    // v4.3 additions (SPG-01, GCP-01)
+    data_classification?: {
+      pii: string;
+      phi: string;
+      financial: string;
+      legal: string;
+      minor: string;
+      jurisdiction: string;
+      regulations: string[];
+    };
+    security_gates?: {
+      GS_DC: boolean;
+      GS_DP: boolean;
+      GS_AC: boolean;
+      GS_AI: boolean;
+      GS_JR: boolean;
+      GS_RT: boolean;
+    };
+    reconciliation?: {
+      planned: string[];
+      claimed: string[];
+      verified: string[];
+      divergences: string[];
+    };
+    enhancement?: {
+      fs: number;
+      hr: number;
+      oa: number;
+      '2m': number;
+    };
+    session_seq?: {
+      seq: number;
+      prev: string;
+      drift: number;
+    };
+  };
+  updated_at: string;
+}
+
+/**
+ * Normalize phase to standard format (full word: BRAINSTORM, PLAN, EXECUTE, REVIEW)
+ * Handles both single-char (B, P, E, R) and full word inputs
+ */
+function normalizePhase(phase: string | null | undefined): string {
+  if (!phase) return 'BRAINSTORM';
+  const p = phase.trim().toUpperCase();
+
+  // Map single character to full word
+  const shortToFull: Record<string, string> = {
+    'B': 'BRAINSTORM',
+    'P': 'PLAN',
+    'E': 'EXECUTE',
+    'R': 'REVIEW'
+  };
+
+  if (p.length === 1 && shortToFull[p]) {
+    return shortToFull[p];
+  }
+
+  // Already full word or close enough
+  if (['BRAINSTORM', 'PLAN', 'EXECUTE', 'REVIEW'].includes(p)) {
+    return p;
+  }
+
+  // Default
+  return 'BRAINSTORM';
+}
+
+/**
+ * Convert phase to single character format for router
+ */
+export function phaseToShort(phase: string | null | undefined): 'B' | 'P' | 'E' | 'R' {
+  if (!phase) return 'B';
+  const p = phase.trim().toUpperCase();
+
+  // Already single char
+  if (p === 'B' || p === 'P' || p === 'E' || p === 'R') {
+    return p as 'B' | 'P' | 'E' | 'R';
+  }
+
+  // Map full word to single char
+  const fullToShort: Record<string, 'B' | 'P' | 'E' | 'R'> = {
+    'BRAINSTORM': 'B',
+    'PLAN': 'P',
+    'EXECUTE': 'E',
+    'REVIEW': 'R'
+  };
+
+  return fullToShort[p] || 'B';
+}
+
+/**
+ * Transform backend state to frontend AIXORDState format
+ * Supports both v4.2 (minimal) and v4.3 (full) state structures
+ *
+ * D-013 FIX: Phase is now read from raw.phase as the source of truth
+ * The backend updates the phase column directly via PUT /state/:id/phase
+ */
+function transformState(raw: BackendState): AIXORDState {
+  // D-013 FIX: Prioritize raw.phase (the database column) over capsule.session.phase
+  // The phase column is updated directly by setPhase API, capsule may have stale data
+  const rawPhase = raw.phase || raw.capsule?.session?.phase;
+  const capsule = raw.capsule || {};
+
+  // Base state (v4.2 compatible)
+  const state: AIXORDState = {
+    project: {
+      name: capsule.project?.name || '',
+      objective: capsule.project?.objective || ''
+    },
+    session: {
+      number: capsule.session?.number || 1,
+      phase: normalizePhase(rawPhase),
+      messageCount: capsule.session?.messageCount || 0,
+      startedAt: normalizeDate(capsule.session?.startedAt) || normalizeDate(raw.updated_at) || new Date().toISOString(),
+      lastCheckpoint: capsule.session?.lastCheckpoint ?? undefined
+    },
+    gates: raw.gates || {},
+    reality: capsule.reality || { class: 'GREENFIELD', constraints: [] },
+  };
+
+  // v4.3 additions (if present in capsule)
+  if (capsule.data_classification) {
+    const dc = capsule.data_classification as Record<string, unknown>;
+    state.dataClassification = {
+      projectId: '',
+      pii: (dc.pii as DataClassificationValue) || 'UNKNOWN',
+      phi: (dc.phi as DataClassificationValue) || 'UNKNOWN',
+      financial: (dc.financial as DataClassificationValue) || 'UNKNOWN',
+      legal: (dc.legal as DataClassificationValue) || 'UNKNOWN',
+      minorData: ((dc.minor_data || dc.minorData || dc.minor) as DataClassificationValue) || 'UNKNOWN',
+      jurisdiction: (dc.jurisdiction as string) || '',
+      regulations: (dc.regulations as string[]) || [],
+      aiExposure: ((dc.ai_exposure || dc.aiExposure) as AIExposureLevel) || 'RESTRICTED',
+      declared: !!(dc.declared_at || dc.declaredAt || dc.declared),
+    };
+  }
+
+  if (capsule.security_gates) {
+    state.securityGates = {
+      GS_DC: capsule.security_gates.GS_DC || false,
+      GS_DP: capsule.security_gates.GS_DP || false,
+      GS_AC: capsule.security_gates.GS_AC || false,
+      GS_AI: capsule.security_gates.GS_AI || false,
+      GS_JR: capsule.security_gates.GS_JR || false,
+      GS_RT: capsule.security_gates.GS_RT || false
+    };
+  }
+
+  if (capsule.reconciliation) {
+    state.reconciliation = {
+      planned: capsule.reconciliation.planned || [],
+      claimed: capsule.reconciliation.claimed || [],
+      verified: capsule.reconciliation.verified || [],
+      divergences: capsule.reconciliation.divergences || []
+    };
+  }
+
+  if (capsule.enhancement) {
+    state.enhancement = {
+      fs: capsule.enhancement.fs || 0,
+      hr: capsule.enhancement.hr || 0,
+      oa: capsule.enhancement.oa || 0,
+      '2m': capsule.enhancement['2m'] || 0
+    };
+  }
+
+  if (capsule.session_seq) {
+    state.sessionSeq = {
+      seq: capsule.session_seq.seq || 1,
+      prev: capsule.session_seq.prev || '',
+      drift: capsule.session_seq.drift || 0
+    };
+  }
+
+  return state;
+}
+
 export const stateApi = {
   /**
    * Get project state
+   * Backend returns: { project_id, phase, gates, capsule, updated_at }
    */
   async get(projectId: string, token: string): Promise<AIXORDState> {
-    const response = await request<{ state: AIXORDState }>(`/state/${projectId}`, {}, token);
-    return response.state;
+    const response = await request<BackendState>(`/state/${projectId}`, {}, token);
+    return transformState(response);
   },
 
   /**
    * Update full state
+   * Backend accepts: { phase?, gates?, capsule? }
    */
-  async update(projectId: string, state: AIXORDState, token: string): Promise<AIXORDState> {
-    const response = await request<{ state: AIXORDState }>(`/state/${projectId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ state }),
-    }, token);
-    return response.state;
-  },
-
-  /**
-   * Patch state at specific path
-   */
-  async patch(
+  async update(
     projectId: string,
-    path: string,
-    value: unknown,
+    state: Partial<{ phase: string; gates: Record<string, boolean>; capsule: object }>,
     token: string
-  ): Promise<AIXORDState> {
-    const response = await request<{ state: AIXORDState }>(`/state/${projectId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ path, value }),
+  ): Promise<{ success: boolean; updated_at: string }> {
+    const response = await request<{ success: boolean; updated_at: string }>(`/state/${projectId}`, {
+      method: 'PUT',
+      body: JSON.stringify(state),
     }, token);
-    return response.state;
+    return response;
   },
 
   /**
-   * Pass a gate
+   * Toggle a gate (pass/unpass)
+   * Backend accepts: { enabled: boolean }
+   * Backend returns: { success: true, gates: {...}, updated_at }
    */
-  async passGate(projectId: string, gateId: string, token: string): Promise<AIXORDState> {
-    const response = await request<{ state: AIXORDState }>(
+  async toggleGate(
+    projectId: string,
+    gateId: string,
+    enabled: boolean,
+    token: string
+  ): Promise<Record<string, boolean>> {
+    const response = await request<{ success: boolean; gates: Record<string, boolean>; updated_at: string }>(
       `/state/${projectId}/gates/${gateId}`,
-      { method: 'POST' },
+      {
+        method: 'PUT',
+        body: JSON.stringify({ enabled }),
+      },
       token
     );
-    return response.state;
+    return response.gates;
   },
 
   /**
    * Set current phase
+   * Backend accepts: { phase: 'BRAINSTORM' | 'PLAN' | 'EXECUTE' | 'REVIEW' }
+   * Backend returns: { success: true, phase, updated_at }
    */
-  async setPhase(projectId: string, phase: string, token: string): Promise<AIXORDState> {
-    const response = await request<{ state: AIXORDState }>(
+  async setPhase(projectId: string, phase: string, token: string): Promise<string> {
+    const response = await request<{ success: boolean; phase: string; updated_at: string }>(
       `/state/${projectId}/phase`,
       {
         method: 'PUT',
@@ -299,19 +674,7 @@ export const stateApi = {
       },
       token
     );
-    return response.state;
-  },
-
-  /**
-   * Increment session number
-   */
-  async incrementSession(projectId: string, token: string): Promise<AIXORDState> {
-    const response = await request<{ state: AIXORDState }>(
-      `/state/${projectId}/session`,
-      { method: 'POST' },
-      token
-    );
-    return response.state;
+    return response.phase;
   },
 };
 
@@ -322,49 +685,1792 @@ export const stateApi = {
 export const decisionsApi = {
   /**
    * List decisions for a project
+   * Backend returns: { decisions: [...] }
    */
   async list(projectId: string, token: string): Promise<Decision[]> {
-    const response = await request<{ decisions: Decision[] }>(
+    const response = await request<{ decisions: BackendDecision[] }>(
       `/projects/${projectId}/decisions`,
       {},
       token
     );
-    return response.decisions;
+    return response.decisions.map(transformDecision);
   },
 
   /**
    * Create a decision
+   * Backend expects: { decision_type, description, actor?, metadata? }
+   * Backend returns: flat decision object (not wrapped)
    */
   async create(
     projectId: string,
     data: {
-      type: string;
-      description: string;
-      rationale: string;
+      type: Decision['type'];
+      summary: string;
+      phase?: Decision['phase'];
+      rationale?: string;
     },
     token: string
   ): Promise<Decision> {
-    const response = await request<{ decision: Decision }>(
+    // Transform frontend format to backend format
+    const backendData = {
+      decision_type: data.type,
+      description: data.summary,
+      actor: 'USER',
+      metadata: {
+        phase: data.phase,
+        rationale: data.rationale,
+      },
+    };
+    const response = await request<BackendDecision>(
       `/projects/${projectId}/decisions`,
+      {
+        method: 'POST',
+        body: JSON.stringify(backendData),
+      },
+      token
+    );
+    return transformDecision(response);
+  },
+};
+
+// ============================================================================
+// Messages API (Conversation Persistence)
+// ============================================================================
+
+/**
+ * Chat message record for persistence.
+ */
+export interface ChatMessage {
+  id: string;
+  projectId: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+/**
+ * Backend message response type (snake_case from D1 database)
+ */
+interface BackendMessage {
+  id: string;
+  project_id: string;
+  role: string;
+  content: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+/**
+ * Transform backend message to frontend ChatMessage format
+ */
+function transformMessage(raw: BackendMessage): ChatMessage {
+  return {
+    id: raw.id,
+    projectId: raw.project_id,
+    role: raw.role as ChatMessage['role'],
+    content: raw.content,
+    metadata: raw.metadata,
+    createdAt: raw.created_at,
+  };
+}
+
+export const messagesApi = {
+  /**
+   * List messages for a project
+   */
+  async list(projectId: string, token: string, limit = 100, offset = 0): Promise<ChatMessage[]> {
+    const response = await request<{ messages: BackendMessage[] }>(
+      `/projects/${projectId}/messages?limit=${limit}&offset=${offset}`,
+      {},
+      token
+    );
+    return response.messages.map(transformMessage);
+  },
+
+  /**
+   * Create a single message
+   */
+  async create(
+    projectId: string,
+    data: {
+      role: ChatMessage['role'];
+      content: string;
+      metadata?: Record<string, unknown>;
+    },
+    token: string
+  ): Promise<ChatMessage> {
+    const response = await request<BackendMessage>(
+      `/projects/${projectId}/messages`,
       {
         method: 'POST',
         body: JSON.stringify(data),
       },
       token
     );
-    return response.decision;
+    return transformMessage(response);
   },
 
   /**
-   * Lock a decision
+   * Create multiple messages at once (batch save)
    */
-  async lock(projectId: string, decisionId: string, token: string): Promise<Decision> {
-    const response = await request<{ decision: Decision }>(
-      `/projects/${projectId}/decisions/${decisionId}/lock`,
+  async createBatch(
+    projectId: string,
+    messages: Array<{
+      role: ChatMessage['role'];
+      content: string;
+      metadata?: Record<string, unknown>;
+      created_at?: string;
+    }>,
+    token: string
+  ): Promise<ChatMessage[]> {
+    const response = await request<{ messages: BackendMessage[] }>(
+      `/projects/${projectId}/messages/batch`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ messages }),
+      },
+      token
+    );
+    return response.messages.map(transformMessage);
+  },
+
+  /**
+   * Clear all messages for a project
+   */
+  async clear(projectId: string, token: string): Promise<void> {
+    await request<{ success: boolean }>(
+      `/projects/${projectId}/messages`,
+      { method: 'DELETE' },
+      token
+    );
+  },
+};
+
+// ============================================================================
+// Router API (Model Router for AI Chat)
+// ============================================================================
+
+/**
+ * Router base URL (same worker, different endpoint path)
+ */
+const ROUTER_BASE = 'https://aixord-router-worker.peoplemerit.workers.dev/v1/router';
+
+/**
+ * Router request types
+ */
+export type RouterMode = 'ECONOMY' | 'BALANCED' | 'PREMIUM';
+export type RouterPhase = 'B' | 'P' | 'E' | 'R';
+export type RouterIntent = 'CHAT' | 'VERIFY' | 'EXTRACT' | 'CLASSIFY' | 'RAG_VERIFY';
+
+export interface RouterRequest {
+  product: 'AIXORD_COPILOT' | 'PMERIT_CHATBOT';
+  intent: RouterIntent;
+  mode: RouterMode;
+  subscription: {
+    tier: 'TRIAL' | 'MANUSCRIPT_BYOK' | 'BYOK_STANDARD' | 'PLATFORM_STANDARD' | 'PLATFORM_PRO' | 'ENTERPRISE';
+    key_mode: 'PLATFORM' | 'BYOK';
+    user_api_key?: string;
+  };
+  capsule: {
+    objective: string;
+    phase: RouterPhase;
+    constraints?: string[];
+    decisions?: string[];
+    open_questions?: string[];
+  };
+  delta: {
+    user_input: string;
+    selection_ids?: string[];
+    changed_constraints?: string[];
+    artifact_refs?: string[];
+  };
+  budget?: {
+    max_cost_usd?: number;
+    max_input_tokens?: number;
+    max_output_tokens?: number;
+    max_latency_ms?: number;
+  };
+  policy_flags?: {
+    require_citations?: boolean;
+    strict_mode?: boolean;
+    allow_retry?: boolean;
+  };
+  trace: {
+    project_id: string;
+    session_id: string;
+    request_id: string;
+    user_id: string;
+  };
+}
+
+export interface RouterResponse {
+  status: 'SUCCESS' | 'ERROR';
+  content: string;
+  model_used: {
+    provider: string;
+    model: string;
+  };
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cost_usd: number;
+    latency_ms: number;
+  };
+  verification?: {
+    verdict: 'PASS' | 'WARN' | 'FAIL';
+    flags: Array<{
+      code: string;
+      severity: 'LOW' | 'MEDIUM' | 'HIGH';
+      detail?: string;
+    }>;
+  };
+  error?: string;
+}
+
+export const routerApi = {
+  /**
+   * Execute a chat request through the model router
+   */
+  async execute(request: RouterRequest): Promise<RouterResponse> {
+    const response = await fetch(`${ROUTER_BASE}/execute`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    const data = await response.json() as RouterResponse;
+
+    if (!response.ok && !data.error) {
+      throw new APIError(response.status, 'ROUTER_ERROR', 'Failed to execute router request');
+    }
+
+    return data;
+  },
+
+  /**
+   * Get a cost quote without executing
+   */
+  async quote(request: RouterRequest): Promise<{
+    model_class: string;
+    primary_model: { provider: string; model: string };
+    estimated: {
+      input_tokens: number;
+      output_tokens: number;
+      cost_usd: number;
+    };
+  }> {
+    const response = await fetch(`${ROUTER_BASE}/quote`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new APIError(response.status, 'ROUTER_ERROR', data.error || 'Failed to get quote');
+    }
+
+    return data;
+  },
+
+  /**
+   * Check router health
+   */
+  async health(): Promise<{ status: string; version: string; timestamp: string }> {
+    const response = await fetch(`${ROUTER_BASE}/health`);
+    return response.json();
+  },
+
+  /**
+   * List available models
+   */
+  async models(): Promise<{
+    classes: Record<string, Array<{ provider: string; model: string }>>;
+    timestamp: string;
+  }> {
+    const response = await fetch(`${ROUTER_BASE}/models`);
+    return response.json();
+  },
+};
+
+// ============================================================================
+// Billing API
+// ============================================================================
+
+/**
+ * Billing base URL (same worker, different endpoint path)
+ */
+const BILLING_BASE = 'https://aixord-router-worker.peoplemerit.workers.dev/v1/billing';
+
+/**
+ * Subscription tier type
+ */
+export type SubscriptionTier = 'TRIAL' | 'MANUSCRIPT_BYOK' | 'BYOK_STANDARD' | 'PLATFORM_STANDARD' | 'PLATFORM_PRO' | 'ENTERPRISE';
+
+/**
+ * Subscription status type
+ */
+export type SubscriptionStatus = 'active' | 'cancelled' | 'expired' | 'past_due';
+
+/**
+ * Subscription info
+ */
+export interface SubscriptionInfo {
+  tier: SubscriptionTier;
+  status: SubscriptionStatus;
+  keyMode: 'PLATFORM' | 'BYOK';
+  periodStart?: string;
+  periodEnd?: string;
+  stripeCustomerId?: string;
+}
+
+export const billingApi = {
+  /**
+   * Create a Stripe checkout session for subscription upgrade
+   * Returns URL to redirect user to Stripe checkout
+   */
+  async createCheckout(
+    userId: string,
+    priceId: string,
+    successUrl: string,
+    cancelUrl: string
+  ): Promise<{ url: string }> {
+    const response = await fetch(`${BILLING_BASE}/checkout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        price_id: priceId,
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+      }),
+    });
+
+    const data = await response.json() as { url?: string; error?: string };
+
+    if (!response.ok) {
+      throw new APIError(response.status, 'BILLING_ERROR', data.error || 'Failed to create checkout session');
+    }
+
+    return { url: data.url! };
+  },
+
+  /**
+   * Create a Stripe customer portal session for subscription management
+   * Returns URL to redirect user to Stripe customer portal
+   */
+  async createPortal(
+    customerId: string,
+    returnUrl: string
+  ): Promise<{ url: string }> {
+    const response = await fetch(`${BILLING_BASE}/portal`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        customer_id: customerId,
+        return_url: returnUrl,
+      }),
+    });
+
+    const data = await response.json() as { url?: string; error?: string };
+
+    if (!response.ok) {
+      throw new APIError(response.status, 'BILLING_ERROR', data.error || 'Failed to create portal session');
+    }
+
+    return { url: data.url! };
+  },
+
+  /**
+   * Activate a Gumroad license (one-time purchase)
+   */
+  async activateGumroad(
+    userId: string,
+    licenseKey: string
+  ): Promise<{ success: boolean; tier: SubscriptionTier }> {
+    const response = await fetch(`${BILLING_BASE}/activate/gumroad`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        license_key: licenseKey,
+      }),
+    });
+
+    const data = await response.json() as { success?: boolean; tier?: SubscriptionTier; error?: string };
+
+    if (!response.ok) {
+      throw new APIError(response.status, 'BILLING_ERROR', data.error || 'Failed to activate license');
+    }
+
+    return { success: true, tier: data.tier || 'MANUSCRIPT_BYOK' };
+  },
+
+  /**
+   * Activate a KDP book code (one-time purchase)
+   */
+  async activateKdp(
+    userId: string,
+    code: string
+  ): Promise<{ success: boolean; tier: SubscriptionTier }> {
+    const response = await fetch(`${BILLING_BASE}/activate/kdp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        code: code,
+      }),
+    });
+
+    const data = await response.json() as { success?: boolean; tier?: SubscriptionTier; error?: string };
+
+    if (!response.ok) {
+      throw new APIError(response.status, 'BILLING_ERROR', data.error || 'Failed to activate code');
+    }
+
+    return { success: true, tier: data.tier || 'MANUSCRIPT_BYOK' };
+  },
+};
+
+// ============================================================================
+// GitHub API (PATCH-GITHUB-01)
+// ============================================================================
+
+/**
+ * GitHub connection status
+ */
+export interface GitHubConnection {
+  project_id: string;
+  connected: boolean;
+  repo_owner: string | null;
+  repo_name: string | null;
+  scope: 'READ_ONLY';
+  connected_at: string | null;
+  last_sync: string | null;
+}
+
+/**
+ * GitHub evidence record
+ */
+export interface GitHubEvidenceRecord {
+  id: string;
+  evidence_type: 'COMMIT' | 'PR' | 'RELEASE' | 'CI_STATUS' | 'ISSUE' | 'MILESTONE';
+  triad_category: 'PLANNED' | 'CLAIMED' | 'VERIFIED';
+  ref_id: string;
+  ref_url: string;
+  title: string;
+  author: string;
+  evidence_timestamp: string;
+  status: 'PENDING' | 'VERIFIED' | 'STALE' | 'UNAVAILABLE';
+}
+
+/**
+ * Evidence grouped by triad category
+ */
+export interface EvidenceTriad {
+  planned: GitHubEvidenceRecord[];
+  claimed: GitHubEvidenceRecord[];
+  verified: GitHubEvidenceRecord[];
+}
+
+/**
+ * GitHub repository info
+ */
+export interface GitHubRepo {
+  id: number;
+  name: string;
+  full_name: string;
+  owner: string;
+  private: boolean;
+  description: string | null;
+  updated_at: string;
+  url: string;
+}
+
+export const githubApi = {
+  /**
+   * Initiate GitHub OAuth connection
+   * Returns authorization URL to redirect user
+   */
+  async connect(
+    projectId: string,
+    token: string,
+    repoOwner?: string,
+    repoName?: string
+  ): Promise<{ authorization_url: string; state: string; expires_in: number }> {
+    return request<{ authorization_url: string; state: string; expires_in: number }>(
+      '/github/connect',
+      {
+        method: 'POST',
+        body: JSON.stringify({ project_id: projectId, repo_owner: repoOwner, repo_name: repoName }),
+      },
+      token
+    );
+  },
+
+  /**
+   * Get GitHub connection status for a project
+   */
+  async getStatus(projectId: string, token: string): Promise<GitHubConnection> {
+    return request<GitHubConnection>(`/github/status/${projectId}`, {}, token);
+  },
+
+  /**
+   * Disconnect GitHub from a project
+   */
+  async disconnect(projectId: string, token: string): Promise<{ success: boolean }> {
+    return request<{ success: boolean }>(`/github/disconnect/${projectId}`, { method: 'DELETE' }, token);
+  },
+
+  /**
+   * List repositories available to the user
+   */
+  async listRepos(projectId: string, token: string): Promise<{ repos: GitHubRepo[] }> {
+    return request<{ repos: GitHubRepo[] }>(`/github/repos?project_id=${projectId}`, {}, token);
+  },
+
+  /**
+   * Update the connected repository for a project
+   */
+  async selectRepo(
+    projectId: string,
+    repoOwner: string,
+    repoName: string,
+    token: string
+  ): Promise<{ success: boolean }> {
+    return request<{ success: boolean }>(
+      `/github/repo/${projectId}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ repo_owner: repoOwner, repo_name: repoName }),
+      },
+      token
+    );
+  },
+};
+
+// ============================================================================
+// Evidence API (PATCH-GITHUB-01)
+// ============================================================================
+
+export const evidenceApi = {
+  /**
+   * Trigger evidence sync from GitHub
+   */
+  async sync(projectId: string, token: string): Promise<{
+    project_id: string;
+    synced_at: string;
+    total_fetched: number;
+    by_type: Record<string, number>;
+    by_triad: Record<string, number>;
+    errors: string[];
+  }> {
+    return request<{
+      project_id: string;
+      synced_at: string;
+      total_fetched: number;
+      by_type: Record<string, number>;
+      by_triad: Record<string, number>;
+      errors: string[];
+    }>(`/evidence/sync/${projectId}`, { method: 'POST' }, token);
+  },
+
+  /**
+   * Get all evidence for a project
+   */
+  async list(projectId: string, token: string): Promise<{
+    project_id: string;
+    total: number;
+    evidence: GitHubEvidenceRecord[];
+  }> {
+    return request<{
+      project_id: string;
+      total: number;
+      evidence: GitHubEvidenceRecord[];
+    }>(`/evidence/${projectId}`, {}, token);
+  },
+
+  /**
+   * Get evidence grouped by triad category
+   */
+  async getTriad(projectId: string, token: string): Promise<{
+    project_id: string;
+    connection: { repo_owner: string | null; repo_name: string | null; last_sync: string | null } | null;
+    counts: { planned: number; claimed: number; verified: number; total: number };
+    triad: EvidenceTriad;
+  }> {
+    return request<{
+      project_id: string;
+      connection: { repo_owner: string | null; repo_name: string | null; last_sync: string | null } | null;
+      counts: { planned: number; claimed: number; verified: number; total: number };
+      triad: EvidenceTriad;
+    }>(`/evidence/${projectId}/triad`, {}, token);
+  },
+};
+
+// ============================================================================
+// Knowledge Artifacts API (GKDL-01)
+// ============================================================================
+
+/**
+ * Knowledge artifact types per AIXORD v4.3 GKDL-01
+ * Sessions = evidence, Artifacts = authoritative
+ */
+export type KnowledgeArtifactType =
+  | 'FAQ_REFERENCE'
+  | 'SYSTEM_OPERATION_MANUAL'
+  | 'SYSTEM_DIAGNOSTICS_GUIDE'
+  | 'CONSOLIDATED_SESSION_REFERENCE'
+  | 'DEFINITION_OF_DONE';
+
+/**
+ * Artifact status per GKDL-01
+ * AI-derived = DRAFT until Director approves
+ */
+export type ArtifactStatus = 'DRAFT' | 'REVIEW' | 'APPROVED' | 'SUPERSEDED';
+
+/**
+ * Knowledge artifact derivation source
+ */
+export type DerivationSource = 'MANUAL' | 'AI_DERIVED' | 'EXTRACTED' | 'IMPORTED';
+
+/**
+ * Knowledge Artifact Record
+ * Per L-GKDL1: Derived knowledge is governed
+ * Per L-GKDL5: AI-derived = DRAFT until approved
+ */
+export interface KnowledgeArtifact {
+  id: string;
+  projectId: string;
+  type: KnowledgeArtifactType;
+  title: string;
+  version: number;
+  content: string;
+  summary?: string;
+  derivationSource: DerivationSource;
+  sourceSessionIds?: string[];
+  sourceArtifactIds?: string[];
+  status: ArtifactStatus;
+  approvedBy?: string;
+  approvedAt?: string;
+  authorityLevel: number;
+  supersedes?: string;
+  supersededBy?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Backend knowledge artifact response type (snake_case from D1 database)
+ */
+interface BackendKnowledgeArtifact {
+  id: string;
+  project_id: string;
+  type: string;
+  title: string;
+  version: number;
+  content: string;
+  summary?: string;
+  derivation_source: string;
+  source_session_ids?: string;
+  source_artifact_ids?: string;
+  status: string;
+  approved_by?: string;
+  approved_at?: string;
+  authority_level: number;
+  supersedes?: string;
+  superseded_by?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Transform backend knowledge artifact to frontend format
+ */
+function transformKnowledgeArtifact(raw: BackendKnowledgeArtifact): KnowledgeArtifact {
+  return {
+    id: raw.id,
+    projectId: raw.project_id,
+    type: raw.type as KnowledgeArtifactType,
+    title: raw.title,
+    version: raw.version,
+    content: raw.content,
+    summary: raw.summary,
+    derivationSource: raw.derivation_source as DerivationSource,
+    sourceSessionIds: raw.source_session_ids ? JSON.parse(raw.source_session_ids) : undefined,
+    sourceArtifactIds: raw.source_artifact_ids ? JSON.parse(raw.source_artifact_ids) : undefined,
+    status: raw.status as ArtifactStatus,
+    approvedBy: raw.approved_by,
+    approvedAt: raw.approved_at,
+    authorityLevel: raw.authority_level,
+    supersedes: raw.supersedes,
+    supersededBy: raw.superseded_by,
+    createdBy: raw.created_by,
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  };
+}
+
+/**
+ * Authority levels per artifact type (for UI display)
+ */
+export const ARTIFACT_AUTHORITY_LEVELS: Record<KnowledgeArtifactType, number> = {
+  CONSOLIDATED_SESSION_REFERENCE: 100,
+  DEFINITION_OF_DONE: 80,
+  SYSTEM_OPERATION_MANUAL: 60,
+  SYSTEM_DIAGNOSTICS_GUIDE: 40,
+  FAQ_REFERENCE: 20,
+};
+
+/**
+ * Human-readable artifact type labels
+ */
+export const ARTIFACT_TYPE_LABELS: Record<KnowledgeArtifactType, string> = {
+  FAQ_REFERENCE: 'FAQ Reference',
+  SYSTEM_OPERATION_MANUAL: 'System Operation Manual',
+  SYSTEM_DIAGNOSTICS_GUIDE: 'System Diagnostics Guide',
+  CONSOLIDATED_SESSION_REFERENCE: 'Consolidated Session Reference (CSR)',
+  DEFINITION_OF_DONE: 'Definition of Done',
+};
+
+/**
+ * Human-readable status labels
+ */
+export const ARTIFACT_STATUS_LABELS: Record<ArtifactStatus, string> = {
+  DRAFT: 'Draft',
+  REVIEW: 'In Review',
+  APPROVED: 'Approved',
+  SUPERSEDED: 'Superseded',
+};
+
+export const knowledgeApi = {
+  /**
+   * List all knowledge artifacts for a project
+   */
+  async list(
+    projectId: string,
+    token: string,
+    filters?: { type?: KnowledgeArtifactType; status?: ArtifactStatus }
+  ): Promise<{ artifacts: KnowledgeArtifact[]; total: number }> {
+    let endpoint = `/projects/${projectId}/knowledge`;
+    const params = new URLSearchParams();
+    if (filters?.type) params.append('type', filters.type);
+    if (filters?.status) params.append('status', filters.status);
+    if (params.toString()) endpoint += `?${params.toString()}`;
+
+    const response = await request<{ artifacts: BackendKnowledgeArtifact[]; total: number }>(
+      endpoint,
+      {},
+      token
+    );
+    return {
+      artifacts: response.artifacts.map(transformKnowledgeArtifact),
+      total: response.total,
+    };
+  },
+
+  /**
+   * Get a specific knowledge artifact
+   */
+  async get(projectId: string, artifactId: string, token: string): Promise<KnowledgeArtifact> {
+    const response = await request<BackendKnowledgeArtifact>(
+      `/projects/${projectId}/knowledge/${artifactId}`,
+      {},
+      token
+    );
+    return transformKnowledgeArtifact(response);
+  },
+
+  /**
+   * Create a new knowledge artifact
+   */
+  async create(
+    projectId: string,
+    data: {
+      type: KnowledgeArtifactType;
+      title: string;
+      content: string;
+      summary?: string;
+      derivationSource?: DerivationSource;
+      sourceSessionIds?: string[];
+      sourceArtifactIds?: string[];
+    },
+    token: string
+  ): Promise<{
+    id: string;
+    type: KnowledgeArtifactType;
+    title: string;
+    version: number;
+    status: ArtifactStatus;
+    authorityLevel: number;
+    createdAt: string;
+  }> {
+    const backendData = {
+      type: data.type,
+      title: data.title,
+      content: data.content,
+      summary: data.summary,
+      derivation_source: data.derivationSource || 'MANUAL',
+      source_session_ids: data.sourceSessionIds,
+      source_artifact_ids: data.sourceArtifactIds,
+    };
+    const response = await request<{
+      id: string;
+      type: string;
+      title: string;
+      version: number;
+      status: string;
+      authority_level: number;
+      created_at: string;
+    }>(
+      `/projects/${projectId}/knowledge`,
+      {
+        method: 'POST',
+        body: JSON.stringify(backendData),
+      },
+      token
+    );
+    return {
+      id: response.id,
+      type: response.type as KnowledgeArtifactType,
+      title: response.title,
+      version: response.version,
+      status: response.status as ArtifactStatus,
+      authorityLevel: response.authority_level,
+      createdAt: response.created_at,
+    };
+  },
+
+  /**
+   * Update a knowledge artifact
+   */
+  async update(
+    projectId: string,
+    artifactId: string,
+    data: {
+      title?: string;
+      content?: string;
+      summary?: string;
+      status?: ArtifactStatus;
+    },
+    token: string
+  ): Promise<{ id: string; version: number; updatedAt: string }> {
+    const response = await request<{ id: string; version: number; updated_at: string }>(
+      `/projects/${projectId}/knowledge/${artifactId}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      },
+      token
+    );
+    return {
+      id: response.id,
+      version: response.version,
+      updatedAt: response.updated_at,
+    };
+  },
+
+  /**
+   * Delete (supersede) a knowledge artifact
+   */
+  async delete(
+    projectId: string,
+    artifactId: string,
+    token: string
+  ): Promise<{ success: boolean; status: 'SUPERSEDED' }> {
+    return request<{ success: boolean; status: 'SUPERSEDED' }>(
+      `/projects/${projectId}/knowledge/${artifactId}`,
+      { method: 'DELETE' },
+      token
+    );
+  },
+
+  /**
+   * Approve a knowledge artifact (L-GKDL5)
+   */
+  async approve(
+    projectId: string,
+    artifactId: string,
+    token: string
+  ): Promise<{
+    id: string;
+    status: 'APPROVED';
+    approvedBy: string;
+    approvedAt: string;
+  }> {
+    const response = await request<{
+      id: string;
+      status: string;
+      approved_by: string;
+      approved_at: string;
+    }>(
+      `/projects/${projectId}/knowledge/${artifactId}/approve`,
       { method: 'POST' },
       token
     );
-    return response.decision;
+    return {
+      id: response.id,
+      status: 'APPROVED',
+      approvedBy: response.approved_by,
+      approvedAt: response.approved_at,
+    };
+  },
+
+  /**
+   * Generate a Consolidated Session Reference (CSR)
+   * Per L-GCP6: Required for 10+ sessions
+   */
+  async generateCSR(
+    projectId: string,
+    token: string
+  ): Promise<{
+    id: string;
+    type: 'CONSOLIDATED_SESSION_REFERENCE';
+    title: string;
+    status: 'DRAFT';
+    sessionCount: number;
+    message: string;
+  }> {
+    const response = await request<{
+      id: string;
+      type: string;
+      title: string;
+      status: string;
+      session_count: number;
+      message: string;
+    }>(
+      `/projects/${projectId}/knowledge/generate-csr`,
+      { method: 'POST' },
+      token
+    );
+    return {
+      id: response.id,
+      type: 'CONSOLIDATED_SESSION_REFERENCE',
+      title: response.title,
+      status: 'DRAFT',
+      sessionCount: response.session_count,
+      message: response.message,
+    };
+  },
+};
+
+// ============================================================================
+// CCS Types (PATCH-CCS-01)
+// ============================================================================
+
+export type CCSPhase = 'INACTIVE' | 'DETECT' | 'CONTAIN' | 'ROTATE' | 'INVALIDATE' | 'VERIFY' | 'ATTEST' | 'UNLOCK';
+export type CCSIncidentStatus = 'ACTIVE' | 'RESOLVED' | 'EXPIRED';
+export type CCSArtifactType = 'CCS-01' | 'CCS-02' | 'CCS-03' | 'CCS-04' | 'CCS-05';
+export type CredentialType = 'API_KEY' | 'ACCESS_TOKEN' | 'SECRET_KEY' | 'PASSWORD' | 'OAUTH_TOKEN' | 'DATABASE_CREDENTIAL' | 'ENCRYPTION_KEY' | 'OTHER';
+export type ExposureSource = 'VERSION_CONTROL' | 'LOG_FILE' | 'SCREENSHOT' | 'PUBLIC_CHANNEL' | 'THIRD_PARTY_BREACH' | 'SECURITY_AUDIT' | 'OTHER';
+
+export interface CCSIncident {
+  id: string;
+  projectId: string;
+  incidentNumber: string;
+  phase: CCSPhase;
+  status: CCSIncidentStatus;
+  credentialType: CredentialType;
+  credentialName: string;
+  exposureSource: ExposureSource;
+  exposureDescription: string;
+  exposureDetectedAt: string;
+  impactAssessment: string;
+  affectedSystems: string[];
+  containCompletedAt?: string;
+  rotateCompletedAt?: string;
+  invalidateCompletedAt?: string;
+  verifyCompletedAt?: string;
+  attestCompletedAt?: string;
+  unlockCompletedAt?: string;
+  attestedBy?: string;
+  attestationStatement?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
+}
+
+export interface CCSArtifact {
+  id: string;
+  incidentId: string;
+  artifactType: CCSArtifactType;
+  title: string;
+  content: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface CCSVerificationTest {
+  id: string;
+  incidentId: string;
+  testType: 'OLD_REJECTED' | 'NEW_SUCCESS' | 'DEPENDENT_SYSTEM';
+  targetSystem: string;
+  expectedResult: string;
+  actualResult: string;
+  passed: boolean;
+  testedBy: string;
+  testedAt: string;
+}
+
+export interface CCSGateStatus {
+  GA_CCS: 0 | 1;
+  ccs_phase: CCSPhase;
+  incident_id: string | null;
+  active_incidents: number;
+  blocking: boolean;
+  active_incident?: {
+    incident_number: string;
+    phase: CCSPhase;
+    credential_name: string;
+    credential_type: CredentialType;
+  };
+}
+
+// ============================================================================
+// CCS API (PATCH-CCS-01)
+// ============================================================================
+
+export const ccsApi = {
+  /**
+   * Get GA:CCS gate status
+   */
+  async getStatus(projectId: string, token: string): Promise<CCSGateStatus> {
+    return request<CCSGateStatus>(
+      `/projects/${projectId}/ccs/status`,
+      {},
+      token
+    );
+  },
+
+  /**
+   * Create a CCS incident (activates GA:CCS gate)
+   */
+  async createIncident(
+    projectId: string,
+    data: {
+      credentialType: CredentialType;
+      credentialName: string;
+      exposureSource: ExposureSource;
+      exposureDescription: string;
+      impactAssessment: string;
+      affectedSystems?: string[];
+    },
+    token: string
+  ): Promise<{
+    id: string;
+    incidentNumber: string;
+    phase: CCSPhase;
+    status: CCSIncidentStatus;
+    gaCcs: number;
+    message: string;
+  }> {
+    const response = await request<{
+      id: string;
+      incident_number: string;
+      phase: CCSPhase;
+      status: CCSIncidentStatus;
+      ga_ccs: number;
+      message: string;
+    }>(
+      `/projects/${projectId}/ccs/incidents`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          credential_type: data.credentialType,
+          credential_name: data.credentialName,
+          exposure_source: data.exposureSource,
+          exposure_description: data.exposureDescription,
+          impact_assessment: data.impactAssessment,
+          affected_systems: data.affectedSystems,
+        }),
+      },
+      token
+    );
+    return {
+      id: response.id,
+      incidentNumber: response.incident_number,
+      phase: response.phase,
+      status: response.status,
+      gaCcs: response.ga_ccs,
+      message: response.message,
+    };
+  },
+
+  /**
+   * List CCS incidents
+   */
+  async listIncidents(
+    projectId: string,
+    token: string,
+    status?: CCSIncidentStatus
+  ): Promise<{ incidents: CCSIncident[]; total: number }> {
+    const query = status ? `?status=${status}` : '';
+    const response = await request<{
+      incidents: Array<{
+        id: string;
+        project_id: string;
+        incident_number: string;
+        phase: CCSPhase;
+        status: CCSIncidentStatus;
+        credential_type: CredentialType;
+        credential_name: string;
+        exposure_source: ExposureSource;
+        exposure_description: string;
+        exposure_detected_at: string;
+        impact_assessment: string;
+        affected_systems: string[];
+        contain_completed_at?: string;
+        rotate_completed_at?: string;
+        invalidate_completed_at?: string;
+        verify_completed_at?: string;
+        attest_completed_at?: string;
+        unlock_completed_at?: string;
+        attested_by?: string;
+        attestation_statement?: string;
+        created_by: string;
+        created_at: string;
+        updated_at: string;
+        resolved_at?: string;
+      }>;
+      total: number;
+    }>(
+      `/projects/${projectId}/ccs/incidents${query}`,
+      {},
+      token
+    );
+    return {
+      incidents: response.incidents.map(i => ({
+        id: i.id,
+        projectId: i.project_id,
+        incidentNumber: i.incident_number,
+        phase: i.phase,
+        status: i.status,
+        credentialType: i.credential_type,
+        credentialName: i.credential_name,
+        exposureSource: i.exposure_source,
+        exposureDescription: i.exposure_description,
+        exposureDetectedAt: i.exposure_detected_at,
+        impactAssessment: i.impact_assessment,
+        affectedSystems: i.affected_systems || [],
+        containCompletedAt: i.contain_completed_at,
+        rotateCompletedAt: i.rotate_completed_at,
+        invalidateCompletedAt: i.invalidate_completed_at,
+        verifyCompletedAt: i.verify_completed_at,
+        attestCompletedAt: i.attest_completed_at,
+        unlockCompletedAt: i.unlock_completed_at,
+        attestedBy: i.attested_by,
+        attestationStatement: i.attestation_statement,
+        createdBy: i.created_by,
+        createdAt: i.created_at,
+        updatedAt: i.updated_at,
+        resolvedAt: i.resolved_at,
+      })),
+      total: response.total,
+    };
+  },
+
+  /**
+   * Get incident details
+   */
+  async getIncident(
+    projectId: string,
+    incidentId: string,
+    token: string
+  ): Promise<CCSIncident & { artifacts: CCSArtifact[]; verificationTests: CCSVerificationTest[] }> {
+    const response = await request<{
+      id: string;
+      project_id: string;
+      incident_number: string;
+      phase: CCSPhase;
+      status: CCSIncidentStatus;
+      credential_type: CredentialType;
+      credential_name: string;
+      exposure_source: ExposureSource;
+      exposure_description: string;
+      exposure_detected_at: string;
+      impact_assessment: string;
+      affected_systems: string[];
+      contain_completed_at?: string;
+      rotate_completed_at?: string;
+      invalidate_completed_at?: string;
+      verify_completed_at?: string;
+      attest_completed_at?: string;
+      unlock_completed_at?: string;
+      attested_by?: string;
+      attestation_statement?: string;
+      created_by: string;
+      created_at: string;
+      updated_at: string;
+      resolved_at?: string;
+      artifacts: Array<{
+        id: string;
+        incident_id: string;
+        artifact_type: CCSArtifactType;
+        title: string;
+        content: string;
+        created_by: string;
+        created_at: string;
+      }>;
+      verification_tests: Array<{
+        id: string;
+        incident_id: string;
+        test_type: 'OLD_REJECTED' | 'NEW_SUCCESS' | 'DEPENDENT_SYSTEM';
+        target_system: string;
+        expected_result: string;
+        actual_result: string;
+        passed: boolean;
+        tested_by: string;
+        tested_at: string;
+      }>;
+    }>(
+      `/projects/${projectId}/ccs/incidents/${incidentId}`,
+      {},
+      token
+    );
+    return {
+      id: response.id,
+      projectId: response.project_id,
+      incidentNumber: response.incident_number,
+      phase: response.phase,
+      status: response.status,
+      credentialType: response.credential_type,
+      credentialName: response.credential_name,
+      exposureSource: response.exposure_source,
+      exposureDescription: response.exposure_description,
+      exposureDetectedAt: response.exposure_detected_at,
+      impactAssessment: response.impact_assessment,
+      affectedSystems: response.affected_systems || [],
+      containCompletedAt: response.contain_completed_at,
+      rotateCompletedAt: response.rotate_completed_at,
+      invalidateCompletedAt: response.invalidate_completed_at,
+      verifyCompletedAt: response.verify_completed_at,
+      attestCompletedAt: response.attest_completed_at,
+      unlockCompletedAt: response.unlock_completed_at,
+      attestedBy: response.attested_by,
+      attestationStatement: response.attestation_statement,
+      createdBy: response.created_by,
+      createdAt: response.created_at,
+      updatedAt: response.updated_at,
+      resolvedAt: response.resolved_at,
+      artifacts: response.artifacts.map(a => ({
+        id: a.id,
+        incidentId: a.incident_id,
+        artifactType: a.artifact_type,
+        title: a.title,
+        content: a.content,
+        createdBy: a.created_by,
+        createdAt: a.created_at,
+      })),
+      verificationTests: response.verification_tests.map(t => ({
+        id: t.id,
+        incidentId: t.incident_id,
+        testType: t.test_type,
+        targetSystem: t.target_system,
+        expectedResult: t.expected_result,
+        actualResult: t.actual_result,
+        passed: t.passed,
+        testedBy: t.tested_by,
+        testedAt: t.tested_at,
+      })),
+    };
+  },
+
+  /**
+   * Update incident phase
+   */
+  async updatePhase(
+    projectId: string,
+    incidentId: string,
+    phase: CCSPhase,
+    token: string
+  ): Promise<{
+    id: string;
+    phase: CCSPhase;
+    previousPhase: CCSPhase;
+    transitionCompletedAt: string;
+    gaCcs: number;
+  }> {
+    const response = await request<{
+      id: string;
+      phase: CCSPhase;
+      previous_phase: CCSPhase;
+      transition_completed_at: string;
+      ga_ccs: number;
+    }>(
+      `/projects/${projectId}/ccs/incidents/${incidentId}/phase`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ phase }),
+      },
+      token
+    );
+    return {
+      id: response.id,
+      phase: response.phase,
+      previousPhase: response.previous_phase,
+      transitionCompletedAt: response.transition_completed_at,
+      gaCcs: response.ga_ccs,
+    };
+  },
+
+  /**
+   * Add CCS artifact
+   */
+  async addArtifact(
+    projectId: string,
+    incidentId: string,
+    data: {
+      artifactType: CCSArtifactType;
+      title: string;
+      content: string;
+    },
+    token: string
+  ): Promise<{ id: string; artifactType: CCSArtifactType; title: string; createdAt: string }> {
+    const response = await request<{
+      id: string;
+      artifact_type: CCSArtifactType;
+      title: string;
+      created_at: string;
+    }>(
+      `/projects/${projectId}/ccs/incidents/${incidentId}/artifacts`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          artifact_type: data.artifactType,
+          title: data.title,
+          content: data.content,
+        }),
+      },
+      token
+    );
+    return {
+      id: response.id,
+      artifactType: response.artifact_type,
+      title: response.title,
+      createdAt: response.created_at,
+    };
+  },
+
+  /**
+   * Add verification test
+   */
+  async addVerificationTest(
+    projectId: string,
+    incidentId: string,
+    data: {
+      testType: 'OLD_REJECTED' | 'NEW_SUCCESS' | 'DEPENDENT_SYSTEM';
+      targetSystem: string;
+      expectedResult: string;
+      actualResult: string;
+      passed: boolean;
+    },
+    token: string
+  ): Promise<{ id: string; testType: string; passed: boolean; testedAt: string }> {
+    const response = await request<{
+      id: string;
+      test_type: string;
+      passed: boolean;
+      tested_at: string;
+    }>(
+      `/projects/${projectId}/ccs/incidents/${incidentId}/verify`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          test_type: data.testType,
+          target_system: data.targetSystem,
+          expected_result: data.expectedResult,
+          actual_result: data.actualResult,
+          passed: data.passed,
+        }),
+      },
+      token
+    );
+    return {
+      id: response.id,
+      testType: response.test_type,
+      passed: response.passed,
+      testedAt: response.tested_at,
+    };
+  },
+
+  /**
+   * Submit Director attestation (CCS-04)
+   */
+  async attest(
+    projectId: string,
+    incidentId: string,
+    attestationStatement: string,
+    token: string
+  ): Promise<{ id: string; attested: boolean; attestedBy: string; attestedAt: string; message: string }> {
+    const response = await request<{
+      id: string;
+      attested: boolean;
+      attested_by: string;
+      attested_at: string;
+      message: string;
+    }>(
+      `/projects/${projectId}/ccs/incidents/${incidentId}/attest`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ attestation_statement: attestationStatement }),
+      },
+      token
+    );
+    return {
+      id: response.id,
+      attested: response.attested,
+      attestedBy: response.attested_by,
+      attestedAt: response.attested_at,
+      message: response.message,
+    };
+  },
+
+  /**
+   * Unlock GA:CCS gate
+   */
+  async unlock(
+    projectId: string,
+    incidentId: string,
+    token: string
+  ): Promise<{
+    id: string;
+    phase: CCSPhase;
+    status: CCSIncidentStatus;
+    gaCcs: number;
+    message: string;
+    unlockedAt: string;
+  }> {
+    const response = await request<{
+      id: string;
+      phase: CCSPhase;
+      status: CCSIncidentStatus;
+      ga_ccs: number;
+      message: string;
+      unlocked_at: string;
+    }>(
+      `/projects/${projectId}/ccs/incidents/${incidentId}/unlock`,
+      { method: 'POST' },
+      token
+    );
+    return {
+      id: response.id,
+      phase: response.phase,
+      status: response.status,
+      gaCcs: response.ga_ccs,
+      message: response.message,
+      unlockedAt: response.unlocked_at,
+    };
+  },
+};
+
+// ============================================================================
+// Security API (SPG-01)
+// ============================================================================
+
+/**
+ * Security Gate status
+ */
+export interface SecurityGate {
+  passed: boolean;
+  passedAt?: string;
+  required: boolean;
+  description: string;
+}
+
+/**
+ * Security Gates for a project
+ */
+export interface SecurityGatesStatus {
+  projectId: string;
+  gates: {
+    'GS:DC': SecurityGate;
+    'GS:DP': SecurityGate;
+    'GS:AC': SecurityGate;
+    'GS:AI': SecurityGate;
+    'GS:JR': SecurityGate;
+    'GS:RT': SecurityGate;
+  };
+  executionAllowed: boolean;
+  reason: string | null;
+}
+
+/**
+ * AI Exposure validation result
+ */
+export interface AIExposureValidation {
+  allowed: boolean;
+  exposureLevel: AIExposureLevel;
+  requiresRedaction: boolean;
+  blockedReason: string | null;
+  logId: string;
+  redactionRules: {
+    maskPii: boolean;
+    maskPhi: boolean;
+    maskMinorData: boolean;
+  } | null;
+}
+
+export const securityApi = {
+  /**
+   * Get data classification for a project
+   */
+  async getClassification(projectId: string, token: string): Promise<DataClassification> {
+    const response = await request<{
+      project_id: string;
+      pii: DataClassificationValue;
+      phi: DataClassificationValue;
+      financial: DataClassificationValue;
+      legal: DataClassificationValue;
+      minor_data: DataClassificationValue;
+      jurisdiction: string;
+      regulations: string[];
+      ai_exposure: AIExposureLevel;
+      declared: boolean;
+      declared_by?: string;
+      declared_at?: string;
+    }>(`/projects/${projectId}/security/classification`, {}, token);
+
+    return {
+      projectId: response.project_id,
+      pii: response.pii,
+      phi: response.phi,
+      financial: response.financial,
+      legal: response.legal,
+      minorData: response.minor_data,
+      jurisdiction: response.jurisdiction,
+      regulations: response.regulations,
+      aiExposure: response.ai_exposure,
+      declared: response.declared,
+      declaredBy: response.declared_by,
+      declaredAt: response.declared_at,
+    };
+  },
+
+  /**
+   * Set data classification for a project (GS:DC gate - L-SPG1)
+   */
+  async setClassification(
+    projectId: string,
+    data: {
+      pii?: DataClassificationValue;
+      phi?: DataClassificationValue;
+      financial?: DataClassificationValue;
+      legal?: DataClassificationValue;
+      minorData?: DataClassificationValue;
+      jurisdiction?: string;
+      regulations?: string[];
+      aiExposure?: AIExposureLevel;
+    },
+    token: string
+  ): Promise<{
+    success: boolean;
+    classification: Omit<DataClassification, 'projectId' | 'declared' | 'declaredBy' | 'declaredAt'>;
+    gatesPassed: string[];
+    warnings: string[];
+  }> {
+    const response = await request<{
+      success: boolean;
+      classification: {
+        pii: DataClassificationValue;
+        phi: DataClassificationValue;
+        financial: DataClassificationValue;
+        legal: DataClassificationValue;
+        minor_data: DataClassificationValue;
+        jurisdiction: string;
+        regulations: string[];
+        ai_exposure: AIExposureLevel;
+      };
+      gates_passed: string[];
+      warnings: string[];
+    }>(
+      `/projects/${projectId}/security/classification`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          pii: data.pii,
+          phi: data.phi,
+          financial: data.financial,
+          legal: data.legal,
+          minor_data: data.minorData,
+          jurisdiction: data.jurisdiction,
+          regulations: data.regulations,
+          ai_exposure: data.aiExposure,
+        }),
+      },
+      token
+    );
+
+    return {
+      success: response.success,
+      classification: {
+        pii: response.classification.pii,
+        phi: response.classification.phi,
+        financial: response.classification.financial,
+        legal: response.classification.legal,
+        minorData: response.classification.minor_data,
+        jurisdiction: response.classification.jurisdiction,
+        regulations: response.classification.regulations,
+        aiExposure: response.classification.ai_exposure,
+      },
+      gatesPassed: response.gates_passed,
+      warnings: response.warnings,
+    };
+  },
+
+  /**
+   * Get security gates status for a project
+   */
+  async getGates(projectId: string, token: string): Promise<SecurityGatesStatus> {
+    const response = await request<{
+      project_id: string;
+      gates: {
+        'GS:DC': SecurityGate;
+        'GS:DP': SecurityGate;
+        'GS:AC': SecurityGate;
+        'GS:AI': SecurityGate;
+        'GS:JR': SecurityGate;
+        'GS:RT': SecurityGate;
+      };
+      execution_allowed: boolean;
+      reason: string | null;
+    }>(`/projects/${projectId}/security/gates`, {}, token);
+
+    return {
+      projectId: response.project_id,
+      gates: response.gates,
+      executionAllowed: response.execution_allowed,
+      reason: response.reason,
+    };
+  },
+
+  /**
+   * Validate AI exposure before sending to model
+   */
+  async validateExposure(
+    projectId: string,
+    requestId: string,
+    token: string
+  ): Promise<AIExposureValidation> {
+    const response = await request<{
+      allowed: boolean;
+      exposure_level: AIExposureLevel;
+      requires_redaction: boolean;
+      blocked_reason: string | null;
+      log_id: string;
+      redaction_rules: {
+        mask_pii: boolean;
+        mask_phi: boolean;
+        mask_minor_data: boolean;
+      } | null;
+    }>(
+      `/projects/${projectId}/security/validate-exposure`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ request_id: requestId }),
+      },
+      token
+    );
+
+    return {
+      allowed: response.allowed,
+      exposureLevel: response.exposure_level,
+      requiresRedaction: response.requires_redaction,
+      blockedReason: response.blocked_reason,
+      logId: response.log_id,
+      redactionRules: response.redaction_rules ? {
+        maskPii: response.redaction_rules.mask_pii,
+        maskPhi: response.redaction_rules.mask_phi,
+        maskMinorData: response.redaction_rules.mask_minor_data,
+      } : null,
+    };
+  },
+};
+
+// ============================================================================
+// Usage API (H1/H2 - Trial and Metering)
+// ============================================================================
+
+export interface UsageData {
+  period: string;
+  tier: string;
+  requests: {
+    used: number;
+    limit: number;
+    remaining: number;
+  };
+  tokens: {
+    used: number;
+  };
+  estimatedCostCents: number;
+  codeTasks: {
+    used: number;
+  };
+  trial: {
+    expiresAt: string;
+    daysLeft: number;
+  } | null;
+}
+
+export interface UsageHistoryItem {
+  period: string;
+  request_count: number;
+  token_count: number;
+  estimated_cost_cents: number;
+  code_task_count: number;
+}
+
+const usageApi = {
+  /**
+   * Get current period usage
+   */
+  async current(token: string): Promise<UsageData> {
+    const response = await request<{
+      period: string;
+      tier: string;
+      requests: { used: number; limit: number; remaining: number };
+      tokens: { used: number };
+      estimated_cost_cents: number;
+      code_tasks: { used: number };
+      trial: { expires_at: string; days_left: number } | null;
+    }>('/usage', {}, token);
+
+    return {
+      period: response.period,
+      tier: response.tier,
+      requests: response.requests,
+      tokens: response.tokens,
+      estimatedCostCents: response.estimated_cost_cents,
+      codeTasks: response.code_tasks,
+      trial: response.trial ? {
+        expiresAt: response.trial.expires_at,
+        daysLeft: response.trial.days_left,
+      } : null,
+    };
+  },
+
+  /**
+   * Get usage history (past 6 months)
+   */
+  async history(token: string): Promise<UsageHistoryItem[]> {
+    const response = await request<{ history: UsageHistoryItem[] }>('/usage/history', {}, token);
+    return response.history;
   },
 };
 
@@ -377,6 +2483,15 @@ export const api = {
   projects: projectsApi,
   state: stateApi,
   decisions: decisionsApi,
+  messages: messagesApi,
+  router: routerApi,
+  billing: billingApi,
+  github: githubApi,
+  evidence: evidenceApi,
+  knowledge: knowledgeApi,
+  ccs: ccsApi,
+  security: securityApi,
+  usage: usageApi,
 };
 
 export default api;

@@ -15,15 +15,15 @@ export function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const { login, loginWithEmail, isLoading, error, user } = useAuth();
+  const { login, loginWithEmail, isLoading, error, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect if already logged in or after login succeeds
+  // If already logged in, redirect immediately
   useEffect(() => {
-    if (user) {
+    if (isAuthenticated) {
       navigate('/dashboard', { replace: true });
     }
-  }, [user, navigate]);
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +33,8 @@ export function Login() {
       } else {
         await login(apiKey);
       }
-      // Navigation handled by useEffect when user becomes truthy
+      // Use React Router navigate - this preserves SPA state and localStorage
+      // The useEffect above will handle the redirect once isAuthenticated becomes true
     } catch {
       // Error is handled by useAuth
     }

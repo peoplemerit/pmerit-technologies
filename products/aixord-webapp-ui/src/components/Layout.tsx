@@ -1,19 +1,26 @@
 /**
  * Layout Component
  *
- * Main layout wrapper with navigation header.
+ * Main layout wrapper with navigation header and sidebar.
  */
 
+import { useState } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Sidebar } from './Sidebar';
 
 export function Layout() {
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, isLoading, user, logout } = useAuth();
   const navigate = useNavigate();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  const handleSidebarToggle = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
   };
 
   return (
@@ -30,15 +37,24 @@ export function Layout() {
               <span className="text-xl font-semibold text-white">AIXORD</span>
             </Link>
 
-            {/* Navigation */}
+            {/* Navigation - wait for auth to load before showing login/logout buttons */}
             <nav className="flex items-center space-x-4">
-              {isAuthenticated ? (
+              {isLoading ? (
+                // Show loading placeholder while auth is being verified
+                <div className="h-8 w-24 bg-gray-800/50 rounded animate-pulse" />
+              ) : isAuthenticated ? (
                 <>
                   <Link
                     to="/dashboard"
                     className="text-gray-300 hover:text-white transition-colors px-3 py-2"
                   >
                     Dashboard
+                  </Link>
+                  <Link
+                    to="/settings"
+                    className="text-gray-300 hover:text-white transition-colors px-3 py-2"
+                  >
+                    Settings
                   </Link>
                   <div className="flex items-center space-x-3">
                     <span className="text-gray-400 text-sm">{user?.email}</span>
@@ -51,6 +67,7 @@ export function Layout() {
                   </div>
                 </>
               ) : (
+                // Not loading and not authenticated - show login/signup
                 <>
                   <Link
                     to="/login"
@@ -71,8 +88,19 @@ export function Layout() {
         </div>
       </header>
 
+      {/* Sidebar */}
+      {isAuthenticated && (
+        <Sidebar
+          isOpen={true}
+          onToggle={handleSidebarToggle}
+        />
+      )}
+
       {/* Main Content */}
-      <main>
+      <main className={`
+        transition-all duration-300
+        ${isAuthenticated ? (sidebarCollapsed ? 'ml-16' : 'ml-56') : ''}
+      `}>
         <Outlet />
       </main>
 
@@ -87,12 +115,12 @@ export function Layout() {
               <a href="/privacy-policy.html" className="text-gray-400 hover:text-white transition-colors">
                 Privacy Policy
               </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
+              <Link to="/docs" className="text-gray-400 hover:text-white transition-colors">
                 Documentation
-              </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                GitHub
-              </a>
+              </Link>
+              <Link to="/pricing" className="text-gray-400 hover:text-white transition-colors">
+                Pricing
+              </Link>
             </div>
           </div>
         </div>

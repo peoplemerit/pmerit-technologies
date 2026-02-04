@@ -1,107 +1,103 @@
 /**
  * Signup Page
  *
- * User registration form.
+ * User registration form with email verification.
  */
 
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export function Signup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
   const [name, setName] = useState('');
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
   const { register, isLoading, error, user } = useAuth();
-  const navigate = useNavigate();
 
-  // Redirect if already logged in
+  // If already logged in, redirect immediately (one-time check on mount)
   useEffect(() => {
     if (user) {
-      navigate('/dashboard', { replace: true });
+      window.location.href = '/dashboard';
     }
-  }, [user, navigate]);
+  }, []); // Empty deps - only check on mount
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const user = await register(email, password, name || undefined);
-      setApiKey(user.apiKey);
+      await register(email, password, name || undefined, username || undefined);
+      setRegistrationComplete(true);
     } catch {
       // Error is handled by useAuth
     }
   };
 
-  const handleCopyApiKey = () => {
-    if (apiKey) {
-      navigator.clipboard.writeText(apiKey);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  // Show success screen after registration
-  if (apiKey) {
+  // Show success screen after registration with email verification instructions
+  if (registrationComplete) {
     return (
       <div className="min-h-[calc(100vh-200px)] flex items-center justify-center px-4">
         <div className="max-w-md w-full">
-          <div className="bg-gray-800/50 rounded-xl p-8 border border-gray-700/50">
+          <div className="bg-gray-800/50 rounded-xl p-8 border border-gray-700/50 relative">
+            {/* D-007 FIX: Added close button */}
+            <button
+              onClick={() => setRegistrationComplete(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
+              aria-label="Close"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
             <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="w-16 h-16 bg-violet-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
               <h1 className="text-2xl font-bold text-white">Check your email!</h1>
               <p className="text-gray-400 mt-2">
-                We've sent a verification link to <span className="text-white">{email}</span>
+                We've sent a verification link to
               </p>
+              <p className="text-white font-medium mt-1">{email}</p>
             </div>
 
             <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg p-4 mb-6">
-              <p className="text-violet-300 text-sm">
-                Please click the link in your email to verify your account before logging in.
-              </p>
-            </div>
-
-            <div className="bg-gray-900/50 rounded-lg p-4 mb-6">
-              <label className="block text-sm text-gray-400 mb-2">Your API Key (for developers)</label>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 bg-gray-950 rounded px-3 py-2 text-sm text-violet-400 font-mono break-all">
-                  {apiKey}
-                </code>
-                <button
-                  onClick={handleCopyApiKey}
-                  className="p-2 text-gray-400 hover:text-white transition-colors"
-                  title="Copy to clipboard"
-                >
-                  {copied ? (
-                    <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  )}
-                </button>
+              <div className="flex items-start gap-3">
+                <svg className="w-5 h-5 text-violet-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="text-sm text-violet-300">
+                  <p className="font-medium mb-1">What's next?</p>
+                  <ol className="list-decimal list-inside space-y-1 text-violet-200/80">
+                    <li>Check your inbox for the verification email</li>
+                    <li>Click the verification link</li>
+                    <li>Log in to start using AIXORD</li>
+                  </ol>
+                </div>
               </div>
             </div>
 
             <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 mb-6">
               <p className="text-amber-400 text-sm">
-                <strong>Important:</strong> Save your API key now - it won't be shown again.
+                <strong>Didn't receive the email?</strong> Check your spam folder or wait a few minutes. The verification link expires in 24 hours.
               </p>
             </div>
 
-            <Link
-              to="/login"
-              className="block w-full bg-violet-600 hover:bg-violet-500 text-white py-3 rounded-lg font-medium transition-colors text-center"
-            >
-              Continue to Login
-            </Link>
+            <div className="space-y-3">
+              <Link
+                to="/login"
+                className="block w-full bg-violet-600 hover:bg-violet-500 text-white py-3 rounded-lg font-medium transition-colors text-center"
+              >
+                Continue to Login
+              </Link>
+              <button
+                onClick={() => setRegistrationComplete(false)}
+                className="block w-full text-gray-400 hover:text-white py-2 text-sm transition-colors text-center"
+              >
+                Use a different email
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -149,10 +145,26 @@ export function Signup() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={8}
+                minLength={6}
                 className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 transition-colors"
-                placeholder="At least 8 characters"
+                placeholder="At least 6 characters"
               />
+            </div>
+
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-2">
+                Username <span className="text-gray-500">(optional)</span>
+              </label>
+              <input
+                id="username"
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 transition-colors"
+                placeholder="your-username"
+                pattern="^[a-zA-Z0-9_-]{3,30}$"
+              />
+              <p className="text-xs text-gray-500 mt-1">3-30 characters, letters, numbers, _ or -</p>
             </div>
 
             <div>

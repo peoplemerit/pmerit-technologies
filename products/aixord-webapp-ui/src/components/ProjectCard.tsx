@@ -22,9 +22,23 @@ const realityLabels = {
   LEGACY: 'Legacy',
 };
 
+// Safe date formatting helper
+function formatDate(dateString: string | undefined): string {
+  if (!dateString) return 'Recently';
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Recently';
+    return date.toLocaleDateString();
+  } catch {
+    return 'Recently';
+  }
+}
+
 export function ProjectCard({ project }: ProjectCardProps) {
-  const realityClass = realityColors[project.realityClassification] || realityColors.GREENFIELD;
-  const realityLabel = realityLabels[project.realityClassification] || 'Unknown';
+  // Normalize realityClassification to handle edge cases
+  const normalizedReality = project.realityClassification?.toUpperCase?.() as keyof typeof realityColors || 'GREENFIELD';
+  const realityClass = realityColors[normalizedReality] || realityColors.GREENFIELD;
+  const realityLabel = realityLabels[normalizedReality] || 'Greenfield';
 
   return (
     <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50 hover:border-violet-500/50 transition-colors group">
@@ -40,7 +54,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
       <p className="text-gray-400 text-sm mb-4 line-clamp-2">{project.objective}</p>
 
       <div className="flex justify-between items-center text-xs text-gray-500">
-        <span>Created {new Date(project.createdAt).toLocaleDateString()}</span>
+        <span>Created {formatDate(project.createdAt)}</span>
         <svg
           className="w-5 h-5 text-gray-600 group-hover:text-violet-400 transition-colors"
           fill="none"

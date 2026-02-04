@@ -85,7 +85,12 @@ export function useProjectState(projectId: string | null, token: string | null) 
       const data = await api.state.get(projectId, token);
       setState(data);
     } catch (err) {
-      setError(err instanceof APIError ? err.message : 'Failed to fetch state');
+      // If 404, state may not exist yet (shouldn't happen with auto-init)
+      if (err instanceof APIError && err.isNotFound()) {
+        setError('Governance state not initialized');
+      } else {
+        setError(err instanceof APIError ? err.message : 'Failed to fetch state');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -95,40 +100,38 @@ export function useProjectState(projectId: string | null, token: string | null) 
     fetchState();
   }, [fetchState]);
 
-  const passGate = useCallback(
-    async (gateId: string) => {
+  /**
+   * Toggle a gate (pass/unpass)
+   */
+  const toggleGate = useCallback(
+    async (gateId: string, enabled: boolean) => {
       if (!projectId || !token) throw new Error('Not authenticated');
-      const newState = await api.state.passGate(projectId, gateId, token);
-      setState(newState);
-      return newState;
+      const newGates = await api.state.toggleGate(projectId, gateId, enabled, token);
+      setState((prev) => prev ? { ...prev, gates: newGates } : prev);
+      return newGates;
     },
     [projectId, token]
   );
 
+  /**
+   * Set the current phase
+   */
   const setPhase = useCallback(
     async (phase: string) => {
       if (!projectId || !token) throw new Error('Not authenticated');
-      const newState = await api.state.setPhase(projectId, phase, token);
-      setState(newState);
-      return newState;
+      const newPhase = await api.state.setPhase(projectId, phase, token);
+      setState((prev) => prev ? { ...prev, session: { ...prev.session, phase: newPhase } } : prev);
+      return newPhase;
     },
     [projectId, token]
   );
-
-  const incrementSession = useCallback(async () => {
-    if (!projectId || !token) throw new Error('Not authenticated');
-    const newState = await api.state.incrementSession(projectId, token);
-    setState(newState);
-    return newState;
-  }, [projectId, token]);
 
   return {
     state,
     isLoading,
     error,
     fetchState,
-    passGate,
+    toggleGate,
     setPhase,
-    incrementSession,
   };
 }
