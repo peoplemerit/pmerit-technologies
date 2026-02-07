@@ -55,17 +55,28 @@ async function request<T>(
     headers,
   });
 
-  const data = await response.json();
+  // Safely parse JSON — backend may return non-JSON on Worker-level crashes
+  const responseText = await response.text();
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(responseText);
+  } catch {
+    throw new APIError(
+      response.status,
+      'PARSE_ERROR',
+      `Server returned non-JSON response (${response.status}): ${responseText.slice(0, 200)}`
+    );
+  }
 
   if (!response.ok) {
     throw new APIError(
       response.status,
-      data.code || 'UNKNOWN_ERROR',
-      data.error || 'An unknown error occurred'
+      (data.code as string) || 'UNKNOWN_ERROR',
+      (data.error as string) || 'An unknown error occurred'
     );
   }
 
-  return data;
+  return data as T;
 }
 
 // ============================================================================
@@ -968,7 +979,18 @@ export const routerApi = {
       body: JSON.stringify(request),
     });
 
-    const data = await response.json() as RouterResponse;
+    // Safely parse JSON — backend may return non-JSON on Worker-level crashes
+    const responseText = await response.text();
+    let data: RouterResponse;
+    try {
+      data = JSON.parse(responseText) as RouterResponse;
+    } catch {
+      throw new APIError(
+        response.status,
+        'ROUTER_ERROR',
+        `Router returned non-JSON response (${response.status}): ${responseText.slice(0, 200)}`
+      );
+    }
 
     if (!response.ok && !data.error) {
       throw new APIError(response.status, 'ROUTER_ERROR', 'Failed to execute router request');
