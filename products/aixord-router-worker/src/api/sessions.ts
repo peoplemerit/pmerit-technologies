@@ -302,6 +302,104 @@ sessions.get('/:projectId/sessions/:sessionId/graph', async (c) => {
 });
 
 /**
+ * GET /api/v1/projects/:projectId/sessions/:sessionId/metrics
+ * D10: Session metrics — aggregate usage data for a session
+ */
+sessions.get('/:projectId/sessions/:sessionId/metrics', async (c) => {
+  const userId = c.get('userId');
+  const projectId = c.req.param('projectId');
+  const sessionId = c.req.param('sessionId');
+
+  if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const session = await c.env.DB.prepare(
+    'SELECT * FROM project_sessions WHERE id = ? AND project_id = ?'
+  ).bind(sessionId, projectId).first<{
+    id: string;
+    session_number: number;
+    session_type: string;
+    status: string;
+    started_at: string;
+    closed_at: string | null;
+  }>();
+
+  if (!session) {
+    return c.json({ error: 'Session not found' }, 404);
+  }
+
+  // Count messages per role
+  const messageCounts = await c.env.DB.prepare(`
+    SELECT role, COUNT(*) as count FROM messages
+    WHERE project_id = ? AND session_id = ?
+    GROUP BY role
+  `).bind(projectId, sessionId).all<{ role: string; count: number }>();
+
+  const roleMap: Record<string, number> = {};
+  for (const row of messageCounts.results) {
+    roleMap[row.role] = row.count;
+  }
+
+  // Get all assistant messages to aggregate usage from metadata
+  const assistantMessages = await c.env.DB.prepare(`
+    SELECT metadata FROM messages
+    WHERE project_id = ? AND session_id = ? AND role = 'assistant'
+  `).bind(projectId, sessionId).all<{ metadata: string }>();
+
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
+  let totalCostUsd = 0;
+  let totalLatencyMs = 0;
+  const modelUsage: Record<string, number> = {};
+
+  for (const msg of assistantMessages.results) {
+    try {
+      const meta = JSON.parse(msg.metadata || '{}');
+      if (meta.usage) {
+        totalInputTokens += meta.usage.inputTokens || 0;
+        totalOutputTokens += meta.usage.outputTokens || 0;
+        totalCostUsd += meta.usage.costUsd || 0;
+        totalLatencyMs += meta.usage.latencyMs || 0;
+      }
+      if (meta.model) {
+        const modelKey = typeof meta.model === 'string' ? meta.model : meta.model.model || 'unknown';
+        modelUsage[modelKey] = (modelUsage[modelKey] || 0) + 1;
+      }
+    } catch {
+      // Skip messages with unparseable metadata
+    }
+  }
+
+  const totalMessages = Object.values(roleMap).reduce((a, b) => a + b, 0);
+
+  return c.json({
+    session_id: sessionId,
+    session_number: session.session_number,
+    session_type: session.session_type,
+    status: session.status,
+    started_at: session.started_at,
+    closed_at: session.closed_at,
+    messages: {
+      total: totalMessages,
+      user: roleMap['user'] || 0,
+      assistant: roleMap['assistant'] || 0,
+      system: roleMap['system'] || 0,
+    },
+    tokens: {
+      input: totalInputTokens,
+      output: totalOutputTokens,
+      total: totalInputTokens + totalOutputTokens,
+    },
+    cost_usd: totalCostUsd,
+    avg_latency_ms: assistantMessages.results.length > 0
+      ? Math.round(totalLatencyMs / assistantMessages.results.length)
+      : 0,
+    model_usage: modelUsage,
+  });
+});
+
+/**
  * POST /api/v1/projects/:projectId/sessions/:sessionId/edges
  * Create an edge between sessions
  */

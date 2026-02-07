@@ -76,4 +76,62 @@ usage.get('/history', async (c) => {
   return c.json({ history: history.results });
 });
 
+/**
+ * GET /api/v1/usage/projects — D16: Per-project metrics
+ * Aggregates usage data across all sessions for each project.
+ */
+usage.get('/projects', async (c) => {
+  const userId = c.get('userId');
+
+  // Get all projects owned by user
+  const projects = await c.env.DB.prepare(
+    'SELECT id, name FROM projects WHERE owner_id = ?'
+  ).bind(userId).all<{ id: string; name: string }>();
+
+  const projectMetrics = [];
+
+  for (const project of projects.results) {
+    // Count sessions
+    const sessionCount = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM project_sessions WHERE project_id = ?'
+    ).bind(project.id).first<{ count: number }>();
+
+    // Count messages
+    const messageCount = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM messages WHERE project_id = ?'
+    ).bind(project.id).first<{ count: number }>();
+
+    // Aggregate token/cost from assistant message metadata
+    const assistantMessages = await c.env.DB.prepare(
+      "SELECT metadata FROM messages WHERE project_id = ? AND role = 'assistant'"
+    ).bind(project.id).all<{ metadata: string }>();
+
+    let totalTokens = 0;
+    let totalCost = 0;
+
+    for (const msg of assistantMessages.results) {
+      try {
+        const meta = JSON.parse(msg.metadata || '{}');
+        if (meta.usage) {
+          totalTokens += (meta.usage.inputTokens || 0) + (meta.usage.outputTokens || 0);
+          totalCost += meta.usage.costUsd || 0;
+        }
+      } catch {
+        // Skip unparseable
+      }
+    }
+
+    projectMetrics.push({
+      project_id: project.id,
+      project_name: project.name,
+      sessions: sessionCount?.count || 0,
+      messages: messageCount?.count || 0,
+      tokens: totalTokens,
+      cost_usd: totalCost,
+    });
+  }
+
+  return c.json({ projects: projectMetrics });
+});
+
 export { usage };

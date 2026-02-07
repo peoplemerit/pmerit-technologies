@@ -264,19 +264,18 @@ github.get('/callback', async (c) => {
       now
     ).run();
 
-    // PATCH-CORS-01: Redirect user back to frontend after successful OAuth
+    // D12: Redirect to originating project page (not /settings)
     const frontendUrl = c.env.FRONTEND_URL || 'https://aixord.pmerit.com';
-    const redirectUrl = new URL(`${frontendUrl}/settings`);
+    const redirectUrl = new URL(`${frontendUrl}/project/${stateData.project_id}`);
     redirectUrl.searchParams.set('github', 'connected');
-    redirectUrl.searchParams.set('project_id', stateData.project_id);
 
     return c.redirect(redirectUrl.toString());
 
   } catch (error) {
     console.error('GitHub callback error:', error);
-    // On error, redirect to frontend with error param
+    // D12: On error, redirect to dashboard with error param
     const frontendUrl = c.env.FRONTEND_URL || 'https://aixord.pmerit.com';
-    const errorUrl = new URL(`${frontendUrl}/settings`);
+    const errorUrl = new URL(`${frontendUrl}/dashboard`);
     errorUrl.searchParams.set('github', 'error');
     errorUrl.searchParams.set('error', error instanceof Error ? error.message : 'OAuth callback failed');
     return c.redirect(errorUrl.toString());

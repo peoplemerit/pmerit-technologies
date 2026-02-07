@@ -42,6 +42,70 @@ function isValidPhase(phase: string): boolean {
 }
 
 /**
+ * Phase ordering for transition validation
+ */
+const PHASE_ORDER: Record<string, number> = {
+  'BRAINSTORM': 0, 'PLAN': 1, 'EXECUTE': 2, 'REVIEW': 3,
+};
+
+/**
+ * Phase exit gate requirements — gates that must be passed before
+ * leaving the current phase (forward transitions only).
+ *
+ * Backward transitions are always allowed (going back to fix things).
+ */
+const PHASE_EXIT_REQUIREMENTS: Record<string, { gates: string[]; label: string }> = {
+  'BRAINSTORM': {
+    gates: ['GA:LIC', 'GA:DIS', 'GA:TIR'],
+    label: 'License, Disclaimer, and Tier gates required to exit Brainstorm',
+  },
+  'PLAN': {
+    gates: ['GA:ENV', 'GA:FLD'],
+    label: 'Environment and Folder gates required to exit Plan',
+  },
+  'EXECUTE': {
+    gates: ['GW:PRE', 'GW:VAL', 'GW:VER'],
+    label: 'Prerequisites, Validation, and Verification gates required to exit Execute',
+  },
+  // REVIEW has no exit requirements (terminal phase)
+};
+
+/**
+ * Check if a phase transition is allowed based on gate requirements.
+ * Returns { allowed, missingGates, message } tuple.
+ */
+function checkPhaseTransition(
+  currentPhase: string,
+  targetPhase: string,
+  gates: Record<string, boolean>
+): { allowed: boolean; missingGates: string[]; message: string | null } {
+  const currentOrder = PHASE_ORDER[currentPhase] ?? -1;
+  const targetOrder = PHASE_ORDER[targetPhase] ?? -1;
+
+  // Backward transitions always allowed
+  if (targetOrder <= currentOrder) {
+    return { allowed: true, missingGates: [], message: null };
+  }
+
+  // Check exit requirements for current phase
+  const requirements = PHASE_EXIT_REQUIREMENTS[currentPhase];
+  if (!requirements) {
+    return { allowed: true, missingGates: [], message: null };
+  }
+
+  const missingGates = requirements.gates.filter(g => !gates[g]);
+  if (missingGates.length > 0) {
+    return {
+      allowed: false,
+      missingGates,
+      message: requirements.label,
+    };
+  }
+
+  return { allowed: true, missingGates: [], message: null };
+}
+
+/**
  * Verify project ownership
  */
 async function verifyProjectOwnership(
@@ -281,14 +345,37 @@ state.put('/:projectId/phase', async (c) => {
     return c.json({ error: 'Project not found' }, 404);
   }
 
-  const body = await c.req.json<{ phase: string }>();
-  const { phase } = body;
+  const body = await c.req.json<{ phase: string; force?: boolean }>();
+  const { phase, force } = body;
 
   if (!isValidPhase(phase)) {
     return c.json({ error: 'Invalid phase. Must be B/P/E/R or BRAINSTORM/PLAN/EXECUTE/REVIEW' }, 400);
   }
 
   const normalizedPhaseValue = normalizePhase(phase);
+
+  // Get current state for transition validation
+  const currentState = await c.env.DB.prepare(
+    'SELECT phase, gates FROM project_state WHERE project_id = ?'
+  ).bind(projectId).first<{ phase: string; gates: string }>();
+
+  const currentPhase = currentState?.phase || 'BRAINSTORM';
+  const gates = JSON.parse(currentState?.gates || '{}');
+
+  // Validate phase transition (unless force=true for admin override)
+  if (!force && normalizedPhaseValue !== currentPhase) {
+    const check = checkPhaseTransition(currentPhase, normalizedPhaseValue!, gates);
+    if (!check.allowed) {
+      return c.json({
+        error: 'Phase transition blocked',
+        message: check.message,
+        currentPhase,
+        targetPhase: normalizedPhaseValue,
+        missingGates: check.missingGates,
+      }, 403);
+    }
+  }
+
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(`

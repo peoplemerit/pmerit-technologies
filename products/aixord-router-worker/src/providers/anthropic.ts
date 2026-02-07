@@ -2,6 +2,7 @@
  * Anthropic Provider Adapter
  *
  * Handles API calls to Claude models.
+ * D14: Prompt caching via anthropic-beta header and cache_control blocks.
  */
 
 import type { Message, CallOptions, ProviderResponse, ImageContent } from '../types';
@@ -11,7 +12,7 @@ const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
 
 // Anthropic content block types
-type AnthropicTextBlock = { type: 'text'; text: string };
+type AnthropicTextBlock = { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } };
 type AnthropicImageBlock = {
   type: 'image';
   source: {
@@ -23,8 +24,15 @@ type AnthropicImageBlock = {
 type AnthropicContentBlock = AnthropicTextBlock | AnthropicImageBlock;
 type AnthropicContent = string | AnthropicContentBlock[];
 
+// D14: System content block (structured format for caching)
+type AnthropicSystemBlock = {
+  type: 'text';
+  text: string;
+  cache_control?: { type: 'ephemeral' };
+};
+
 /**
- * Call Anthropic Claude API (ENH-4: Now supports vision/images)
+ * Call Anthropic Claude API (ENH-4: vision/images, D14: prompt caching)
  */
 export async function callAnthropic(
   model: string,
@@ -89,17 +97,30 @@ export async function callAnthropic(
     messages: anthropicMessages
   };
 
+  // D14: System prompt with cache_control for prompt caching
+  // Use structured system blocks so Anthropic can cache the system prompt
   if (systemPrompt) {
-    body.system = systemPrompt;
+    const systemBlocks: AnthropicSystemBlock[] = [
+      {
+        type: 'text',
+        text: systemPrompt,
+        cache_control: { type: 'ephemeral' },
+      },
+    ];
+    body.system = systemBlocks;
   }
+
+  // D14: Include prompt caching beta header
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': ANTHROPIC_VERSION,
+    'anthropic-beta': 'prompt-caching-2024-07-31',
+  };
 
   const response = await fetch(ANTHROPIC_API_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': ANTHROPIC_VERSION
-    },
+    headers,
     body: JSON.stringify(body)
   });
 
@@ -114,7 +135,12 @@ export async function callAnthropic(
 
   const data = await response.json() as {
     content: Array<{ type: string; text: string }>;
-    usage: { input_tokens: number; output_tokens: number };
+    usage: {
+      input_tokens: number;
+      output_tokens: number;
+      cache_creation_input_tokens?: number;
+      cache_read_input_tokens?: number;
+    };
   };
 
   // Extract text from content blocks
@@ -127,7 +153,9 @@ export async function callAnthropic(
     content: textContent,
     usage: {
       input_tokens: data.usage.input_tokens,
-      output_tokens: data.usage.output_tokens
+      output_tokens: data.usage.output_tokens,
+      cache_creation_input_tokens: data.usage.cache_creation_input_tokens,
+      cache_read_input_tokens: data.usage.cache_read_input_tokens,
     }
   };
 }
@@ -135,23 +163,34 @@ export async function callAnthropic(
 /**
  * Estimate cost for Anthropic models
  * Prices in USD per 1M tokens (as of 2026)
+ * D14: Includes cache read/write pricing
  */
 export function estimateAnthropicCost(
   model: string,
   inputTokens: number,
-  outputTokens: number
+  outputTokens: number,
+  cacheCreationTokens?: number,
+  cacheReadTokens?: number
 ): number {
   // Pricing per 1M tokens
-  const PRICING: Record<string, { input: number; output: number }> = {
-    'claude-opus-4-20250514': { input: 15.0, output: 75.0 },
-    'claude-sonnet-4-20250514': { input: 3.0, output: 15.0 },
-    'claude-3-5-haiku-latest': { input: 0.25, output: 1.25 }
+  const PRICING: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }> = {
+    'claude-opus-4-20250514': { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.50 },
+    'claude-sonnet-4-20250514': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.30 },
+    'claude-3-5-haiku-latest': { input: 0.25, output: 1.25, cacheWrite: 0.30, cacheRead: 0.025 }
   };
 
-  const price = PRICING[model] || { input: 3.0, output: 15.0 }; // Default to Sonnet pricing
+  const price = PRICING[model] || { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.30 };
 
-  return (
-    (inputTokens / 1_000_000) * price.input +
-    (outputTokens / 1_000_000) * price.output
-  );
+  let cost = (inputTokens / 1_000_000) * price.input +
+    (outputTokens / 1_000_000) * price.output;
+
+  // D14: Add cache costs if present
+  if (cacheCreationTokens) {
+    cost += (cacheCreationTokens / 1_000_000) * price.cacheWrite;
+  }
+  if (cacheReadTokens) {
+    cost += (cacheReadTokens / 1_000_000) * price.cacheRead;
+  }
+
+  return cost;
 }

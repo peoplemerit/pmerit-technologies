@@ -2,6 +2,10 @@
  * OpenAI Provider Adapter
  *
  * Handles API calls to GPT models.
+ * D15: OpenAI prompt caching is automatic for GPT-4o and later models.
+ * No special headers needed — caching is server-side and applied when
+ * the same prompt prefix is reused within the cache TTL window.
+ * Cached tokens are reported in usage.prompt_tokens_details.cached_tokens.
  */
 
 import type { Message, CallOptions, ProviderResponse, ImageContent } from '../types';
@@ -88,14 +92,22 @@ export async function callOpenAI(
 
   const data = await response.json() as {
     choices: Array<{ message: { content: string } }>;
-    usage: { prompt_tokens: number; completion_tokens: number };
+    usage: {
+      prompt_tokens: number;
+      completion_tokens: number;
+      prompt_tokens_details?: { cached_tokens?: number };
+    };
   };
+
+  // D15: Report cached tokens if available
+  const cachedTokens = data.usage.prompt_tokens_details?.cached_tokens;
 
   return {
     content: data.choices[0]?.message?.content || '',
     usage: {
       input_tokens: data.usage.prompt_tokens,
-      output_tokens: data.usage.completion_tokens
+      output_tokens: data.usage.completion_tokens,
+      cache_read_input_tokens: cachedTokens,
     }
   };
 }
