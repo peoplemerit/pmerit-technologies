@@ -1,0 +1,10 @@
+{
+  "variant": "claude",
+  "platform": "Anthropic Claude",
+  "version": "4.2",
+  "weaknessSuppressions": ["hallucination", "context-loss", "over-refusal"],
+  "messageThreshold": 25,
+  "defaultTier": "PRO",
+  "legendCore": "AIXORD_LEGEND_CORE_Claude_v4.2",
+  "platformUrl": "https://claude.ai"
+}

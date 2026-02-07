@@ -1,0 +1,15 @@
+SHORT DESCRIPTION (132 chars max):
+AIXORD Companion — AI governance side panel. Track gates, phases, and handoffs for structured AI collaboration.
+
+FULL DESCRIPTION:
+AIXORD Companion is a free governance tool for AI collaboration.
+
+Features:
+- 13 AIXORD v4.2 gates (Setup + Work phases)
+- Phase tracking (BRAINSTORM → PLAN → BLUEPRINT → EXECUTE → VERIFY)
+- Session notes with auto-save
+- HANDOFF document generation
+- Works alongside any AI chat interface
+
+Part of the AIXORD Enforcement Platform.
+https://aixord-webapp-ui.pages.dev

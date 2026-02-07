@@ -1,0 +1,10 @@
+{
+  "variant": "gemini",
+  "platform": "Google Gemini",
+  "version": "4.2",
+  "weaknessSuppressions": ["factual-errors", "citation-issues", "context-window"],
+  "messageThreshold": 20,
+  "defaultTier": "PRO",
+  "legendCore": "AIXORD_LEGEND_CORE_Gemini_v4.2",
+  "platformUrl": "https://gemini.google.com"
+}
