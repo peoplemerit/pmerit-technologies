@@ -128,17 +128,18 @@ function NavItemComponent({
     <Link
       to={item.path}
       className={`
-        flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
+        flex items-center gap-3 px-3 py-2.5 rounded-r-lg transition-all duration-200
+        border-l-[3px]
         ${isActive
-          ? 'bg-violet-500/20 text-violet-400'
-          : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+          ? 'border-violet-500 bg-violet-500/20 text-violet-400'
+          : 'border-transparent text-gray-400 hover:text-white hover:bg-gray-800/50 hover:border-gray-600'
         }
         ${isCollapsed ? 'justify-center' : ''}
       `}
       title={isCollapsed ? item.label : undefined}
       data-tour={tourAttribute}
     >
-      <span className="flex-shrink-0">{item.icon}</span>
+      <span className={`flex-shrink-0 ${isActive ? 'text-violet-400' : ''}`}>{item.icon}</span>
       {!isCollapsed && (
         <>
           <span className="flex-1 text-sm font-medium">{item.label}</span>

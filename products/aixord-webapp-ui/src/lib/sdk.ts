@@ -67,6 +67,21 @@ export interface GateEnforcementResult {
 }
 
 /**
+ * Execution Layer Context (Path B: Proactive Debugging)
+ * Passed to AI during Execute phase for layered execution mode
+ */
+export interface ExecutionLayerContext {
+  layer_number: number;
+  title: string;
+  status: 'PENDING' | 'ACTIVE' | 'EXECUTED' | 'VERIFIED' | 'LOCKED' | 'FAILED';
+  expected_inputs?: Record<string, unknown>;
+  expected_outputs?: Record<string, unknown>;
+  locked_layers_count: number;
+  failed_layers_count: number;
+  total_layers: number;
+}
+
+/**
  * Send options for governed chat
  */
 export interface SendOptions {
@@ -86,6 +101,16 @@ export interface SendOptions {
   sessionId?: string;
   /** Max output tokens budget */
   maxOutputTokens?: number;
+  /** Image references attached to this message (ENH-4) */
+  imageRefs?: Array<{ id: string; filename: string; evidenceType: string; projectId: string }>;
+  /** Execution layer context for layered execution mode (Path B) */
+  executionLayer?: ExecutionLayerContext;
+  /** Session graph context (v4.4) */
+  sessionGraph?: {
+    current: { number: number; type: string; messageCount: number };
+    lineage: Array<{ number: number; type: string; edgeType: string; summary?: string }>;
+    total: number;
+  };
 }
 
 /**
@@ -288,6 +313,68 @@ export class AIXORDSDKClient {
       }
     }
 
+    // L-GCP3: DoD enforcement — REVIEW phase requires Definition of Done
+    // This is a non-blocking warning (governance best practice, not hard gate)
+    // so users can still proceed but are informed that DoD is missing
+    if (currentPhase === 'REVIEW' || currentPhase === 'R') {
+      try {
+        const result = await api.knowledge.list(
+          this.config.projectId,
+          this.config.token,
+          { type: 'DEFINITION_OF_DONE' as any, status: 'APPROVED' as any }
+        );
+        const hasDod = result && result.artifacts && result.artifacts.length > 0;
+        results.push({
+          gate: 'GA:DOD',
+          passed: hasDod,
+          reason: hasDod
+            ? undefined
+            : 'L-GCP3: No approved Definition of Done found. Create and approve a DoD artifact before verifying deliverables.',
+          blocking: false, // Warning, not blocking
+        });
+        if (!hasDod) {
+          console.warn('[AIXORD SDK] GA:DOD warning: No approved Definition of Done for REVIEW phase');
+        }
+      } catch (err) {
+        // If knowledge API fails, add as non-blocking warning
+        results.push({
+          gate: 'GA:DOD',
+          passed: false,
+          reason: 'Unable to verify Definition of Done (knowledge API unavailable)',
+          blocking: false,
+        });
+      }
+    }
+
+    // GA:ENG — Part XIV Engineering Governance (non-blocking, informational)
+    // Checks if engineering governance artifacts exist for the project
+    if (currentPhase === 'EXECUTE' || currentPhase === 'E' ||
+        currentPhase === 'REVIEW' || currentPhase === 'R') {
+      try {
+        const compliance = await api.engineering.getCompliance(this.config.projectId, this.config.token);
+        const engPassed = compliance.required_percentage >= 50;
+        results.push({
+          gate: 'GA:ENG',
+          passed: engPassed,
+          reason: engPassed
+            ? undefined
+            : `Part XIV Engineering Governance: ${compliance.summary}. Consider adding SAR, interface contracts, and operational readiness artifacts.`,
+          blocking: false, // Non-blocking — informational only
+        });
+        if (!engPassed) {
+          console.warn('[AIXORD SDK] GA:ENG advisory: Engineering governance artifacts incomplete —', compliance.summary);
+        }
+      } catch {
+        // If engineering API fails, add as non-blocking info
+        results.push({
+          gate: 'GA:ENG',
+          passed: false,
+          reason: 'Unable to verify engineering governance (API unavailable)',
+          blocking: false,
+        });
+      }
+    }
+
     return {
       allowed: blockingGates.length === 0,
       blockingGates,
@@ -407,7 +494,27 @@ export class AIXORDSDKClient {
       );
     }
 
-    // 3. Build router request
+    // 3. Fetch image base64 data if images attached (ENH-4: Session 19 fix)
+    let imageData: Array<{ type: 'image'; media_type: string; base64: string; filename?: string }> = [];
+    if (options.imageRefs?.length && this.config.token) {
+      try {
+        const imagePromises = options.imageRefs.map(async (ref) => {
+          const data = await api.images.getBase64(ref.projectId, ref.id, this.config.token!);
+          return {
+            type: 'image' as const,
+            media_type: data.media_type,
+            base64: data.base64,
+            filename: data.filename,
+          };
+        });
+        imageData = await Promise.all(imagePromises);
+      } catch (err) {
+        console.warn('[SDK] Failed to fetch image base64 data:', err);
+        // Continue without images — text context will still inform AI
+      }
+    }
+
+    // 4. Build router request
     // Note: phase already defined above at line 383
     const routerRequest: RouterRequest = {
       product: 'AIXORD_COPILOT',
@@ -426,9 +533,16 @@ export class AIXORDSDKClient {
         constraints: options.constraints || [],
         decisions: options.decisions || [],
         open_questions: [],
+        ...(options.sessionGraph && { session_graph: options.sessionGraph }),
       },
       delta: {
-        user_input: options.message,
+        user_input: options.imageRefs?.length
+          ? `${options.message}\n\n[Attached images: ${options.imageRefs.map(r => `${r.filename} (${r.evidenceType})`).join(', ')}]`
+          : options.message,
+        // ENH-4: Include actual image data for vision API
+        ...(imageData.length > 0 && { images: imageData }),
+        // Path B: Include execution layer context for layered execution mode
+        ...(options.executionLayer && { execution_layer: options.executionLayer }),
       },
       budget: {
         max_output_tokens: options.maxOutputTokens || 4096,

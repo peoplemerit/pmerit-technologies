@@ -46,6 +46,14 @@ export interface MessageMetadata {
     size: number;
     includeContent: boolean;
   }>;
+  // Image attachments (ENH-4: Path C)
+  images?: Array<{
+    id: string;
+    url: string;
+    filename: string;
+    evidenceType: string;
+    caption?: string;
+  }>;
 }
 
 export interface MessageOption {

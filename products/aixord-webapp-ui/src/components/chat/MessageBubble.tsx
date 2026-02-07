@@ -7,11 +7,13 @@
 
 import type { Message } from './types';
 import { ChatErrorMessage } from '../ChatErrorMessage';
+import { ImageDisplay } from './ImageDisplay';
 
 interface MessageBubbleProps {
   message: Message;
   onSelectOption?: (optionId: string) => void;
   onRetry?: () => void;
+  token?: string; // Auth token for image loading
 }
 
 // Check if message content looks like an error
@@ -32,7 +34,7 @@ function isErrorMessage(content: string): boolean {
   return errorPatterns.some(pattern => pattern.test(content));
 }
 
-export function MessageBubble({ message, onSelectOption, onRetry }: MessageBubbleProps) {
+export function MessageBubble({ message, onSelectOption, onRetry, token }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const isError = (isSystem || message.role === 'assistant') && isErrorMessage(message.content);
@@ -67,6 +69,11 @@ export function MessageBubble({ message, onSelectOption, onRetry }: MessageBubbl
         <div className="whitespace-pre-wrap text-sm leading-relaxed">
           {message.content}
         </div>
+
+        {/* Image attachments (ENH-4) */}
+        {message.metadata?.images && message.metadata.images.length > 0 && (
+          <ImageDisplay images={message.metadata.images} token={token} />
+        )}
 
         {/* Option buttons (for assistant messages with options) */}
         {message.metadata?.options && message.metadata.options.length > 0 && (

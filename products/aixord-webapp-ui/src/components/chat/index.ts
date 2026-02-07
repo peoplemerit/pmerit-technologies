@@ -7,6 +7,11 @@
 export { ChatWindow } from './ChatWindow';
 export { ChatInput } from './ChatInput';
 export { MessageBubble } from './MessageBubble';
+export { ImageUpload } from './ImageUpload';
+export { ImageDisplay } from './ImageDisplay';
+
+export type { PendingImage, EvidenceType } from './ImageUpload';
+export type { ChatImage } from './ImageDisplay';
 
 export type {
   Message,

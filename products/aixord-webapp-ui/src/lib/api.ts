@@ -779,9 +779,11 @@ export const messagesApi = {
   /**
    * List messages for a project
    */
-  async list(projectId: string, token: string, limit = 100, offset = 0): Promise<ChatMessage[]> {
+  async list(projectId: string, token: string, limit = 100, offset = 0, sessionId?: string): Promise<ChatMessage[]> {
+    let url = `/projects/${projectId}/messages?limit=${limit}&offset=${offset}`;
+    if (sessionId) url += `&session_id=${sessionId}`;
     const response = await request<{ messages: BackendMessage[] }>(
-      `/projects/${projectId}/messages?limit=${limit}&offset=${offset}`,
+      url,
       {},
       token
     );
@@ -797,6 +799,7 @@ export const messagesApi = {
       role: ChatMessage['role'];
       content: string;
       metadata?: Record<string, unknown>;
+      session_id?: string;
     },
     token: string
   ): Promise<ChatMessage> {
@@ -2475,6 +2478,829 @@ const usageApi = {
 };
 
 // ============================================================================
+// Image API (ENH-4: Path C — Image Evidence)
+// ============================================================================
+
+export interface ImageMetadata {
+  id: string;
+  project_id: string;
+  user_id: string;
+  r2_key: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  evidence_type: 'GENERAL' | 'CHECKPOINT' | 'GATE_PROOF' | 'SCREENSHOT' | 'DIAGRAM';
+  caption: string | null;
+  checkpoint_id: string | null;
+  decision_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImageUploadResponse {
+  id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  evidence_type: string;
+  url: string;
+  created_at: string;
+}
+
+export interface ImageListResponse {
+  project_id: string;
+  total: number;
+  limit: number;
+  offset: number;
+  images: ImageMetadata[];
+}
+
+export const imageApi = {
+  /**
+   * Upload an image to a project (multipart/form-data)
+   */
+  async upload(
+    projectId: string,
+    file: File,
+    options: {
+      evidenceType?: string;
+      caption?: string;
+      checkpointId?: string;
+      decisionId?: string;
+    },
+    token: string
+  ): Promise<ImageUploadResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (options.evidenceType) formData.append('evidence_type', options.evidenceType);
+    if (options.caption) formData.append('caption', options.caption);
+    if (options.checkpointId) formData.append('checkpoint_id', options.checkpointId);
+    if (options.decisionId) formData.append('decision_id', options.decisionId);
+
+    const response = await fetch(`${API_BASE}/projects/${projectId}/images`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new APIError(response.status, data.code || 'UPLOAD_ERROR', data.error || 'Upload failed');
+    }
+    return data;
+  },
+
+  /**
+   * List images for a project
+   */
+  async list(
+    projectId: string,
+    token: string,
+    options?: { evidenceType?: string; limit?: number; offset?: number }
+  ): Promise<ImageListResponse> {
+    const params = new URLSearchParams();
+    if (options?.evidenceType) params.set('evidence_type', options.evidenceType);
+    if (options?.limit) params.set('limit', String(options.limit));
+    if (options?.offset) params.set('offset', String(options.offset));
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request<ImageListResponse>(`/projects/${projectId}/images${qs}`, {}, token);
+  },
+
+  /**
+   * Get image metadata
+   */
+  async get(projectId: string, imageId: string, token: string): Promise<ImageMetadata> {
+    return request<ImageMetadata>(`/projects/${projectId}/images/${imageId}`, {}, token);
+  },
+
+  /**
+   * Get image URL (returns the serving endpoint path)
+   */
+  getUrl(projectId: string, imageId: string): string {
+    return `${API_BASE}/projects/${projectId}/images/${imageId}/url`;
+  },
+
+  /**
+   * Get image as base64 for AI vision (FIX 2: Session 19)
+   */
+  async getBase64(projectId: string, imageId: string, token: string): Promise<{
+    base64: string;
+    media_type: string;
+    filename: string;
+  }> {
+    return request<{ base64: string; media_type: string; filename: string }>(
+      `/projects/${projectId}/images/${imageId}/base64`,
+      {},
+      token
+    );
+  },
+
+  /**
+   * Delete an image
+   */
+  async delete(projectId: string, imageId: string, token: string): Promise<{ deleted: boolean; id: string }> {
+    return request<{ deleted: boolean; id: string }>(
+      `/projects/${projectId}/images/${imageId}`,
+      { method: 'DELETE' },
+      token
+    );
+  },
+};
+
+// ============================================================================
+// Execution Layers API (Path B: Proactive Debugging)
+// ============================================================================
+
+export type LayerStatus = 'PENDING' | 'ACTIVE' | 'EXECUTED' | 'VERIFIED' | 'LOCKED' | 'FAILED';
+export type VerificationMethod = 'user_confirm' | 'screenshot' | 'test_output' | 'file_check' | 'ai_auto';
+
+export interface ExecutionLayer {
+  id: string;
+  project_id: string;
+  session_number: number;
+  layer_number: number;
+  title: string;
+  description: string | null;
+  status: LayerStatus;
+  expected_inputs: Record<string, unknown> | null;
+  expected_outputs: Record<string, unknown> | null;
+  actual_outputs: Record<string, unknown> | null;
+  verification_method: VerificationMethod | null;
+  verification_evidence: {
+    type: string;
+    image_id?: string;
+    text?: string;
+    timestamp: string;
+  } | null;
+  verified_at: string | null;
+  verified_by: string | null;
+  failure_reason: string | null;
+  retry_count: number;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  locked_at: string | null;
+}
+
+export interface CreateLayerInput {
+  layer_number: number;
+  title: string;
+  description?: string;
+  expected_inputs?: Record<string, unknown>;
+  expected_outputs?: Record<string, unknown>;
+}
+
+export interface VerifyLayerInput {
+  method: VerificationMethod;
+  evidence?: {
+    type: string;
+    image_id?: string;
+    text?: string;
+  };
+  notes?: string;
+}
+
+export const layersApi = {
+  /**
+   * List all layers for a project (optionally filtered by session)
+   */
+  async list(projectId: string, token: string, sessionNumber?: number): Promise<{ layers: ExecutionLayer[] }> {
+    const url = sessionNumber
+      ? `/projects/${projectId}/layers?session=${sessionNumber}`
+      : `/projects/${projectId}/layers`;
+    return request<{ layers: ExecutionLayer[] }>(url, {}, token);
+  },
+
+  /**
+   * Get a specific layer
+   */
+  async get(projectId: string, layerId: string, token: string): Promise<ExecutionLayer> {
+    return request<ExecutionLayer>(`/projects/${projectId}/layers/${layerId}`, {}, token);
+  },
+
+  /**
+   * Create a new layer
+   */
+  async create(projectId: string, data: CreateLayerInput, token: string): Promise<ExecutionLayer> {
+    return request<ExecutionLayer>(
+      `/projects/${projectId}/layers`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      token
+    );
+  },
+
+  /**
+   * Create multiple layers at once
+   */
+  async createBatch(projectId: string, layers: CreateLayerInput[], token: string): Promise<{ layers: ExecutionLayer[] }> {
+    return request<{ layers: ExecutionLayer[] }>(
+      `/projects/${projectId}/layers/batch`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ layers }),
+      },
+      token
+    );
+  },
+
+  /**
+   * Update a layer
+   */
+  async update(
+    projectId: string,
+    layerId: string,
+    data: Partial<CreateLayerInput> & { actual_outputs?: Record<string, unknown> },
+    token: string
+  ): Promise<ExecutionLayer> {
+    return request<ExecutionLayer>(
+      `/projects/${projectId}/layers/${layerId}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      token
+    );
+  },
+
+  /**
+   * Start executing a layer (PENDING → ACTIVE)
+   */
+  async start(projectId: string, layerId: string, token: string): Promise<ExecutionLayer> {
+    return request<ExecutionLayer>(
+      `/projects/${projectId}/layers/${layerId}/start`,
+      { method: 'POST' },
+      token
+    );
+  },
+
+  /**
+   * Mark layer as executed (ACTIVE → EXECUTED)
+   */
+  async complete(projectId: string, layerId: string, actualOutputs: Record<string, unknown> | undefined, token: string): Promise<ExecutionLayer> {
+    return request<ExecutionLayer>(
+      `/projects/${projectId}/layers/${layerId}/complete`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ actual_outputs: actualOutputs }),
+      },
+      token
+    );
+  },
+
+  /**
+   * Verify a layer (EXECUTED → LOCKED)
+   */
+  async verify(projectId: string, layerId: string, data: VerifyLayerInput, token: string): Promise<ExecutionLayer> {
+    return request<ExecutionLayer>(
+      `/projects/${projectId}/layers/${layerId}/verify`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      },
+      token
+    );
+  },
+
+  /**
+   * Mark layer as failed (ACTIVE/EXECUTED → FAILED)
+   */
+  async fail(projectId: string, layerId: string, reason: string, token: string): Promise<ExecutionLayer> {
+    return request<ExecutionLayer>(
+      `/projects/${projectId}/layers/${layerId}/fail`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      },
+      token
+    );
+  },
+
+  /**
+   * Retry a failed layer (FAILED → ACTIVE)
+   */
+  async retry(projectId: string, layerId: string, token: string): Promise<ExecutionLayer> {
+    return request<ExecutionLayer>(
+      `/projects/${projectId}/layers/${layerId}/retry`,
+      { method: 'POST' },
+      token
+    );
+  },
+
+  /**
+   * Delete a layer (only PENDING layers)
+   */
+  async delete(projectId: string, layerId: string, token: string): Promise<{ success: boolean }> {
+    return request<{ success: boolean }>(
+      `/projects/${projectId}/layers/${layerId}`,
+      { method: 'DELETE' },
+      token
+    );
+  },
+
+  /**
+   * Get evidence for a layer
+   */
+  async getEvidence(projectId: string, layerId: string, token: string): Promise<{ evidence: unknown[] }> {
+    return request<{ evidence: unknown[] }>(
+      `/projects/${projectId}/layers/${layerId}/evidence`,
+      {},
+      token
+    );
+  },
+};
+
+// ============================================================================
+// Sessions API (AIXORD v4.4 — Session Graph Model)
+// ============================================================================
+
+export type SessionType = 'DISCOVER' | 'BRAINSTORM' | 'BLUEPRINT' | 'EXECUTE' | 'AUDIT' | 'VERIFY_LOCK';
+export type SessionStatus = 'ACTIVE' | 'CLOSED' | 'ARCHIVED';
+export type EdgeType = 'CONTINUES' | 'DERIVES' | 'SUPERSEDES' | 'FORKS' | 'RECONCILES';
+
+export interface ProjectSession {
+  id: string;
+  project_id: string;
+  session_number: number;
+  session_type: SessionType;
+  status: SessionStatus;
+  phase: string;
+  capsule_snapshot?: string;
+  summary?: string;
+  message_count: number;
+  token_count: number;
+  cost_usd: number;
+  started_at: string;
+  closed_at?: string;
+  created_by: string;
+}
+
+export interface SessionEdge {
+  id: string;
+  from_session_id: string;
+  to_session_id: string;
+  edge_type: EdgeType;
+  metadata?: string;
+  created_at: string;
+}
+
+export const sessionsApi = {
+  /**
+   * Create a new session
+   */
+  async create(
+    projectId: string,
+    data: {
+      session_type?: SessionType;
+      parent_session_id?: string;
+      edge_type?: EdgeType;
+    },
+    token: string
+  ): Promise<ProjectSession> {
+    return request<ProjectSession>(
+      `/projects/${projectId}/sessions`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  /**
+   * List sessions for a project
+   */
+  async list(projectId: string, token: string, status?: SessionStatus): Promise<ProjectSession[]> {
+    const query = status ? `?status=${status}` : '';
+    const result = await request<{ sessions: ProjectSession[] }>(
+      `/projects/${projectId}/sessions${query}`,
+      {},
+      token
+    );
+    return result.sessions;
+  },
+
+  /**
+   * Get session details
+   */
+  async get(projectId: string, sessionId: string, token: string): Promise<ProjectSession> {
+    return request<ProjectSession>(
+      `/projects/${projectId}/sessions/${sessionId}`,
+      {},
+      token
+    );
+  },
+
+  /**
+   * Update session (close, archive, summary)
+   */
+  async update(
+    projectId: string,
+    sessionId: string,
+    data: {
+      status?: SessionStatus;
+      summary?: string;
+      capsule_snapshot?: object;
+      phase?: string;
+    },
+    token: string
+  ): Promise<{ success: boolean; updated_at: string }> {
+    return request<{ success: boolean; updated_at: string }>(
+      `/projects/${projectId}/sessions/${sessionId}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  /**
+   * Get session graph (edges)
+   */
+  async getGraph(
+    projectId: string,
+    sessionId: string,
+    token: string
+  ): Promise<{ session_id: string; outgoing: SessionEdge[]; incoming: SessionEdge[] }> {
+    return request<{ session_id: string; outgoing: SessionEdge[]; incoming: SessionEdge[] }>(
+      `/projects/${projectId}/sessions/${sessionId}/graph`,
+      {},
+      token
+    );
+  },
+
+  /**
+   * Create edge between sessions
+   */
+  async createEdge(
+    projectId: string,
+    fromSessionId: string,
+    data: {
+      to_session_id: string;
+      edge_type: EdgeType;
+      metadata?: object;
+    },
+    token: string
+  ): Promise<SessionEdge> {
+    return request<SessionEdge>(
+      `/projects/${projectId}/sessions/${fromSessionId}/edges`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
+};
+
+// ============================================================================
+// Part XIV — Engineering Governance API (AIXORD v4.5)
+// ============================================================================
+
+/** §64.3 SAR status */
+export type SARStatus = 'DRAFT' | 'ACTIVE' | 'SUPERSEDED' | 'ARCHIVED';
+
+/** §64.4 Contract status */
+export type ContractStatus = 'DRAFT' | 'ACTIVE' | 'DEPRECATED' | 'BROKEN';
+
+/** §64.6 Fitness dimension */
+export type FitnessDimension = 'PERFORMANCE' | 'SCALABILITY' | 'RELIABILITY' | 'SECURITY' | 'COST' | 'OTHER';
+
+/** §64.6 Fitness status */
+export type FitnessStatus = 'DEFINED' | 'MEASURING' | 'PASSING' | 'FAILING' | 'NOT_APPLICABLE';
+
+/** §65.3 Test level */
+export type TestLevel = 'UNIT' | 'INTEGRATION' | 'SYSTEM' | 'ACCEPTANCE';
+
+/** §65.3 Test result */
+export type TestResult = 'PASS' | 'FAIL' | 'SKIP' | 'NOT_RUN';
+
+/** §66.5 Budget status */
+export type BudgetStatus = 'ACTIVE' | 'EXHAUSTED' | 'EXCEEDED' | 'CLOSED';
+
+/** §67.2 Readiness level */
+export type ReadinessLevel = 'L0' | 'L1' | 'L2' | 'L3';
+
+/** §67.4 Alert severity */
+export type AlertSeverity = 'SEV1' | 'SEV2' | 'SEV3' | 'SEV4';
+
+/** §67.6 Knowledge transfer type */
+export type KnowledgeTransferType = 'DEPLOYMENT' | 'MONITORING' | 'TROUBLESHOOTING' | 'ARCHITECTURE' | 'API' | 'DEPENDENCIES' | 'OTHER';
+
+export interface SAR {
+  id: string;
+  project_id: string;
+  title: string;
+  version: number;
+  status: SARStatus;
+  system_boundary: string | null;
+  component_map: string | null;
+  interface_contracts_summary: string | null;
+  data_flow: string | null;
+  state_ownership: string | null;
+  consistency_model: string | null;
+  failure_domains: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InterfaceContract {
+  id: string;
+  project_id: string;
+  sar_id: string | null;
+  contract_name: string;
+  producer: string;
+  consumer: string;
+  input_shape: string | null;
+  output_shape: string | null;
+  error_contract: string | null;
+  versioning_strategy: string | null;
+  idempotency: string | null;
+  status: ContractStatus;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FitnessFunction {
+  id: string;
+  project_id: string;
+  dimension: FitnessDimension;
+  metric_name: string;
+  target_value: string;
+  current_value: string | null;
+  unit: string | null;
+  measurement_method: string | null;
+  verified_at: string | null;
+  status: FitnessStatus;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IntegrationTestRecord {
+  id: string;
+  project_id: string;
+  contract_id: string | null;
+  test_level: TestLevel;
+  test_name: string;
+  description: string | null;
+  producer: string | null;
+  consumer: string | null;
+  happy_path: string | null;
+  error_path: string | null;
+  boundary_conditions: string | null;
+  last_result: TestResult;
+  last_run_at: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IterationBudget {
+  id: string;
+  project_id: string;
+  scope_name: string;
+  expected_iterations: number;
+  iteration_ceiling: number;
+  actual_iterations: number;
+  time_budget_hours: number | null;
+  time_used_hours: number;
+  status: BudgetStatus;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OperationalReadiness {
+  id: string;
+  project_id: string;
+  declared_level: ReadinessLevel;
+  current_level: ReadinessLevel;
+  deployment_method: string | null;
+  health_endpoint: string | null;
+  logging_strategy: string | null;
+  alerting: string | null;
+  checklist_json: string | null;
+  verified_at: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RollbackStrategy {
+  id: string;
+  project_id: string;
+  component_name: string;
+  rollback_method: string;
+  rollback_tested: boolean;
+  rollback_tested_at: string | null;
+  recovery_time_target: string | null;
+  procedure: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AlertConfiguration {
+  id: string;
+  project_id: string;
+  alert_name: string;
+  severity: AlertSeverity;
+  condition_description: string;
+  notification_channel: string | null;
+  escalation_path: string | null;
+  enabled: boolean;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeTransfer {
+  id: string;
+  project_id: string;
+  title: string;
+  transfer_type: KnowledgeTransferType;
+  content: string | null;
+  target_audience: string | null;
+  status: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EngineeringComplianceArea {
+  count?: number;
+  declared_level?: string | null;
+  current_level?: string | null;
+  required: boolean;
+  met: boolean;
+}
+
+export interface EngineeringCompliance {
+  project_id: string;
+  overall_percentage: number;
+  required_percentage: number;
+  areas: Record<string, EngineeringComplianceArea>;
+  test_results: Array<{ test_level: string; last_result: string; count: number }>;
+  fitness_status: Array<{ status: string; count: number }>;
+  summary: string;
+}
+
+export const engineeringApi = {
+  // --- SAR ---
+  async listSAR(projectId: string, token: string, status?: SARStatus): Promise<SAR[]> {
+    const query = status ? `?status=${status}` : '';
+    const result = await request<{ sars: SAR[] }>(`/projects/${projectId}/engineering/sar${query}`, {}, token);
+    return result.sars;
+  },
+  async getSAR(projectId: string, sarId: string, token: string): Promise<SAR & { interface_contracts: InterfaceContract[] }> {
+    return request<SAR & { interface_contracts: InterfaceContract[] }>(`/projects/${projectId}/engineering/sar/${sarId}`, {}, token);
+  },
+  async createSAR(projectId: string, data: Partial<SAR>, token: string): Promise<SAR> {
+    return request<SAR>(`/projects/${projectId}/engineering/sar`, { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+  async updateSAR(projectId: string, sarId: string, data: Partial<SAR>, token: string): Promise<{ id: string; updated_at: string }> {
+    return request<{ id: string; updated_at: string }>(`/projects/${projectId}/engineering/sar/${sarId}`, { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+  async deleteSAR(projectId: string, sarId: string, token: string): Promise<{ deleted: boolean }> {
+    return request<{ deleted: boolean }>(`/projects/${projectId}/engineering/sar/${sarId}`, { method: 'DELETE' }, token);
+  },
+
+  // --- Interface Contracts ---
+  async listContracts(projectId: string, token: string): Promise<InterfaceContract[]> {
+    const result = await request<{ contracts: InterfaceContract[] }>(`/projects/${projectId}/engineering/contracts`, {}, token);
+    return result.contracts;
+  },
+  async createContract(projectId: string, data: Partial<InterfaceContract>, token: string): Promise<InterfaceContract> {
+    return request<InterfaceContract>(`/projects/${projectId}/engineering/contracts`, { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+  async updateContract(projectId: string, contractId: string, data: Partial<InterfaceContract>, token: string): Promise<{ id: string; updated_at: string }> {
+    return request<{ id: string; updated_at: string }>(`/projects/${projectId}/engineering/contracts/${contractId}`, { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+  async deleteContract(projectId: string, contractId: string, token: string): Promise<{ deleted: boolean }> {
+    return request<{ deleted: boolean }>(`/projects/${projectId}/engineering/contracts/${contractId}`, { method: 'DELETE' }, token);
+  },
+
+  // --- Fitness Functions ---
+  async listFitness(projectId: string, token: string): Promise<FitnessFunction[]> {
+    const result = await request<{ fitness_functions: FitnessFunction[] }>(`/projects/${projectId}/engineering/fitness`, {}, token);
+    return result.fitness_functions;
+  },
+  async createFitness(projectId: string, data: Partial<FitnessFunction>, token: string): Promise<FitnessFunction> {
+    return request<FitnessFunction>(`/projects/${projectId}/engineering/fitness`, { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+  async updateFitness(projectId: string, fitnessId: string, data: Partial<FitnessFunction>, token: string): Promise<{ id: string; updated_at: string }> {
+    return request<{ id: string; updated_at: string }>(`/projects/${projectId}/engineering/fitness/${fitnessId}`, { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+  async deleteFitness(projectId: string, fitnessId: string, token: string): Promise<{ deleted: boolean }> {
+    return request<{ deleted: boolean }>(`/projects/${projectId}/engineering/fitness/${fitnessId}`, { method: 'DELETE' }, token);
+  },
+
+  // --- Integration Tests ---
+  async listTests(projectId: string, token: string, level?: TestLevel): Promise<IntegrationTestRecord[]> {
+    const query = level ? `?level=${level}` : '';
+    const result = await request<{ tests: IntegrationTestRecord[] }>(`/projects/${projectId}/engineering/tests${query}`, {}, token);
+    return result.tests;
+  },
+  async createTest(projectId: string, data: Partial<IntegrationTestRecord>, token: string): Promise<IntegrationTestRecord> {
+    return request<IntegrationTestRecord>(`/projects/${projectId}/engineering/tests`, { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+  async updateTest(projectId: string, testId: string, data: Partial<IntegrationTestRecord>, token: string): Promise<{ id: string; updated_at: string }> {
+    return request<{ id: string; updated_at: string }>(`/projects/${projectId}/engineering/tests/${testId}`, { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+  async deleteTest(projectId: string, testId: string, token: string): Promise<{ deleted: boolean }> {
+    return request<{ deleted: boolean }>(`/projects/${projectId}/engineering/tests/${testId}`, { method: 'DELETE' }, token);
+  },
+
+  // --- Iteration Budget ---
+  async listBudget(projectId: string, token: string): Promise<IterationBudget[]> {
+    const result = await request<{ budgets: IterationBudget[] }>(`/projects/${projectId}/engineering/budget`, {}, token);
+    return result.budgets;
+  },
+  async createBudget(projectId: string, data: Partial<IterationBudget>, token: string): Promise<IterationBudget> {
+    return request<IterationBudget>(`/projects/${projectId}/engineering/budget`, { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+  async updateBudget(projectId: string, budgetId: string, data: Partial<IterationBudget>, token: string): Promise<{ id: string; updated_at: string }> {
+    return request<{ id: string; updated_at: string }>(`/projects/${projectId}/engineering/budget/${budgetId}`, { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+
+  // --- Operational Readiness ---
+  async listReadiness(projectId: string, token: string): Promise<OperationalReadiness[]> {
+    const result = await request<{ readiness: OperationalReadiness[] }>(`/projects/${projectId}/engineering/readiness`, {}, token);
+    return result.readiness;
+  },
+  async createReadiness(projectId: string, data: Partial<OperationalReadiness>, token: string): Promise<OperationalReadiness> {
+    return request<OperationalReadiness>(`/projects/${projectId}/engineering/readiness`, { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+  async updateReadiness(projectId: string, readinessId: string, data: Partial<OperationalReadiness>, token: string): Promise<{ id: string; updated_at: string }> {
+    return request<{ id: string; updated_at: string }>(`/projects/${projectId}/engineering/readiness/${readinessId}`, { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+
+  // --- Rollback Strategies ---
+  async listRollback(projectId: string, token: string): Promise<RollbackStrategy[]> {
+    const result = await request<{ strategies: RollbackStrategy[] }>(`/projects/${projectId}/engineering/rollback`, {}, token);
+    return result.strategies;
+  },
+  async createRollback(projectId: string, data: Partial<RollbackStrategy>, token: string): Promise<RollbackStrategy> {
+    return request<RollbackStrategy>(`/projects/${projectId}/engineering/rollback`, { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+  async updateRollback(projectId: string, rollbackId: string, data: Partial<RollbackStrategy>, token: string): Promise<{ id: string; updated_at: string }> {
+    return request<{ id: string; updated_at: string }>(`/projects/${projectId}/engineering/rollback/${rollbackId}`, { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+  async deleteRollback(projectId: string, rollbackId: string, token: string): Promise<{ deleted: boolean }> {
+    return request<{ deleted: boolean }>(`/projects/${projectId}/engineering/rollback/${rollbackId}`, { method: 'DELETE' }, token);
+  },
+
+  // --- Alert Configurations ---
+  async listAlerts(projectId: string, token: string): Promise<AlertConfiguration[]> {
+    const result = await request<{ alerts: AlertConfiguration[] }>(`/projects/${projectId}/engineering/alerts`, {}, token);
+    return result.alerts;
+  },
+  async createAlert(projectId: string, data: Partial<AlertConfiguration>, token: string): Promise<AlertConfiguration> {
+    return request<AlertConfiguration>(`/projects/${projectId}/engineering/alerts`, { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+  async updateAlert(projectId: string, alertId: string, data: Partial<AlertConfiguration>, token: string): Promise<{ id: string; updated_at: string }> {
+    return request<{ id: string; updated_at: string }>(`/projects/${projectId}/engineering/alerts/${alertId}`, { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+  async deleteAlert(projectId: string, alertId: string, token: string): Promise<{ deleted: boolean }> {
+    return request<{ deleted: boolean }>(`/projects/${projectId}/engineering/alerts/${alertId}`, { method: 'DELETE' }, token);
+  },
+
+  // --- Knowledge Transfers ---
+  async listKnowledge(projectId: string, token: string): Promise<KnowledgeTransfer[]> {
+    const result = await request<{ knowledge: KnowledgeTransfer[] }>(`/projects/${projectId}/engineering/knowledge`, {}, token);
+    return result.knowledge;
+  },
+  async createKnowledge(projectId: string, data: Partial<KnowledgeTransfer>, token: string): Promise<KnowledgeTransfer> {
+    return request<KnowledgeTransfer>(`/projects/${projectId}/engineering/knowledge`, { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+  async updateKnowledge(projectId: string, ktId: string, data: Partial<KnowledgeTransfer>, token: string): Promise<{ id: string; updated_at: string }> {
+    return request<{ id: string; updated_at: string }>(`/projects/${projectId}/engineering/knowledge/${ktId}`, { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+  async deleteKnowledge(projectId: string, ktId: string, token: string): Promise<{ deleted: boolean }> {
+    return request<{ deleted: boolean }>(`/projects/${projectId}/engineering/knowledge/${ktId}`, { method: 'DELETE' }, token);
+  },
+
+  // --- Compliance Summary ---
+  async getCompliance(projectId: string, token: string): Promise<EngineeringCompliance> {
+    return request<EngineeringCompliance>(`/projects/${projectId}/engineering/compliance`, {}, token);
+  },
+};
+
+// ============================================================================
 // Combined API object
 // ============================================================================
 
@@ -2492,6 +3318,10 @@ export const api = {
   ccs: ccsApi,
   security: securityApi,
   usage: usageApi,
+  images: imageApi,
+  layers: layersApi,
+  sessions: sessionsApi,
+  engineering: engineeringApi,
 };
 
 export default api;
