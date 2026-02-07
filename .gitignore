@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+.wrangler/
+
+# Environment
+.env
+*.local
+
+# Build outputs
+dist/
+dist-ssr/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Archives (don't commit zips)
+*.zip
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.sw?

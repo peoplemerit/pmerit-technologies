@@ -12,176 +12,6 @@
 
 *Transforming Chaos into Structure*
 
-
-
----
-
-## Additional AIXORD Concepts
-
-The following sections provide deeper coverage of key AIXORD concepts that apply across all AI platforms.
-
-
-### The Seven Quality Dimensions
-
-AIXORD includes a comprehensive quality assessment framework that evaluates every deliverable across seven dimensions. This framework ensures professional-grade output regardless of which AI assistant you use.
-
-**Dimension 1: Best Practices**
-
-Every deliverable must follow industry-standard approaches. This means using established patterns, following security guidelines, and applying proven methodologies. AI assistants are instructed to aggregate their knowledge and proactively apply best practices rather than waiting for you to specify them.
-
-**Dimension 2: Completeness**
-
-All requirements must be addressed. A deliverable cannot be marked complete if it only partially fulfills the specification. AIXORD forces explicit tracking of requirements against implementation.
-
-**Dimension 3: Accuracy**
-
-Information must be factually correct and verified. When certainty varies, AIXORD requires the AI to communicate confidence levels:
-- HIGH confidence: Multiple authoritative sources confirm
-- MEDIUM confidence: Single source or inference
-- LOW confidence: AI reasoning only
-- UNVERIFIED: Recommend external verification
-
-**Dimension 4: Sustainability**
-
-Deliverables must be maintainable long-term. This dimension evaluates whether the work can be understood, modified, and extended by others. Code without documentation, clever but obscure solutions, and tightly coupled components fail sustainability assessment.
-
-**Dimension 5: Reliability**
-
-Work must handle errors and edge cases gracefully. Systems that crash under unusual conditions, ignore error states, or assume perfect inputs fail reliability assessment.
-
-**Dimension 6: User-Friendliness**
-
-Output must be intuitive and well-documented. Technical excellence means nothing if users cannot understand or use the result effectively.
-
-**Dimension 7: Accessibility**
-
-Deliverables must follow inclusive design principles. This applies to documentation, interfaces, and any user-facing components.
-
-**Quality Enforcement**
-
-Any dimension marked FAIL blocks progression unless the Director explicitly accepts the trade-off. Each assessment requires evidence or justification — unsupported "PASS" ratings are invalid.
-
-
----
-
-## Additional AIXORD Concepts
-
-The following sections provide deeper coverage of key AIXORD concepts that apply across all AI platforms.
-
-
-### The Seven Quality Dimensions
-
-AIXORD includes a comprehensive quality assessment framework that evaluates every deliverable across seven dimensions. This framework ensures professional-grade output regardless of which AI assistant you use.
-
-**Dimension 1: Best Practices**
-
-Every deliverable must follow industry-standard approaches. This means using established patterns, following security guidelines, and applying proven methodologies. AI assistants are instructed to aggregate their knowledge and proactively apply best practices rather than waiting for you to specify them.
-
-**Dimension 2: Completeness**
-
-All requirements must be addressed. A deliverable cannot be marked complete if it only partially fulfills the specification. AIXORD forces explicit tracking of requirements against implementation.
-
-**Dimension 3: Accuracy**
-
-Information must be factually correct and verified. When certainty varies, AIXORD requires the AI to communicate confidence levels:
-- HIGH confidence: Multiple authoritative sources confirm
-- MEDIUM confidence: Single source or inference
-- LOW confidence: AI reasoning only
-- UNVERIFIED: Recommend external verification
-
-**Dimension 4: Sustainability**
-
-Deliverables must be maintainable long-term. This dimension evaluates whether the work can be understood, modified, and extended by others. Code without documentation, clever but obscure solutions, and tightly coupled components fail sustainability assessment.
-
-**Dimension 5: Reliability**
-
-Work must handle errors and edge cases gracefully. Systems that crash under unusual conditions, ignore error states, or assume perfect inputs fail reliability assessment.
-
-**Dimension 6: User-Friendliness**
-
-Output must be intuitive and well-documented. Technical excellence means nothing if users cannot understand or use the result effectively.
-
-**Dimension 7: Accessibility**
-
-Deliverables must follow inclusive design principles. This applies to documentation, interfaces, and any user-facing components.
-
-**Quality Enforcement**
-
-Any dimension marked FAIL blocks progression unless the Director explicitly accepts the trade-off. Each assessment requires evidence or justification — unsupported "PASS" ratings are invalid.
-
-
-
-### Task Classification System
-
-Not every task requires full AIXORD ceremony. The framework recognizes that a simple typo fix shouldn't require the same governance as a platform migration.
-
-**TRIVIAL Tasks**
-
-Criteria: Less than 5 minutes, fully reversible, no dependencies.
-Required governance: Director approval only.
-Example: "Fix typo in README"
-
-**SIMPLE Tasks**
-
-Criteria: Less than 1 hour, single deliverable.
-Required governance: Deliverable definition plus steps.
-Example: "Add logout button"
-
-**STANDARD Tasks**
-
-Criteria: Multiple deliverables with dependencies.
-Required governance: Full AIXORD formula.
-Example: "Build authentication system"
-
-**COMPLEX Tasks**
-
-Criteria: Multi-session, high risk, significant dependencies.
-Required governance: Full formula plus risk assessment.
-Example: "Platform migration"
-
-The classification flow works as follows:
-1. AI proposes task class based on scope analysis
-2. Director confirms or overrides the classification
-3. Classification is recorded in STATE
-4. Governance scales accordingly
-
-This prevents the framework from becoming bureaucratic overhead while ensuring complex work receives appropriate structure.
-
-
-
-### Artifact Binding and Persistence
-
-One of the most critical concepts in AIXORD is artifact binding. This addresses a fundamental limitation of AI chat systems: they do not reliably persist files or remember generated content across sessions.
-
-**The Core Problem**
-
-When you ask an AI to create a document, that document exists only in the chat window. If you start a new session, the AI has no memory of what it created. If the platform loses the conversation, the document is gone.
-
-Worse, many AI systems will confidently act as if they remember files they generated previously. They will reference non-existent documents, claim to see folder structures that were never created, and proceed with work based on artifacts that no longer exist.
-
-**The Artifact Binding Solution**
-
-AIXORD requires explicit artifact binding. This means:
-
-1. When the AI generates any artifact intended for future use, it must instruct you to save it externally
-2. You must confirm the save before the AI considers the artifact "bound"
-3. On resume, all artifacts must be re-bound by providing confirmation they still exist
-4. The AI cannot act on unbound artifacts
-
-**Binding Methods**
-
-AIXORD accepts several confirmation methods:
-- VISUAL: Screenshot or file explorer image showing the saved file
-- TEXTUAL: Pasting the file contents or directory listing
-- HASH: Providing a cryptographic hash of the file
-- PLATFORM: Sharing a link (Google Drive, GitHub, Dropbox)
-- ATTESTATION: Simple statement that the file was saved (low assurance)
-
-**Why This Matters**
-
-Without artifact binding, AI conversations eventually collapse. The AI makes assumptions about what exists, acts on those assumptions, and produces work that conflicts with reality. Artifact binding prevents this failure mode by requiring explicit verification.
-
-
 ---
 
 ## Dedication
@@ -1236,6 +1066,127 @@ LIC → DIS → TIR → ENV → FLD → CIT → CON → OBJ → RA → FX → PD
 
 ---
 
+# Chapter 16: Advanced Techniques
+
+## Multi-Session Project Management
+
+Large projects often span many sessions over days or weeks. AIXORD provides the framework for managing this complexity effectively with DeepSeek.
+
+### Session Planning
+
+Before beginning a multi-session project with DeepSeek, consider:
+
+**Scope Division**: How will the work be divided across sessions? What are logical stopping points? DeepSeek works best with clearly bounded, well-specified tasks.
+
+**Artifact Strategy**: What documents will you maintain? Where will they be stored? Given DeepSeek's lack of persistent storage, external artifact management is essential.
+
+**Handoff Cadence**: How frequently will you create full handoffs versus quick checkpoints? DeepSeek's context limitations make regular handoffs critical.
+
+**Recovery Planning**: If something goes wrong, how will you recover? What are your backup points?
+
+### Maintaining Momentum
+
+Strategies for maintaining momentum with DeepSeek:
+
+**Consistent Naming**: Use consistent file and artifact naming conventions.
+
+**Explicit State Tracking**: Keep a running log of decisions, even small ones.
+
+**Regular Reviews**: Periodically step back and review the overall project state.
+
+**Clean Breaks**: End sessions at natural stopping points.
+
+## Working Effectively with DeepSeek's Reasoning Traces
+
+DeepSeek-R1's Chain-of-Thought reasoning traces provide transparency but require careful interpretation:
+
+**Read Critically**: Traces show reasoning, but fluent explanations don't guarantee correct conclusions.
+
+**Verify Independently**: For important decisions, verify the conclusion through external means.
+
+**Use for Debugging**: When outputs seem wrong, traces help identify where reasoning went astray.
+
+**Don't Over-Trust**: The explanation can be convincing even when the answer is wrong.
+
+---
+
+# Chapter 17: Frequently Asked Questions
+
+## About AIXORD
+
+**Q: What does AIXORD stand for?**
+A: AI Execution Order — adapted from military OPORD (Operations Order) methodology for structured human-AI collaboration.
+
+**Q: Is AIXORD specific to DeepSeek?**
+A: No. AIXORD is a methodology that works with many AI platforms. This variant is adapted for DeepSeek's specific characteristics.
+
+**Q: Do I need technical skills to use AIXORD?**
+A: Basic familiarity with AI assistants is helpful, but AIXORD is designed for users at all technical levels.
+
+## About DeepSeek
+
+**Q: Which DeepSeek model should I use?**
+A: DeepSeek-V3 is recommended for general tasks. DeepSeek-R1 provides reasoning transparency for analytical work.
+
+**Q: How do I handle DeepSeek's lower refusal threshold?**
+A: AIXORD's governance structure provides ethical guardrails independent of model behavior. The framework's explicit approval requirements add oversight.
+
+**Q: Can I trust DeepSeek's reasoning traces?**
+A: Treat them as informative but not authoritative. The traces show reasoning patterns but don't guarantee accuracy.
+
+## About Practical Usage
+
+**Q: How long does setup take?**
+A: The nine-step setup typically takes a few minutes. It's an investment that pays dividends throughout the session.
+
+**Q: How often should I checkpoint?**
+A: Every 15-20 messages is a good guideline. More frequently if doing complex work or when context shows signs of degradation.
+
+**Q: What if I lose my handoff document?**
+A: Without a handoff, resumption is difficult. You'll need to reconstruct state from other artifacts or start fresh.
+
+---
+
+# Chapter 18: Final Recommendations
+
+## Building Effective DeepSeek Workflows
+
+As you develop expertise with AIXORD and DeepSeek together, consider these recommendations:
+
+### Leverage DeepSeek's Cost Efficiency
+
+DeepSeek's pricing model makes it accessible for iterative work. Use this advantage:
+
+**Multiple Iterations**: Don't settle for the first response. Use DeepSeek's cost efficiency to explore multiple approaches.
+
+**Extensive Testing**: Generate more test cases and edge cases than you might with pricier alternatives.
+
+**Learning Experiments**: Use DeepSeek for experimentation and learning without worrying about costs.
+
+### Compensate for Limitations Proactively
+
+Rather than discovering limitations during critical work, plan for them:
+
+**Verification Workflows**: Build external verification into your process from the start.
+
+**Chunked Complexity**: Break complex tasks into pieces before starting, not after encountering problems.
+
+**Backup Plans**: Know what you'll do if DeepSeek can't complete a task to your satisfaction.
+
+### Document Your Patterns
+
+As you learn what works with DeepSeek:
+
+**Effective Prompts**: Save prompts that produce good results for reuse.
+
+**Common Issues**: Track problems you encounter and their solutions.
+
+**Best Practices**: Build a personal playbook for DeepSeek governance.
+
+The combination of DeepSeek's capabilities and AIXORD's structure creates a powerful workflow for productive AI collaboration.
+
+---
+
 ## About PMERIT
 
 PMERIT LLC develops governance frameworks for human-AI collaboration. AIXORD represents our commitment to structured, accountable, and effective AI-assisted work.
@@ -1243,6 +1194,16 @@ PMERIT LLC develops governance frameworks for human-AI collaboration. AIXORD rep
 For support: support@pmerit.com
 
 For products: https://pmerit.gumroad.com
+
+---
+
+## Operational Assets
+
+Operational assets for this manuscript are available via Gumroad.
+
+Optional web interface: https://aixord-webapp-ui.pages.dev/login
+
+These tools are optional and assist with workflow continuity. They do not override AI platform behavior or enforce governance automatically.
 
 ---
 

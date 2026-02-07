@@ -22,93 +22,6 @@ AIXORD is a trademark of PMERIT LLC.
 
 Google Gemma is a trademark of Google LLC. This publication is not affiliated with, endorsed by, or sponsored by Google.
 
-
----
-
-## Additional AIXORD Concepts
-
-The following sections provide deeper coverage of key AIXORD concepts that apply across all AI platforms.
-
-
-### The Seven Quality Dimensions
-
-AIXORD includes a comprehensive quality assessment framework that evaluates every deliverable across seven dimensions. This framework ensures professional-grade output regardless of which AI assistant you use.
-
-**Dimension 1: Best Practices**
-
-Every deliverable must follow industry-standard approaches. This means using established patterns, following security guidelines, and applying proven methodologies. AI assistants are instructed to aggregate their knowledge and proactively apply best practices rather than waiting for you to specify them.
-
-**Dimension 2: Completeness**
-
-All requirements must be addressed. A deliverable cannot be marked complete if it only partially fulfills the specification. AIXORD forces explicit tracking of requirements against implementation.
-
-**Dimension 3: Accuracy**
-
-Information must be factually correct and verified. When certainty varies, AIXORD requires the AI to communicate confidence levels:
-- HIGH confidence: Multiple authoritative sources confirm
-- MEDIUM confidence: Single source or inference
-- LOW confidence: AI reasoning only
-- UNVERIFIED: Recommend external verification
-
-**Dimension 4: Sustainability**
-
-Deliverables must be maintainable long-term. This dimension evaluates whether the work can be understood, modified, and extended by others. Code without documentation, clever but obscure solutions, and tightly coupled components fail sustainability assessment.
-
-**Dimension 5: Reliability**
-
-Work must handle errors and edge cases gracefully. Systems that crash under unusual conditions, ignore error states, or assume perfect inputs fail reliability assessment.
-
-**Dimension 6: User-Friendliness**
-
-Output must be intuitive and well-documented. Technical excellence means nothing if users cannot understand or use the result effectively.
-
-**Dimension 7: Accessibility**
-
-Deliverables must follow inclusive design principles. This applies to documentation, interfaces, and any user-facing components.
-
-**Quality Enforcement**
-
-Any dimension marked FAIL blocks progression unless the Director explicitly accepts the trade-off. Each assessment requires evidence or justification — unsupported "PASS" ratings are invalid.
-
-
-
-### Task Classification System
-
-Not every task requires full AIXORD ceremony. The framework recognizes that a simple typo fix shouldn't require the same governance as a platform migration.
-
-**TRIVIAL Tasks**
-
-Criteria: Less than 5 minutes, fully reversible, no dependencies.
-Required governance: Director approval only.
-Example: "Fix typo in README"
-
-**SIMPLE Tasks**
-
-Criteria: Less than 1 hour, single deliverable.
-Required governance: Deliverable definition plus steps.
-Example: "Add logout button"
-
-**STANDARD Tasks**
-
-Criteria: Multiple deliverables with dependencies.
-Required governance: Full AIXORD formula.
-Example: "Build authentication system"
-
-**COMPLEX Tasks**
-
-Criteria: Multi-session, high risk, significant dependencies.
-Required governance: Full formula plus risk assessment.
-Example: "Platform migration"
-
-The classification flow works as follows:
-1. AI proposes task class based on scope analysis
-2. Director confirms or overrides the classification
-3. Classification is recorded in STATE
-4. Governance scales accordingly
-
-This prevents the framework from becoming bureaucratic overhead while ensuring complex work receives appropriate structure.
-
-
 ---
 
 ## Dedication
@@ -244,6 +157,27 @@ Every AI model has characteristics that shape how it should be used. Gemma's des
 **Instruction Following:** Complex, multi-part prompts are most effective when each part is explicitly acknowledged and addressed.
 
 These characteristics aren't flaws—they're aspects of Gemma's design that inform how to collaborate with it most effectively. AIXORD provides the structures to work with these characteristics productively.
+
+---
+
+## Open-Weight Reality: Freedom Without Enforcement
+
+Gemma's open-weight nature offers significant advantages: privacy, customization, and freedom from platform restrictions. However, this freedom comes with an important truth that AIXORD users must understand.
+
+**Gemma does not enforce AIXORD.**
+
+No AI model enforces external governance frameworks. But with hosted models like Claude or Gemini, platform-level safety controls provide some structure. With Gemma, those controls are configurable or removable.
+
+This means:
+
+- You have more freedom, but also more responsibility
+- Governance depends entirely on your discipline
+- Open-weight access increases drift risk, not compliance
+- AIXORD works because *you* work it, not because Gemma obeys it
+
+The AIXORD framework provides structure and discipline for your collaboration with Gemma. It does not control Gemma's behavior. Your commitment to following the framework determines whether governance succeeds.
+
+This is not a limitation of AIXORD—it is the reality of working with any AI system. Open-weight models simply make this reality more visible.
 
 ---
 
@@ -1123,10 +1057,28 @@ Each variant is adapted to its platform's specific characteristics while maintai
 
 ---
 
-*AIXORD v4.2 — Authority. Formula. Conservation. Verification.*
+## Operational Assets
 
-*This manuscript is for educational purposes. The AIXORD framework becomes operational through the AI Operational Core file, not through reading this document.*
+Operational assets for this manuscript are available via Gumroad.
+
+Optional web interface: https://aixord-webapp-ui.pages.dev/login
+
+These tools are optional and assist with workflow continuity. They do not override AI platform behavior or enforce governance automatically.
 
 ---
 
-**End of Manuscript**
+## License Information
+
+This manuscript is educational material accompanying the AIXORD for Gemma product. The operational governance is contained in a separate AI-internal document.
+
+See LICENSE.md for complete licensing terms.
+
+See DISCLAIMER.md for important disclaimers and limitations.
+
+---
+
+*AIXORD — Because chaos is optional.*
+
+*Version 4.2 — Gemma Edition*
+
+*© PMERIT LLC*

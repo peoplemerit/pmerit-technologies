@@ -121,6 +121,32 @@ Think of it like the rules of a game. Without rules, there's no game — just ch
 
 ---
 
+## Ecosystem Reality: Variability Without Guarantees
+
+LLaMA's position as an open-weight ecosystem model creates a unique challenge that AIXORD users must understand clearly.
+
+**LLaMA does not enforce AIXORD.**
+
+No AI model enforces external governance frameworks. But LLaMA's ecosystem amplifies this truth: there is no single "LLaMA behavior" to govern. The model you interact with depends on:
+
+- **Where it's hosted**: Self-hosted, cloud provider, third-party service
+- **What fine-tune is applied**: Base model, instruction-tuned, domain-specific
+- **Which fork you're using**: Official Meta releases, community variants, merged models
+- **How it's configured**: Quantization, context length, sampling parameters
+
+This means:
+
+- Governance cannot rely on model uniformity
+- Fine-tuning does **not** improve compliance — it changes behavior unpredictably
+- Local control does **not** equal governance enforcement
+- AIXORD governs your **process**, not LLaMA's inference
+
+The AIXORD framework provides structure and discipline for your collaboration with LLaMA variants. It does not control model behavior. Your commitment to following the framework — regardless of which LLaMA variant you're using — determines whether governance succeeds.
+
+This is not a limitation of AIXORD — it is the reality of ecosystem-driven, open-weight AI models. AIXORD provides the discipline that no single model instance can guarantee.
+
+---
+
 # Chapter 3: The Authority Model
 
 ## The Three Roles
@@ -1133,176 +1159,6 @@ A: AIXORD is designed as an integrated system. Skipping parts reduces effectiven
 **Q: What if the AI doesn't follow AIXORD?**
 A: Reinforce the governance explicitly. LLaMA may need repeated instruction. If governance consistently fails, verify your model is adequately instruction-tuned.
 
-
-
----
-
-## Additional AIXORD Concepts
-
-The following sections provide deeper coverage of key AIXORD concepts that apply across all AI platforms.
-
-
-### The Seven Quality Dimensions
-
-AIXORD includes a comprehensive quality assessment framework that evaluates every deliverable across seven dimensions. This framework ensures professional-grade output regardless of which AI assistant you use.
-
-**Dimension 1: Best Practices**
-
-Every deliverable must follow industry-standard approaches. This means using established patterns, following security guidelines, and applying proven methodologies. AI assistants are instructed to aggregate their knowledge and proactively apply best practices rather than waiting for you to specify them.
-
-**Dimension 2: Completeness**
-
-All requirements must be addressed. A deliverable cannot be marked complete if it only partially fulfills the specification. AIXORD forces explicit tracking of requirements against implementation.
-
-**Dimension 3: Accuracy**
-
-Information must be factually correct and verified. When certainty varies, AIXORD requires the AI to communicate confidence levels:
-- HIGH confidence: Multiple authoritative sources confirm
-- MEDIUM confidence: Single source or inference
-- LOW confidence: AI reasoning only
-- UNVERIFIED: Recommend external verification
-
-**Dimension 4: Sustainability**
-
-Deliverables must be maintainable long-term. This dimension evaluates whether the work can be understood, modified, and extended by others. Code without documentation, clever but obscure solutions, and tightly coupled components fail sustainability assessment.
-
-**Dimension 5: Reliability**
-
-Work must handle errors and edge cases gracefully. Systems that crash under unusual conditions, ignore error states, or assume perfect inputs fail reliability assessment.
-
-**Dimension 6: User-Friendliness**
-
-Output must be intuitive and well-documented. Technical excellence means nothing if users cannot understand or use the result effectively.
-
-**Dimension 7: Accessibility**
-
-Deliverables must follow inclusive design principles. This applies to documentation, interfaces, and any user-facing components.
-
-**Quality Enforcement**
-
-Any dimension marked FAIL blocks progression unless the Director explicitly accepts the trade-off. Each assessment requires evidence or justification — unsupported "PASS" ratings are invalid.
-
-
----
-
-## Additional AIXORD Concepts
-
-The following sections provide deeper coverage of key AIXORD concepts that apply across all AI platforms.
-
-
-### The Seven Quality Dimensions
-
-AIXORD includes a comprehensive quality assessment framework that evaluates every deliverable across seven dimensions. This framework ensures professional-grade output regardless of which AI assistant you use.
-
-**Dimension 1: Best Practices**
-
-Every deliverable must follow industry-standard approaches. This means using established patterns, following security guidelines, and applying proven methodologies. AI assistants are instructed to aggregate their knowledge and proactively apply best practices rather than waiting for you to specify them.
-
-**Dimension 2: Completeness**
-
-All requirements must be addressed. A deliverable cannot be marked complete if it only partially fulfills the specification. AIXORD forces explicit tracking of requirements against implementation.
-
-**Dimension 3: Accuracy**
-
-Information must be factually correct and verified. When certainty varies, AIXORD requires the AI to communicate confidence levels:
-- HIGH confidence: Multiple authoritative sources confirm
-- MEDIUM confidence: Single source or inference
-- LOW confidence: AI reasoning only
-- UNVERIFIED: Recommend external verification
-
-**Dimension 4: Sustainability**
-
-Deliverables must be maintainable long-term. This dimension evaluates whether the work can be understood, modified, and extended by others. Code without documentation, clever but obscure solutions, and tightly coupled components fail sustainability assessment.
-
-**Dimension 5: Reliability**
-
-Work must handle errors and edge cases gracefully. Systems that crash under unusual conditions, ignore error states, or assume perfect inputs fail reliability assessment.
-
-**Dimension 6: User-Friendliness**
-
-Output must be intuitive and well-documented. Technical excellence means nothing if users cannot understand or use the result effectively.
-
-**Dimension 7: Accessibility**
-
-Deliverables must follow inclusive design principles. This applies to documentation, interfaces, and any user-facing components.
-
-**Quality Enforcement**
-
-Any dimension marked FAIL blocks progression unless the Director explicitly accepts the trade-off. Each assessment requires evidence or justification — unsupported "PASS" ratings are invalid.
-
-
-
-### Task Classification System
-
-Not every task requires full AIXORD ceremony. The framework recognizes that a simple typo fix shouldn't require the same governance as a platform migration.
-
-**TRIVIAL Tasks**
-
-Criteria: Less than 5 minutes, fully reversible, no dependencies.
-Required governance: Director approval only.
-Example: "Fix typo in README"
-
-**SIMPLE Tasks**
-
-Criteria: Less than 1 hour, single deliverable.
-Required governance: Deliverable definition plus steps.
-Example: "Add logout button"
-
-**STANDARD Tasks**
-
-Criteria: Multiple deliverables with dependencies.
-Required governance: Full AIXORD formula.
-Example: "Build authentication system"
-
-**COMPLEX Tasks**
-
-Criteria: Multi-session, high risk, significant dependencies.
-Required governance: Full formula plus risk assessment.
-Example: "Platform migration"
-
-The classification flow works as follows:
-1. AI proposes task class based on scope analysis
-2. Director confirms or overrides the classification
-3. Classification is recorded in STATE
-4. Governance scales accordingly
-
-This prevents the framework from becoming bureaucratic overhead while ensuring complex work receives appropriate structure.
-
-
-
-### Artifact Binding and Persistence
-
-One of the most critical concepts in AIXORD is artifact binding. This addresses a fundamental limitation of AI chat systems: they do not reliably persist files or remember generated content across sessions.
-
-**The Core Problem**
-
-When you ask an AI to create a document, that document exists only in the chat window. If you start a new session, the AI has no memory of what it created. If the platform loses the conversation, the document is gone.
-
-Worse, many AI systems will confidently act as if they remember files they generated previously. They will reference non-existent documents, claim to see folder structures that were never created, and proceed with work based on artifacts that no longer exist.
-
-**The Artifact Binding Solution**
-
-AIXORD requires explicit artifact binding. This means:
-
-1. When the AI generates any artifact intended for future use, it must instruct you to save it externally
-2. You must confirm the save before the AI considers the artifact "bound"
-3. On resume, all artifacts must be re-bound by providing confirmation they still exist
-4. The AI cannot act on unbound artifacts
-
-**Binding Methods**
-
-AIXORD accepts several confirmation methods:
-- VISUAL: Screenshot or file explorer image showing the saved file
-- TEXTUAL: Pasting the file contents or directory listing
-- HASH: Providing a cryptographic hash of the file
-- PLATFORM: Sharing a link (Google Drive, GitHub, Dropbox)
-- ATTESTATION: Simple statement that the file was saved (low assurance)
-
-**Why This Matters**
-
-Without artifact binding, AI conversations eventually collapse. The AI makes assumptions about what exists, acts on those assumptions, and produces work that conflicts with reality. Artifact binding prevents this failure mode by requiring explicit verification.
-
-
 ## About Practical Usage
 
 **Q: How long does setup take?**
@@ -1328,12 +1184,74 @@ Thank you for choosing AIXORD. May your AI collaborations be productive, your co
 
 ---
 
-**AIXORD v4.2 — Authority. Formula. Conservation. Verification.**
+# Final Recommendations for LLaMA Users
 
-*Adapted for Meta LLaMA Family*
+## Embracing the Open-Weight Advantage
+
+The open-weight nature of LLaMA models provides unique opportunities that AIXORD helps you maximize:
+
+**Privacy Control**: Running models locally means sensitive data stays on your infrastructure. AIXORD's artifact system complements this by keeping project documentation in your control as well.
+
+**Customization Potential**: Fine-tuning LLaMA for specific domains can dramatically improve results for specialized work. AIXORD governance applies equally to base and fine-tuned models.
+
+**Cost Optimization**: After initial infrastructure investment, running costs become predictable. AIXORD's session management helps you use those resources efficiently.
+
+**Reproducibility**: With consistent model deployments and AIXORD's artifact discipline, you can achieve reproducible results across projects and team members.
+
+## Building Your Practice
+
+As you develop expertise with AIXORD and LLaMA together:
+
+**Start Simple**: Begin with straightforward projects to internalize the methodology before tackling complex work.
+
+**Iterate and Improve**: Each project teaches lessons. Capture what works and what doesn't in your artifacts.
+
+**Share Knowledge**: If working in teams, document effective patterns for others to follow.
+
+**Stay Current**: The LLaMA ecosystem evolves rapidly. New models and techniques may change optimal approaches.
+
+## The Long-Term View
+
+AIXORD isn't just about individual sessions — it's about building sustainable practices for AI-assisted work. The artifacts you create, the patterns you establish, and the discipline you develop compound over time.
+
+Projects that seemed overwhelming become manageable. Quality that seemed aspirational becomes standard. Frustrations that seemed inevitable become rare.
+
+This is the promise of governed AI collaboration: not perfection, but reliability. Not magic, but method. Not chaos, but order.
+
+## Your Journey Continues
+
+AIXORD provides the framework. LLaMA provides the capability. But the results depend on your commitment to the process. Each session, each checkpoint, each carefully maintained artifact builds toward mastery.
+
+The open-weight ecosystem is evolving rapidly. New models, new techniques, and new possibilities emerge constantly. AIXORD's governance principles remain constant even as the underlying technology advances. The discipline you develop now will serve you through future generations of AI capability.
+
+We encourage you to engage with the AIXORD community, share your experiences, and contribute to the collective understanding of what works in AI governance. Together, we can advance the practice of human-AI collaboration.
+
+Welcome to structured AI collaboration with LLaMA. The chaos ends here.
 
 ---
 
-© 2026 PMERIT LLC. All rights reserved.
+## Operational Assets
 
-This material is protected under applicable copyright law. Unauthorized reproduction or distribution is prohibited.
+Operational assets for this manuscript are available via Gumroad.
+
+Optional web interface: https://aixord-webapp-ui.pages.dev/login
+
+These tools are optional and assist with workflow continuity. They do not override AI platform behavior or enforce governance automatically.
+
+---
+
+## License Information
+
+This manuscript is educational material accompanying the AIXORD for LLaMA product. The operational governance is contained in a separate AI-internal document.
+
+See LICENSE.md for complete licensing terms.
+
+See DISCLAIMER.md for important disclaimers and limitations.
+
+---
+
+*AIXORD — Because chaos is optional.*
+
+*Version 4.2 — LLaMA Edition*
+
+*© PMERIT LLC*

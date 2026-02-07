@@ -1194,8 +1194,28 @@ AIXORD provides that governance. The rest is up to you.
 
 ---
 
-*AIXORD v4.2 — Formula & Engine Edition*
+## Operational Assets
 
-*Authority. Formula. Conservation. Verification.*
+Operational assets for this manuscript are available via Gumroad.
 
-*© 2026 PMERIT LLC. All rights reserved.*
+Optional web interface: https://aixord-webapp-ui.pages.dev/login
+
+These tools are optional and assist with workflow continuity. They do not override AI platform behavior or enforce governance automatically.
+
+---
+
+## License Information
+
+This manuscript is educational material accompanying the AIXORD for Claude product. The operational governance is contained in a separate AI-internal document.
+
+See LICENSE.md for complete licensing terms.
+
+See DISCLAIMER.md for important disclaimers and limitations.
+
+---
+
+*AIXORD — Because chaos is optional.*
+
+*Version 4.2 — Claude Edition*
+
+*© PMERIT LLC*

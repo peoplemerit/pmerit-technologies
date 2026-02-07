@@ -1194,6 +1194,197 @@ This Handoff: [current filename]
 
 ---
 
+# Chapter 18: Advanced Techniques
+
+## Multi-Session Project Management
+
+Large projects often span many sessions over days or weeks. AIXORD provides the framework for managing this complexity effectively with Copilot.
+
+### Session Planning
+
+Before beginning a multi-session project with Copilot, consider:
+
+**Scope Division**: How will the work be divided across sessions? What are logical stopping points? Copilot works best with focused, bounded tasks.
+
+**Artifact Strategy**: What documents will you maintain? Where will they be stored? How will they be updated? Use OneDrive, SharePoint, or your preferred cloud storage.
+
+**Handoff Cadence**: How frequently will you create full handoffs versus quick checkpoints? Copilot's context limitations make regular handoffs essential.
+
+**Recovery Planning**: If something goes wrong, how will you recover? What are your backup points?
+
+### Maintaining Momentum
+
+Long projects face the challenge of maintaining momentum across sessions. Each return requires context restoration. Each handoff carries the risk of lost nuance.
+
+Strategies for maintaining momentum with Copilot:
+
+**Consistent Naming**: Use consistent file and artifact naming conventions. This reduces confusion when resuming.
+
+**Explicit State Tracking**: Keep a running log of decisions, even small ones. What seems obvious today may be unclear next week.
+
+**Regular Reviews**: Periodically step back and review the overall project state. Are you still on track? Have requirements changed?
+
+**Clean Breaks**: End sessions at natural stopping points. Don't leave work in ambiguous states.
+
+### Handling Project Evolution
+
+Projects change over time. Requirements evolve. New information emerges. AIXORD provides mechanisms for controlled evolution:
+
+**Scope Expansion Commands**: Use explicit commands to expand scope rather than allowing gradual creep.
+
+**Change Documentation**: Document why changes were made, not just what changed.
+
+**Impact Assessment**: When scope changes, assess impact on existing work before proceeding.
+
+**Version Control**: Maintain versions of key documents so you can track evolution.
+
+## Working with Multiple AI Sessions
+
+Sometimes you might work with different AI instances or even different Copilot deployments during a project. AIXORD enables this through its artifact-centric approach.
+
+### Artifact Portability
+
+Because AIXORD governance lives in artifacts rather than AI memory, you can:
+
+Transfer work between different Copilot sessions.
+Resume with different instances of the same deployment.
+Move between GitHub Copilot, Microsoft 365 Copilot, and other Copilot products.
+
+The key is maintaining accurate, complete artifacts that capture all essential state.
+
+### Instance Independence
+
+Each Copilot session starts fresh. Never assume Copilot "remembers" anything from previous sessions. Always:
+
+Provide handoff documents explicitly.
+Verify artifact bindings before proceeding.
+Re-establish context through the recovery process.
+
+### Team Collaboration
+
+In team settings where multiple people work with Copilot on the same project:
+
+Establish a single source of truth for project artifacts.
+Use clear handoff naming that includes dates and authors.
+Maintain a project log accessible to all team members.
+Define roles and responsibilities for artifact maintenance.
+
+---
+
+# Chapter 19: Case Studies
+
+## Case Study 1: Software Feature Development
+
+**Scenario**: A developer needs to add a user authentication system to an existing web application using GitHub Copilot assistance.
+
+**AIXORD Application**:
+
+Setup established the project as BROWNFIELD-EXTEND, conserving the existing application architecture.
+
+Ideation phase explored authentication approaches: session-based, JWT, OAuth integration.
+
+Blueprint phase produced detailed specifications for OAuth-based authentication with Microsoft identity.
+
+Gates ensured specifications were complete before implementation began.
+
+Execution phase implemented the feature according to specifications, with Copilot assisting code generation.
+
+Quality assessment verified security best practices, completeness, and documentation.
+
+Lock phase finalized the feature for deployment.
+
+**Outcome**: The authentication system was delivered on specification, with clear documentation and verified security practices. The multi-session project maintained continuity through handoffs.
+
+## Case Study 2: Documentation Project
+
+**Scenario**: A technical writer needs to create comprehensive API documentation using Microsoft 365 Copilot.
+
+**AIXORD Application**:
+
+Setup established GREENFIELD project for the new documentation.
+
+Ideation phase identified key API endpoints, user personas, and documentation requirements.
+
+Blueprint phase structured the documentation outline with sections and code examples.
+
+Gates required the outline to be approved before writing began.
+
+Execution phase produced content section by section, with checkpoints after each major section.
+
+Quality assessment verified accuracy of API descriptions, completeness of examples, and clarity of explanations.
+
+Handoffs enabled the multi-week project to maintain consistency across sessions.
+
+**Outcome**: The documentation was comprehensive, well-organized, and accurately reflected the API behavior. Copilot's suggestions accelerated the writing process while AIXORD's structure ensured quality.
+
+## Case Study 3: Business Process Automation
+
+**Scenario**: An analyst needs to design Power Automate workflows using Copilot assistance.
+
+**AIXORD Application**:
+
+Ideation explored different automation approaches and identified process requirements.
+
+Multiple sessions covered different workflows: approval routing, data synchronization, notification systems.
+
+Blueprints produced detailed workflow definitions with trigger conditions and error handling.
+
+Quality assessment ensured workflows were reliable, maintainable, and well-documented.
+
+Artifacts created comprehensive automation documentation for the IT team.
+
+**Outcome**: The business launched with well-defined automated processes that reduced manual work and improved consistency. The documentation provided a foundation for future workflow improvements.
+
+---
+
+# Chapter 20: Frequently Asked Questions
+
+## About AIXORD
+
+**Q: What does AIXORD stand for?**
+A: AI Execution Order — adapted from military OPORD (Operations Order) methodology for structured human-AI collaboration.
+
+**Q: Is AIXORD specific to Microsoft Copilot?**
+A: No. AIXORD is a methodology that works with many AI platforms. This variant is adapted for Copilot's specific characteristics across Microsoft's product ecosystem.
+
+**Q: Do I need technical skills to use AIXORD?**
+A: Basic familiarity with AI assistants and Microsoft products is helpful, but AIXORD is designed for users at all technical levels. The methodology itself is straightforward.
+
+## About Copilot
+
+**Q: Which Copilot product works best with AIXORD?**
+A: AIXORD works with all Copilot products. GitHub Copilot for code, Microsoft 365 Copilot for documents and communication, and Copilot Chat for general assistance all benefit from governance.
+
+**Q: Can I use AIXORD across different Copilot products?**
+A: Yes. AIXORD governance applies regardless of which Copilot product you're using. Artifacts can transfer between products.
+
+**Q: Does AIXORD work with Copilot for different programming languages?**
+A: Absolutely. Language-specific considerations exist, but AIXORD governance is language-agnostic.
+
+## About Governance
+
+**Q: Why so much structure?**
+A: Structure prevents the common frustrations of AI work: lost context, scope creep, quality inconsistency. The overhead pays for itself in reduced rework and frustration.
+
+**Q: Can I skip parts of AIXORD?**
+A: AIXORD is designed as an integrated system. Skipping parts reduces effectiveness. That said, simpler tasks can use simpler governance through lighter checkpoint cadences.
+
+**Q: What if Copilot doesn't follow AIXORD protocols?**
+A: Reinforce the governance explicitly. Copilot may need repeated instruction on governance requirements. Use the response header to maintain awareness of current state.
+
+## About Practical Usage
+
+**Q: How long does setup take?**
+A: The nine-step setup typically takes a few minutes. It's an investment that pays dividends throughout the session.
+
+**Q: How often should I checkpoint?**
+A: Every 15-20 messages is a good guideline. More frequently if doing complex or risky work.
+
+**Q: What if I lose my handoff document?**
+A: Without a handoff, resumption is difficult. You'll need to reconstruct state from other artifacts or start fresh. This is why maintaining handoffs is critical.
+
+---
+
 # Final Notes
 
 ## The AIXORD Promise
@@ -1219,267 +1410,34 @@ For support:
 - Community: PMERIT Discord (link in package)
 - Issues: Submit via Gumroad purchase page
 
-
-
----
-
-## Additional AIXORD Concepts
-
-The following sections provide deeper coverage of key AIXORD concepts that apply across all AI platforms.
-
-
-### The Seven Quality Dimensions
-
-AIXORD includes a comprehensive quality assessment framework that evaluates every deliverable across seven dimensions. This framework ensures professional-grade output regardless of which AI assistant you use.
-
-**Dimension 1: Best Practices**
-
-Every deliverable must follow industry-standard approaches. This means using established patterns, following security guidelines, and applying proven methodologies. AI assistants are instructed to aggregate their knowledge and proactively apply best practices rather than waiting for you to specify them.
-
-**Dimension 2: Completeness**
-
-All requirements must be addressed. A deliverable cannot be marked complete if it only partially fulfills the specification. AIXORD forces explicit tracking of requirements against implementation.
-
-**Dimension 3: Accuracy**
-
-Information must be factually correct and verified. When certainty varies, AIXORD requires the AI to communicate confidence levels:
-- HIGH confidence: Multiple authoritative sources confirm
-- MEDIUM confidence: Single source or inference
-- LOW confidence: AI reasoning only
-- UNVERIFIED: Recommend external verification
-
-**Dimension 4: Sustainability**
-
-Deliverables must be maintainable long-term. This dimension evaluates whether the work can be understood, modified, and extended by others. Code without documentation, clever but obscure solutions, and tightly coupled components fail sustainability assessment.
-
-**Dimension 5: Reliability**
-
-Work must handle errors and edge cases gracefully. Systems that crash under unusual conditions, ignore error states, or assume perfect inputs fail reliability assessment.
-
-**Dimension 6: User-Friendliness**
-
-Output must be intuitive and well-documented. Technical excellence means nothing if users cannot understand or use the result effectively.
-
-**Dimension 7: Accessibility**
-
-Deliverables must follow inclusive design principles. This applies to documentation, interfaces, and any user-facing components.
-
-**Quality Enforcement**
-
-Any dimension marked FAIL blocks progression unless the Director explicitly accepts the trade-off. Each assessment requires evidence or justification — unsupported "PASS" ratings are invalid.
-
-
-
-### Task Classification System
-
-Not every task requires full AIXORD ceremony. The framework recognizes that a simple typo fix shouldn't require the same governance as a platform migration.
-
-**TRIVIAL Tasks**
-
-Criteria: Less than 5 minutes, fully reversible, no dependencies.
-Required governance: Director approval only.
-Example: "Fix typo in README"
-
-**SIMPLE Tasks**
-
-Criteria: Less than 1 hour, single deliverable.
-Required governance: Deliverable definition plus steps.
-Example: "Add logout button"
-
-**STANDARD Tasks**
-
-Criteria: Multiple deliverables with dependencies.
-Required governance: Full AIXORD formula.
-Example: "Build authentication system"
-
-**COMPLEX Tasks**
-
-Criteria: Multi-session, high risk, significant dependencies.
-Required governance: Full formula plus risk assessment.
-Example: "Platform migration"
-
-The classification flow works as follows:
-1. AI proposes task class based on scope analysis
-2. Director confirms or overrides the classification
-3. Classification is recorded in STATE
-4. Governance scales accordingly
-
-This prevents the framework from becoming bureaucratic overhead while ensuring complex work receives appropriate structure.
-
-
----
-
-## Additional AIXORD Concepts
-
-The following sections provide deeper coverage of key AIXORD concepts that apply across all AI platforms.
-
-
-### The Seven Quality Dimensions
-
-AIXORD includes a comprehensive quality assessment framework that evaluates every deliverable across seven dimensions. This framework ensures professional-grade output regardless of which AI assistant you use.
-
-**Dimension 1: Best Practices**
-
-Every deliverable must follow industry-standard approaches. This means using established patterns, following security guidelines, and applying proven methodologies. AI assistants are instructed to aggregate their knowledge and proactively apply best practices rather than waiting for you to specify them.
-
-**Dimension 2: Completeness**
-
-All requirements must be addressed. A deliverable cannot be marked complete if it only partially fulfills the specification. AIXORD forces explicit tracking of requirements against implementation.
-
-**Dimension 3: Accuracy**
-
-Information must be factually correct and verified. When certainty varies, AIXORD requires the AI to communicate confidence levels:
-- HIGH confidence: Multiple authoritative sources confirm
-- MEDIUM confidence: Single source or inference
-- LOW confidence: AI reasoning only
-- UNVERIFIED: Recommend external verification
-
-**Dimension 4: Sustainability**
-
-Deliverables must be maintainable long-term. This dimension evaluates whether the work can be understood, modified, and extended by others. Code without documentation, clever but obscure solutions, and tightly coupled components fail sustainability assessment.
-
-**Dimension 5: Reliability**
-
-Work must handle errors and edge cases gracefully. Systems that crash under unusual conditions, ignore error states, or assume perfect inputs fail reliability assessment.
-
-**Dimension 6: User-Friendliness**
-
-Output must be intuitive and well-documented. Technical excellence means nothing if users cannot understand or use the result effectively.
-
-**Dimension 7: Accessibility**
-
-Deliverables must follow inclusive design principles. This applies to documentation, interfaces, and any user-facing components.
-
-**Quality Enforcement**
-
-Any dimension marked FAIL blocks progression unless the Director explicitly accepts the trade-off. Each assessment requires evidence or justification — unsupported "PASS" ratings are invalid.
-
-
-
-### Task Classification System
-
-Not every task requires full AIXORD ceremony. The framework recognizes that a simple typo fix shouldn't require the same governance as a platform migration.
-
-**TRIVIAL Tasks**
-
-Criteria: Less than 5 minutes, fully reversible, no dependencies.
-Required governance: Director approval only.
-Example: "Fix typo in README"
-
-**SIMPLE Tasks**
-
-Criteria: Less than 1 hour, single deliverable.
-Required governance: Deliverable definition plus steps.
-Example: "Add logout button"
-
-**STANDARD Tasks**
-
-Criteria: Multiple deliverables with dependencies.
-Required governance: Full AIXORD formula.
-Example: "Build authentication system"
-
-**COMPLEX Tasks**
-
-Criteria: Multi-session, high risk, significant dependencies.
-Required governance: Full formula plus risk assessment.
-Example: "Platform migration"
-
-The classification flow works as follows:
-1. AI proposes task class based on scope analysis
-2. Director confirms or overrides the classification
-3. Classification is recorded in STATE
-4. Governance scales accordingly
-
-This prevents the framework from becoming bureaucratic overhead while ensuring complex work receives appropriate structure.
-
-
-
-### Artifact Binding and Persistence
-
-One of the most critical concepts in AIXORD is artifact binding. This addresses a fundamental limitation of AI chat systems: they do not reliably persist files or remember generated content across sessions.
-
-**The Core Problem**
-
-When you ask an AI to create a document, that document exists only in the chat window. If you start a new session, the AI has no memory of what it created. If the platform loses the conversation, the document is gone.
-
-Worse, many AI systems will confidently act as if they remember files they generated previously. They will reference non-existent documents, claim to see folder structures that were never created, and proceed with work based on artifacts that no longer exist.
-
-**The Artifact Binding Solution**
-
-AIXORD requires explicit artifact binding. This means:
-
-1. When the AI generates any artifact intended for future use, it must instruct you to save it externally
-2. You must confirm the save before the AI considers the artifact "bound"
-3. On resume, all artifacts must be re-bound by providing confirmation they still exist
-4. The AI cannot act on unbound artifacts
-
-**Binding Methods**
-
-AIXORD accepts several confirmation methods:
-- VISUAL: Screenshot or file explorer image showing the saved file
-- TEXTUAL: Pasting the file contents or directory listing
-- HASH: Providing a cryptographic hash of the file
-- PLATFORM: Sharing a link (Google Drive, GitHub, Dropbox)
-- ATTESTATION: Simple statement that the file was saved (low assurance)
-
-**Why This Matters**
-
-Without artifact binding, AI conversations eventually collapse. The AI makes assumptions about what exists, acts on those assumptions, and produces work that conflicts with reality. Artifact binding prevents this failure mode by requiring explicit verification.
-
-
-
-### The Conservation Law
-
-AIXORD v4.2 introduces the Conservation Law, an accounting-grade principle that prevents AI systems from producing more than was documented and approved.
-
-**The Equation**
-
-```
-EXECUTION_TOTAL = VERIFIED_REALITY + FORMULA_EXECUTION
-```
-
-This means that everything that exists or will exist must equal what was already verified plus what the AIXORD formula authorizes.
-
-**Why This Matters**
-
-Without conservation, AI systems tend toward scope creep. They add features you didn't request, modify systems that were working fine, and produce parallel implementations instead of extensions.
-
-The Conservation Law makes this structurally impossible. If something isn't in the verified reality or the approved formula, it cannot be executed.
-
-**Brownfield vs Greenfield**
-
-The Conservation Law distinguishes between two types of projects:
-
-GREENFIELD: No verified execution exists. The formula governs the entire system. You're building from scratch.
-
-BROWNFIELD-EXTEND: Verified execution exists and must be preserved. The formula governs only the delta — the new work being added.
-
-BROWNFIELD-REPLACE: Verified execution exists but replacement is authorized. Specific scopes are unlocked for modification.
-
-**Practical Application**
-
-When you start an AIXORD session, you declare your reality classification. If you're extending an existing system, you list the scopes that must be conserved. Any attempt to rebuild a conserved scope triggers a HALT — the AI cannot proceed without explicit unlock authorization.
-
-This prevents the common failure mode where an AI, lacking context about what already works, cheerfully rebuilds your entire system from scratch.
-
-
 ## License Reminder
 
 Your AIXORD license covers up to 2 authorized email addresses. For team deployments, contact support@pmerit.com for volume licensing.
 
 ---
 
-**AIXORD for Microsoft Copilot — Version 4.2**
+## Operational Assets
 
-*Authority. Formula. Conservation. Verification.*
+Operational assets for this manuscript are available via Gumroad.
 
-*Transform chaos into completion.*
+Optional web interface: https://aixord-webapp-ui.pages.dev/login
+
+These tools are optional and assist with workflow continuity. They do not override AI platform behavior or enforce governance automatically.
 
 ---
 
-© 2026 PMERIT LLC. All rights reserved.
+## License Information
 
-This document is licensed for use with a valid AIXORD license. Unauthorized distribution prohibited.
+This manuscript is educational material accompanying the AIXORD for Copilot product. The operational governance is contained in a separate AI-internal document.
 
-For licensing inquiries: support@pmerit.com
-Purchase: https://pmerit.gumroad.com
+See LICENSE.md for complete licensing terms.
+
+See DISCLAIMER.md for important disclaimers and limitations.
+
+---
+
+*AIXORD — Because chaos is optional.*
+
+*Version 4.2 — Copilot Edition*
+
+*© PMERIT LLC*

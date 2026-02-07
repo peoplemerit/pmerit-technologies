@@ -141,6 +141,44 @@ AIXORD addresses these limitations through structural controls:
 
 ---
 
+## Optimization Reality: Speed Is Not Governance
+
+Mistral's efficiency-optimized design creates a unique challenge that AIXORD users must understand clearly.
+
+**Mistral does not enforce AIXORD.**
+
+No AI model enforces external governance frameworks. But Mistral's design amplifies this truth in a specific way: optimization pressure can silently degrade governance fidelity.
+
+Consider what efficiency optimization actually means:
+
+- **Faster responses may skip steps.** Compression favors throughput, not deliberation.
+- **Cost optimization rewards brevity.** Shorter outputs may omit important caveats.
+- **Performance tuning hides failures.** Governance drift is harder to detect when everything runs quickly.
+
+This creates a fundamental tension:
+
+| Mistral Optimizes For | AIXORD Requires |
+|----------------------|-----------------|
+| Speed | Deliberation |
+| Efficiency | Thoroughness |
+| Brevity | Completeness |
+| Throughput | Verification |
+
+**Optimization improves performance, not governance.**
+
+AIXORD exists to **slow the system down**. The gates, checkpoints, and approval requirements are not bureaucracy — they are counterweights to the platform's natural tendency toward speed over structure.
+
+When working with Mistral under AIXORD governance:
+
+- Recognize that **faster is not safer**
+- Understand that optimization can **mask governance failures**
+- Use AIXORD's structure to impose **deliberation where the platform favors speed**
+- Treat efficiency as a **tool, not a substitute for discipline**
+
+This is not a limitation of Mistral — it is the reality of efficiency-optimized AI systems. AIXORD provides the discipline that optimization cannot.
+
+---
+
 # Chapter 3: The Authority Model
 
 ## The Three Roles
@@ -1346,6 +1384,86 @@ Blockers: [List or None]
 
 ---
 
+# Chapter 18: Case Studies
+
+## Case Study 1: Rapid Prototyping with Mistral
+
+**Scenario**: A startup developer needs to quickly prototype a REST API for a mobile application.
+
+**AIXORD Application**:
+
+Setup established GREENFIELD project with acknowledgment of Mistral's strengths in rapid iteration.
+
+Ideation phase leveraged Mistral's speed for quick brainstorming of API endpoints and data structures.
+
+Blueprint phase produced detailed endpoint specifications, with checkpoints every few iterations to catch drift.
+
+Gates ensured specifications were complete before implementation began.
+
+Execution phase used Mistral's fast code completion for rapid implementation, with frequent verification checkpoints.
+
+Quality assessment verified best practices and completeness, with special attention to error handling.
+
+**Outcome**: The API prototype was delivered quickly, leveraging Mistral's speed advantage while AIXORD's structure ensured quality wasn't sacrificed for velocity.
+
+## Case Study 2: Documentation Generation
+
+**Scenario**: A technical writer needs to generate user documentation for an internal tool.
+
+**AIXORD Application**:
+
+Ideation explored documentation structure and user needs.
+
+Blueprint created detailed outlines with section specifications.
+
+Execution used Mistral's fast drafting capability, producing sections rapidly with frequent checkpoints to detect drift.
+
+Quality assessment verified accuracy and completeness.
+
+**Outcome**: Comprehensive documentation was produced efficiently. Mistral's speed enabled multiple revision cycles within the time a slower model would take for one draft.
+
+---
+
+# Chapter 19: Frequently Asked Questions
+
+## About AIXORD
+
+**Q: What does AIXORD stand for?**
+A: AI Execution Order — adapted from military OPORD (Operations Order) methodology for structured human-AI collaboration.
+
+**Q: Is AIXORD specific to Mistral?**
+A: No. AIXORD is a methodology that works with many AI platforms. This variant is adapted for Mistral's specific characteristics.
+
+**Q: Do I need technical skills to use AIXORD?**
+A: Basic familiarity with AI assistants is helpful, but AIXORD is designed for users at all technical levels.
+
+## About Mistral
+
+**Q: Which Mistral model should I use?**
+A: Mistral Large for complex tasks requiring deeper reasoning. Mistral 7B or Mixtral for routine tasks where speed is valued.
+
+**Q: How do I handle Mistral's instruction drift?**
+A: Use shorter instructions, limit simultaneous constraints, checkpoint frequently, and restate constraints when drift is detected.
+
+**Q: Can Mistral handle long documents?**
+A: Context window limitations make long-document analysis challenging. Break documents into sections and process incrementally.
+
+**Q: How do I compensate for Mistral's hallucination risk?**
+A: Treat all factual claims as UNVERIFIED by default. Require external validation for critical information. Don't accept citations without independent verification.
+
+## About Practical Usage
+
+**Q: How long does setup take?**
+A: The nine-step setup typically takes a few minutes. It's an investment that pays dividends throughout the session.
+
+**Q: Why does AIXORD recommend more frequent checkpoints for Mistral?**
+A: Mistral's optimization for speed can mask context degradation. Regular checkpoints ensure governance remains intact.
+
+**Q: What if I lose my handoff document?**
+A: Without a handoff, resumption is difficult. You'll need to reconstruct state from other artifacts or start fresh.
+
+---
+
 # Legal Notice
 
 ## License Reference
@@ -1356,176 +1474,6 @@ This product is licensed under terms specified in the accompanying LICENSE.md fi
 
 Full disclaimer terms are specified in the accompanying DISCLAIMER.md file. By using AIXORD, you acknowledge acceptance of those terms.
 
-
-
----
-
-## Additional AIXORD Concepts
-
-The following sections provide deeper coverage of key AIXORD concepts that apply across all AI platforms.
-
-
-### The Seven Quality Dimensions
-
-AIXORD includes a comprehensive quality assessment framework that evaluates every deliverable across seven dimensions. This framework ensures professional-grade output regardless of which AI assistant you use.
-
-**Dimension 1: Best Practices**
-
-Every deliverable must follow industry-standard approaches. This means using established patterns, following security guidelines, and applying proven methodologies. AI assistants are instructed to aggregate their knowledge and proactively apply best practices rather than waiting for you to specify them.
-
-**Dimension 2: Completeness**
-
-All requirements must be addressed. A deliverable cannot be marked complete if it only partially fulfills the specification. AIXORD forces explicit tracking of requirements against implementation.
-
-**Dimension 3: Accuracy**
-
-Information must be factually correct and verified. When certainty varies, AIXORD requires the AI to communicate confidence levels:
-- HIGH confidence: Multiple authoritative sources confirm
-- MEDIUM confidence: Single source or inference
-- LOW confidence: AI reasoning only
-- UNVERIFIED: Recommend external verification
-
-**Dimension 4: Sustainability**
-
-Deliverables must be maintainable long-term. This dimension evaluates whether the work can be understood, modified, and extended by others. Code without documentation, clever but obscure solutions, and tightly coupled components fail sustainability assessment.
-
-**Dimension 5: Reliability**
-
-Work must handle errors and edge cases gracefully. Systems that crash under unusual conditions, ignore error states, or assume perfect inputs fail reliability assessment.
-
-**Dimension 6: User-Friendliness**
-
-Output must be intuitive and well-documented. Technical excellence means nothing if users cannot understand or use the result effectively.
-
-**Dimension 7: Accessibility**
-
-Deliverables must follow inclusive design principles. This applies to documentation, interfaces, and any user-facing components.
-
-**Quality Enforcement**
-
-Any dimension marked FAIL blocks progression unless the Director explicitly accepts the trade-off. Each assessment requires evidence or justification — unsupported "PASS" ratings are invalid.
-
-
----
-
-## Additional AIXORD Concepts
-
-The following sections provide deeper coverage of key AIXORD concepts that apply across all AI platforms.
-
-
-### The Seven Quality Dimensions
-
-AIXORD includes a comprehensive quality assessment framework that evaluates every deliverable across seven dimensions. This framework ensures professional-grade output regardless of which AI assistant you use.
-
-**Dimension 1: Best Practices**
-
-Every deliverable must follow industry-standard approaches. This means using established patterns, following security guidelines, and applying proven methodologies. AI assistants are instructed to aggregate their knowledge and proactively apply best practices rather than waiting for you to specify them.
-
-**Dimension 2: Completeness**
-
-All requirements must be addressed. A deliverable cannot be marked complete if it only partially fulfills the specification. AIXORD forces explicit tracking of requirements against implementation.
-
-**Dimension 3: Accuracy**
-
-Information must be factually correct and verified. When certainty varies, AIXORD requires the AI to communicate confidence levels:
-- HIGH confidence: Multiple authoritative sources confirm
-- MEDIUM confidence: Single source or inference
-- LOW confidence: AI reasoning only
-- UNVERIFIED: Recommend external verification
-
-**Dimension 4: Sustainability**
-
-Deliverables must be maintainable long-term. This dimension evaluates whether the work can be understood, modified, and extended by others. Code without documentation, clever but obscure solutions, and tightly coupled components fail sustainability assessment.
-
-**Dimension 5: Reliability**
-
-Work must handle errors and edge cases gracefully. Systems that crash under unusual conditions, ignore error states, or assume perfect inputs fail reliability assessment.
-
-**Dimension 6: User-Friendliness**
-
-Output must be intuitive and well-documented. Technical excellence means nothing if users cannot understand or use the result effectively.
-
-**Dimension 7: Accessibility**
-
-Deliverables must follow inclusive design principles. This applies to documentation, interfaces, and any user-facing components.
-
-**Quality Enforcement**
-
-Any dimension marked FAIL blocks progression unless the Director explicitly accepts the trade-off. Each assessment requires evidence or justification — unsupported "PASS" ratings are invalid.
-
-
-
-### Task Classification System
-
-Not every task requires full AIXORD ceremony. The framework recognizes that a simple typo fix shouldn't require the same governance as a platform migration.
-
-**TRIVIAL Tasks**
-
-Criteria: Less than 5 minutes, fully reversible, no dependencies.
-Required governance: Director approval only.
-Example: "Fix typo in README"
-
-**SIMPLE Tasks**
-
-Criteria: Less than 1 hour, single deliverable.
-Required governance: Deliverable definition plus steps.
-Example: "Add logout button"
-
-**STANDARD Tasks**
-
-Criteria: Multiple deliverables with dependencies.
-Required governance: Full AIXORD formula.
-Example: "Build authentication system"
-
-**COMPLEX Tasks**
-
-Criteria: Multi-session, high risk, significant dependencies.
-Required governance: Full formula plus risk assessment.
-Example: "Platform migration"
-
-The classification flow works as follows:
-1. AI proposes task class based on scope analysis
-2. Director confirms or overrides the classification
-3. Classification is recorded in STATE
-4. Governance scales accordingly
-
-This prevents the framework from becoming bureaucratic overhead while ensuring complex work receives appropriate structure.
-
-
-
-### Artifact Binding and Persistence
-
-One of the most critical concepts in AIXORD is artifact binding. This addresses a fundamental limitation of AI chat systems: they do not reliably persist files or remember generated content across sessions.
-
-**The Core Problem**
-
-When you ask an AI to create a document, that document exists only in the chat window. If you start a new session, the AI has no memory of what it created. If the platform loses the conversation, the document is gone.
-
-Worse, many AI systems will confidently act as if they remember files they generated previously. They will reference non-existent documents, claim to see folder structures that were never created, and proceed with work based on artifacts that no longer exist.
-
-**The Artifact Binding Solution**
-
-AIXORD requires explicit artifact binding. This means:
-
-1. When the AI generates any artifact intended for future use, it must instruct you to save it externally
-2. You must confirm the save before the AI considers the artifact "bound"
-3. On resume, all artifacts must be re-bound by providing confirmation they still exist
-4. The AI cannot act on unbound artifacts
-
-**Binding Methods**
-
-AIXORD accepts several confirmation methods:
-- VISUAL: Screenshot or file explorer image showing the saved file
-- TEXTUAL: Pasting the file contents or directory listing
-- HASH: Providing a cryptographic hash of the file
-- PLATFORM: Sharing a link (Google Drive, GitHub, Dropbox)
-- ATTESTATION: Simple statement that the file was saved (low assurance)
-
-**Why This Matters**
-
-Without artifact binding, AI conversations eventually collapse. The AI makes assumptions about what exists, acts on those assumptions, and produces work that conflicts with reality. Artifact binding prevents this failure mode by requiring explicit verification.
-
-
 ## Contact
 
 For support inquiries: support@pmerit.com
@@ -1533,7 +1481,28 @@ For license issues: https://pmerit.gumroad.com
 
 ---
 
-*AIXORD v4.2 — Authority. Formula. Conservation. Verification.*
-*Mistral Edition — Structured Governance for Efficient AI*
+## Operational Assets
 
-**© 2026 PMERIT LLC. All rights reserved.**
+Operational assets for this manuscript are available via Gumroad.
+
+Optional web interface: https://aixord-webapp-ui.pages.dev/login
+
+These tools are optional and assist with workflow continuity. They do not override AI platform behavior or enforce governance automatically.
+
+---
+
+## License Information
+
+This manuscript is educational material accompanying the AIXORD for Mistral product. The operational governance is contained in a separate AI-internal document.
+
+See LICENSE.md for complete licensing terms.
+
+See DISCLAIMER.md for important disclaimers and limitations.
+
+---
+
+*AIXORD — Because chaos is optional.*
+
+*Version 4.2 — Mistral Edition*
+
+*© PMERIT LLC*

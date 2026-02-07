@@ -1362,6 +1362,28 @@ Full terms available in your product package.
 
 ---
 
-*AIXORD for ChatGPT v4.2*
-*Formula & Engine Edition*
+## Operational Assets
+
+Operational assets for this manuscript are available via Gumroad.
+
+Optional web interface: https://aixord-webapp-ui.pages.dev/login
+
+These tools are optional and assist with workflow continuity. They do not override AI platform behavior or enforce governance automatically.
+
+---
+
+## License Information
+
+This manuscript is educational material accompanying the AIXORD for ChatGPT product. The operational governance is contained in a separate AI-internal document.
+
+See LICENSE.md for complete licensing terms.
+
+See DISCLAIMER.md for important disclaimers and limitations.
+
+---
+
+*AIXORD — Because chaos is optional.*
+
+*Version 4.2 — ChatGPT Edition*
+
 *© PMERIT LLC*

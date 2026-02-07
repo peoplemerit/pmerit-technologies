@@ -180,6 +180,44 @@ The AIXORD Perplexity variant includes adaptations designed specifically for Per
 
 ---
 
+## Retrieval Reality: Citations Are Not Governance
+
+Perplexity's retrieval-augmented design creates a unique challenge that AIXORD users must understand clearly.
+
+**Perplexity does not enforce AIXORD.**
+
+No AI model enforces external governance frameworks. But Perplexity's design amplifies this truth in a specific way: citations create an illusion of authority that can mask governance violations.
+
+Consider what retrieval-augmented output actually means:
+
+- **Citations increase confidence, not correctness.** A well-sourced answer can still violate scope, skip phases, or ignore approvals.
+- **Sources are not decisions.** Finding information is not the same as governing its use.
+- **Reference quality ≠ governance quality.** Even accurate citations can support ungoverned work.
+
+This creates a fundamental tension:
+
+| Perplexity Provides | AIXORD Requires |
+|--------------------|-----------------|
+| Sources | Authority |
+| Citations | Approvals |
+| Information | Discipline |
+| Research | Governance |
+
+**Citations increase confidence, not governance.**
+
+AIXORD exists to **separate research from execution**. The gates, checkpoints, and approval requirements ensure that well-sourced information still passes through proper governance before becoming action.
+
+When working with Perplexity under AIXORD governance:
+
+- Recognize that **sources do not confer authority**
+- Understand that **citations can mask governance violations**
+- Use AIXORD's structure to impose **decision discipline despite high-quality research**
+- Treat information retrieval as **input to governance, not a substitute for it**
+
+This is not a limitation of Perplexity — it is the reality of retrieval-augmented AI systems. AIXORD provides the discipline that citations cannot.
+
+---
+
 # Chapter 4: The Authority Model
 
 ## The Three Roles
@@ -1064,104 +1102,6 @@ AIXORD helps organize work. It doesn't replace professional judgment.
 
 # Chapter 17: Appendices
 
-
----
-
-## Additional AIXORD Concepts
-
-The following sections provide deeper coverage of key AIXORD concepts that apply across all AI platforms.
-
-
-### The Seven Quality Dimensions
-
-AIXORD includes a comprehensive quality assessment framework that evaluates every deliverable across seven dimensions. This framework ensures professional-grade output regardless of which AI assistant you use.
-
-**Dimension 1: Best Practices**
-
-Every deliverable must follow industry-standard approaches. This means using established patterns, following security guidelines, and applying proven methodologies. AI assistants are instructed to aggregate their knowledge and proactively apply best practices rather than waiting for you to specify them.
-
-**Dimension 2: Completeness**
-
-All requirements must be addressed. A deliverable cannot be marked complete if it only partially fulfills the specification. AIXORD forces explicit tracking of requirements against implementation.
-
-**Dimension 3: Accuracy**
-
-Information must be factually correct and verified. When certainty varies, AIXORD requires the AI to communicate confidence levels:
-- HIGH confidence: Multiple authoritative sources confirm
-- MEDIUM confidence: Single source or inference
-- LOW confidence: AI reasoning only
-- UNVERIFIED: Recommend external verification
-
-**Dimension 4: Sustainability**
-
-Deliverables must be maintainable long-term. This dimension evaluates whether the work can be understood, modified, and extended by others. Code without documentation, clever but obscure solutions, and tightly coupled components fail sustainability assessment.
-
-**Dimension 5: Reliability**
-
-Work must handle errors and edge cases gracefully. Systems that crash under unusual conditions, ignore error states, or assume perfect inputs fail reliability assessment.
-
-**Dimension 6: User-Friendliness**
-
-Output must be intuitive and well-documented. Technical excellence means nothing if users cannot understand or use the result effectively.
-
-**Dimension 7: Accessibility**
-
-Deliverables must follow inclusive design principles. This applies to documentation, interfaces, and any user-facing components.
-
-**Quality Enforcement**
-
-Any dimension marked FAIL blocks progression unless the Director explicitly accepts the trade-off. Each assessment requires evidence or justification — unsupported "PASS" ratings are invalid.
-
-
-
----
-
-## Additional AIXORD Concepts
-
-The following sections provide deeper coverage of key AIXORD concepts that apply across all AI platforms.
-
-
-### The Seven Quality Dimensions
-
-AIXORD includes a comprehensive quality assessment framework that evaluates every deliverable across seven dimensions. This framework ensures professional-grade output regardless of which AI assistant you use.
-
-**Dimension 1: Best Practices**
-
-Every deliverable must follow industry-standard approaches. This means using established patterns, following security guidelines, and applying proven methodologies. AI assistants are instructed to aggregate their knowledge and proactively apply best practices rather than waiting for you to specify them.
-
-**Dimension 2: Completeness**
-
-All requirements must be addressed. A deliverable cannot be marked complete if it only partially fulfills the specification. AIXORD forces explicit tracking of requirements against implementation.
-
-**Dimension 3: Accuracy**
-
-Information must be factually correct and verified. When certainty varies, AIXORD requires the AI to communicate confidence levels:
-- HIGH confidence: Multiple authoritative sources confirm
-- MEDIUM confidence: Single source or inference
-- LOW confidence: AI reasoning only
-- UNVERIFIED: Recommend external verification
-
-**Dimension 4: Sustainability**
-
-Deliverables must be maintainable long-term. This dimension evaluates whether the work can be understood, modified, and extended by others. Code without documentation, clever but obscure solutions, and tightly coupled components fail sustainability assessment.
-
-**Dimension 5: Reliability**
-
-Work must handle errors and edge cases gracefully. Systems that crash under unusual conditions, ignore error states, or assume perfect inputs fail reliability assessment.
-
-**Dimension 6: User-Friendliness**
-
-Output must be intuitive and well-documented. Technical excellence means nothing if users cannot understand or use the result effectively.
-
-**Dimension 7: Accessibility**
-
-Deliverables must follow inclusive design principles. This applies to documentation, interfaces, and any user-facing components.
-
-**Quality Enforcement**
-
-Any dimension marked FAIL blocks progression unless the Director explicitly accepts the trade-off. Each assessment requires evidence or justification — unsupported "PASS" ratings are invalid.
-
-
 ## Appendix A: Gumroad Product Information
 
 **Product**: AIXORD for Perplexity - Perplexity AI Governance
@@ -1523,11 +1463,28 @@ This is AIXORD: where chaos becomes optional and execution becomes reliable.
 
 ---
 
-*AIXORD v4.2 for Perplexity*
-*Authority. Formula. Conservation. Verification.*
+## Operational Assets
 
-*© 2026 PMERIT Technologies LLC. All rights reserved.*
+Operational assets for this manuscript are available via Gumroad.
+
+Optional web interface: https://aixord-webapp-ui.pages.dev/login
+
+These tools are optional and assist with workflow continuity. They do not override AI platform behavior or enforce governance automatically.
 
 ---
 
-**END OF MANUSCRIPT**
+## License Information
+
+This manuscript is educational material accompanying the AIXORD for Perplexity product. The operational governance is contained in a separate AI-internal document.
+
+See LICENSE.md for complete licensing terms.
+
+See DISCLAIMER.md for important disclaimers and limitations.
+
+---
+
+*AIXORD — Because chaos is optional.*
+
+*Version 4.2 — Perplexity Edition*
+
+*© PMERIT LLC*
