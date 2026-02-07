@@ -8,9 +8,10 @@ import type { Provider, Subscription, Env } from '../types';
 import { RouterError } from '../types';
 
 /**
- * BYOK tiers that require user-provided API keys
+ * BYOK tiers that REQUIRE user-provided API keys (no platform fallback).
+ * TRIAL is excluded — trial users can use BYOK or platform keys.
  */
-const BYOK_REQUIRED_TIERS = ['TRIAL', 'MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
+const BYOK_REQUIRED_TIERS = ['MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
 
 /**
  * Resolve the API key to use for a given provider

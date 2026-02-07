@@ -336,18 +336,20 @@ auth.get('/subscription', async (c) => {
   }>();
 
   if (!subscription) {
-    // No subscription found, return default TRIAL
+    // No subscription found, return default TRIAL with PLATFORM keys
+    // TRIAL users get platform-provided keys (dual-mode: BYOK optional)
     return c.json({
       tier: 'TRIAL',
       status: 'active',
-      keyMode: 'BYOK',
+      keyMode: 'PLATFORM',
       periodEnd: null,
       stripeCustomerId: null
     });
   }
 
   // Determine key mode based on tier
-  const byokTiers = ['TRIAL', 'MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
+  // TRIAL is excluded from BYOK-only tiers — trial users use platform keys by default
+  const byokTiers = ['MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
   const keyMode = byokTiers.includes(subscription.tier) ? 'BYOK' : 'PLATFORM';
 
   return c.json({

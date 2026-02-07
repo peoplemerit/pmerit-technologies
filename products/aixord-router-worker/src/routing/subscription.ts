@@ -18,7 +18,8 @@ export async function validateSubscription(
   const { user_id } = request.trace;
 
   // 1. Verify BYOK tiers have user key
-  const byokTiers: SubscriptionTier[] = ['TRIAL', 'MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
+  // TRIAL is excluded — trial users can use BYOK or platform keys (dual-mode)
+  const byokTiers: SubscriptionTier[] = ['MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
   if (byokTiers.includes(tier) && key_mode !== 'BYOK') {
     throw new RouterError(
       'BYOK_REQUIRED',

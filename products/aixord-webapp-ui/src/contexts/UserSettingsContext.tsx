@@ -76,7 +76,7 @@ interface UserSettingsContextType {
 const defaultSettings: UserSettings = {
   subscription: {
     tier: 'TRIAL',
-    keyMode: 'BYOK',
+    keyMode: 'PLATFORM',
     status: 'active',
   },
   apiKeys: {},

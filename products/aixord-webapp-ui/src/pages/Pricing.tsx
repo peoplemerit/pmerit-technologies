@@ -46,8 +46,8 @@ const PLANS: PlanInfo[] = [
     features: [
       '50 AI requests/month',
       '1 project',
-      'Bring Your Own Keys (BYOK)',
-      '7-day audit retention',
+      'Platform API keys included',
+      '14-day trial period',
       'Community support',
     ],
   },
