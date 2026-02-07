@@ -159,6 +159,16 @@ export function Project() {
   const [blueprintPanelOpen, setBlueprintPanelOpen] = useState(false);
   const [showWorkspaceWizard, setShowWorkspaceWizard] = useState(false);
   const [workspaceChecked, setWorkspaceChecked] = useState(false);
+  const [workspaceStatus, setWorkspaceStatus] = useState<{
+    bound: boolean;
+    folder_name?: string;
+    folder_template?: string;
+    permission_level?: string;
+    scaffold_generated?: boolean;
+    github_connected: boolean;
+    github_repo?: string | null;
+    confirmed: boolean;
+  } | null>(null);
 
   // ============================================================================
   // Data Fetching
@@ -368,24 +378,26 @@ export function Project() {
     api.router.models().then(data => setAvailableModels(data.classes)).catch(console.error);
   }, [fetchProject, fetchDecisions, fetchCCSStatus, fetchEvidence, fetchImages, fetchGithubRepos]);
 
-  // Auto-detect first-time workspace setup: show wizard if GA:ENV not passed
+  // Fetch workspace status for capsule enrichment + auto-detect wizard
   useEffect(() => {
     if (state && id && token && !workspaceChecked) {
       setWorkspaceChecked(true);
-      const envPassed = state.gates?.['GA:ENV'];
-      if (!envPassed) {
-        // Check if there's already a workspace binding server-side
-        api.workspace.getStatus(id, token)
-          .then(status => {
-            if (!status.confirmed) {
-              setShowWorkspaceWizard(true);
-            }
-          })
-          .catch(() => {
-            // No binding exists — show wizard for new projects
+      api.workspace.getStatus(id, token)
+        .then(status => {
+          setWorkspaceStatus(status);
+          // Show wizard if GA:ENV not passed and no confirmed binding
+          const envPassed = state.gates?.['GA:ENV'];
+          if (!envPassed && !status.confirmed) {
             setShowWorkspaceWizard(true);
-          });
-      }
+          }
+        })
+        .catch(() => {
+          setWorkspaceStatus({ bound: false, github_connected: false, confirmed: false });
+          const envPassed = state.gates?.['GA:ENV'];
+          if (!envPassed) {
+            setShowWorkspaceWizard(true);
+          }
+        });
     }
   }, [state, id, token, workspaceChecked]);
 
@@ -467,6 +479,9 @@ export function Project() {
       if (binding.binding_confirmed) {
         await toggleGate('GA:ENV', true);
       }
+      // Refresh workspace status for capsule enrichment
+      const updatedStatus = await api.workspace.getStatus(id, token);
+      setWorkspaceStatus(updatedStatus);
       setShowWorkspaceWizard(false);
     } catch (err) {
       console.error('Workspace setup failed:', err);
@@ -527,13 +542,13 @@ export function Project() {
   const handleEvidenceSync = useCallback(async () => {
     if (!id || !token) return;
     try {
-      await api.evidence.sync(id, token);
+      await api.evidence.sync(id, token, activeSession?.id);
       await fetchEvidence();
       await fetchImages();
     } catch (err) {
       console.error('Evidence sync failed:', err);
     }
-  }, [id, token, fetchEvidence, fetchImages]);
+  }, [id, token, activeSession, fetchEvidence, fetchImages]);
 
   const handleDeleteImage = useCallback(async (imageId: string) => {
     if (!id || !token) return;
@@ -685,7 +700,10 @@ export function Project() {
             number: s.session_number,
             type: s.session_type,
             edgeType: 'CONTINUES' as const,  // Simplified — Phase D+ will resolve actual edges
-            summary: s.summary || undefined,
+            summary: s.summary
+              ? (s.summary.length > 200 ? s.summary.slice(0, 200) + '…' : s.summary)
+              : `${s.session_type} session with ${s.message_count ?? 0} messages`,
+            messageCount: s.message_count ?? 0,
           })),
         total: sessions.length,
       } : undefined;
@@ -706,6 +724,15 @@ export function Project() {
           projectId: id,
         })) : undefined,
         sessionGraph,
+        workspace: workspaceStatus ? {
+          bound: workspaceStatus.bound,
+          folder_name: workspaceStatus.folder_name,
+          template: workspaceStatus.folder_template,
+          permission_level: workspaceStatus.permission_level,
+          scaffold_generated: workspaceStatus.scaffold_generated,
+          github_connected: workspaceStatus.github_connected || false,
+          github_repo: workspaceStatus.github_repo || undefined,
+        } : { bound: false },
       });
 
       // Create assistant message

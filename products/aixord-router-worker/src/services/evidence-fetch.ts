@@ -175,7 +175,8 @@ function calculateStaleAfter(evidenceType: EvidenceType): string {
 export async function syncProjectEvidence(
   projectId: string,
   db: D1Database,
-  encryptionKey: string
+  encryptionKey: string,
+  sessionId?: string
 ): Promise<EvidenceSyncResult> {
   const errors: string[] = [];
   const byType: Record<EvidenceType, number> = {
@@ -247,6 +248,7 @@ export async function syncProjectEvidence(
           author: commit.author?.login || commit.commit.author.name,
           evidence_timestamp: commit.commit.author.date,
           stale_after: calculateStaleAfter('COMMIT'),
+          session_id: sessionId,
           updated_at: now
         });
         byType['COMMIT']++;
@@ -269,6 +271,7 @@ export async function syncProjectEvidence(
           author: pr.user.login,
           evidence_timestamp: pr.merged_at || pr.created_at,
           stale_after: calculateStaleAfter('PR'),
+          session_id: sessionId,
           updated_at: now
         });
         byType['PR']++;
@@ -291,6 +294,7 @@ export async function syncProjectEvidence(
           author: release.author.login,
           evidence_timestamp: release.published_at,
           stale_after: calculateStaleAfter('RELEASE'),
+          session_id: sessionId,
           updated_at: now
         });
         byType['RELEASE']++;
@@ -316,6 +320,7 @@ export async function syncProjectEvidence(
           author: issue.user.login,
           evidence_timestamp: issue.created_at,
           stale_after: calculateStaleAfter('ISSUE'),
+          session_id: sessionId,
           updated_at: now
         });
         byType['ISSUE']++;
@@ -338,6 +343,7 @@ export async function syncProjectEvidence(
           author: milestone.creator.login,
           evidence_timestamp: milestone.created_at,
           stale_after: calculateStaleAfter('MILESTONE'),
+          session_id: sessionId,
           updated_at: now
         });
         byType['MILESTONE']++;
@@ -394,13 +400,14 @@ async function upsertEvidence(
     evidence_timestamp: string;
     stale_after: string;
     updated_at: string;
+    session_id?: string;
   }
 ): Promise<void> {
   await db.prepare(`
     INSERT INTO github_evidence (
       project_id, source, evidence_type, triad_category, ref_id, ref_url,
-      status, stale_after, title, author, evidence_timestamp, updated_at
-    ) VALUES (?, 'GITHUB', ?, ?, ?, ?, 'VERIFIED', ?, ?, ?, ?, ?)
+      status, stale_after, title, author, evidence_timestamp, session_id, updated_at
+    ) VALUES (?, 'GITHUB', ?, ?, ?, ?, 'VERIFIED', ?, ?, ?, ?, ?, ?)
     ON CONFLICT(project_id, source, evidence_type, ref_id) DO UPDATE SET
       title = excluded.title,
       author = excluded.author,
@@ -408,6 +415,7 @@ async function upsertEvidence(
       stale_after = excluded.stale_after,
       status = 'VERIFIED',
       verified_at = datetime('now'),
+      session_id = COALESCE(excluded.session_id, session_id),
       updated_at = excluded.updated_at
   `).bind(
     evidence.project_id,
@@ -419,6 +427,7 @@ async function upsertEvidence(
     evidence.title,
     evidence.author,
     evidence.evidence_timestamp,
+    evidence.session_id || null,
     evidence.updated_at
   ).run();
 }

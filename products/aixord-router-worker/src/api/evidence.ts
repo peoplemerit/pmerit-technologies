@@ -47,8 +47,17 @@ evidence.post('/sync/:projectId', async (c) => {
     // Get encryption key
     const encryptionKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY || 'default-key-change-in-production';
 
-    // Sync evidence
-    const result = await syncProjectEvidence(projectId, c.env.DB, encryptionKey);
+    // Accept optional session_id from request body
+    let sessionId: string | undefined;
+    try {
+      const body = await c.req.json<{ session_id?: string }>();
+      sessionId = body.session_id;
+    } catch {
+      // No body or invalid JSON — sessionId stays undefined
+    }
+
+    // Sync evidence with session attribution
+    const result = await syncProjectEvidence(projectId, c.env.DB, encryptionKey, sessionId);
 
     return c.json(result);
 

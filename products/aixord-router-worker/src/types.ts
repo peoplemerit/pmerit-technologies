@@ -128,6 +128,20 @@ export interface Capsule {
   constraints: string[];
   decisions: string[];
   open_questions: string[];
+  session_graph?: {
+    current: { number: number; type: string; messageCount: number };
+    lineage: Array<{ number: number; type: string; edgeType: string; summary?: string; messageCount?: number }>;
+    total: number;
+  };
+  workspace?: {
+    bound: boolean;
+    folder_name?: string;
+    template?: string;
+    permission_level?: string;
+    scaffold_generated?: boolean;
+    github_connected?: boolean;
+    github_repo?: string;
+  };
 }
 
 export interface ArtifactRef {

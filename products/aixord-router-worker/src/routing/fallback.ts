@@ -83,6 +83,32 @@ Current context:
 ${request.policy_flags.require_citations ? 'IMPORTANT: Provide citations for all claims.' : ''}
 ${request.policy_flags.strict_mode ? 'IMPORTANT: Strict mode enabled. Be precise and accurate.' : ''}`;
 
+  // Session graph context (v4.4)
+  if (request.capsule.session_graph) {
+    const sg = request.capsule.session_graph;
+    systemPrompt += `\n\nSession context:
+- Current session: #${sg.current.number} (${sg.current.type}, ${sg.current.messageCount} messages)
+- Total sessions: ${sg.total}`;
+    if (sg.lineage?.length) {
+      systemPrompt += `\n- Prior sessions: ${sg.lineage.map(l => `#${l.number} ${l.type} [${l.edgeType}]${l.summary ? ': ' + l.summary.slice(0, 100) : ''}`).join('; ')}`;
+    }
+  }
+
+  // Workspace binding context (v4.4 — Session 24)
+  if (request.capsule.workspace) {
+    const ws = request.capsule.workspace;
+    if (ws.bound) {
+      systemPrompt += `\n\nWorkspace:
+- Folder: ${ws.folder_name || 'linked'}
+- Template: ${ws.template || 'unknown'}
+- Permission: ${ws.permission_level || 'readwrite'}
+- Scaffold: ${ws.scaffold_generated ? 'generated' : 'not generated'}
+- GitHub: ${ws.github_connected ? (ws.github_repo || 'connected') : 'not connected'}`;
+    } else {
+      systemPrompt += `\n\nWorkspace: not bound (no local folder linked)`;
+    }
+  }
+
   // Path B: Add layered execution instructions during Execute phase
   if (request.capsule.phase === 'E' && request.delta.execution_layer) {
     systemPrompt += buildLayeredExecutionPrompt(request.delta.execution_layer);

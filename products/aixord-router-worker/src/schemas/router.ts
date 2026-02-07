@@ -4,7 +4,7 @@
  * Validates incoming requests and normalizes data.
  */
 
-import type { RouterRequest, Product, Intent, Mode, SubscriptionTier, KeyMode, RouterIntent } from '../types';
+import type { RouterRequest, Product, Intent, Mode, SubscriptionTier, KeyMode, RouterIntent, Capsule } from '../types';
 import { RouterError } from '../types';
 
 const VALID_PRODUCTS: Product[] = ['AIXORD_COPILOT', 'PMERIT_CHATBOT'];
@@ -165,7 +165,9 @@ export function validateRequest(body: unknown): RouterRequest {
       phase: capsule.phase as 'B' | 'P' | 'E' | 'R',
       constraints: Array.isArray(capsule.constraints) ? capsule.constraints : [],
       decisions: Array.isArray(capsule.decisions) ? capsule.decisions : [],
-      open_questions: Array.isArray(capsule.open_questions) ? capsule.open_questions : []
+      open_questions: Array.isArray(capsule.open_questions) ? capsule.open_questions : [],
+      ...(capsule.session_graph && typeof capsule.session_graph === 'object' ? { session_graph: capsule.session_graph as Capsule['session_graph'] } : {}),
+      ...(capsule.workspace && typeof capsule.workspace === 'object' ? { workspace: capsule.workspace as Capsule['workspace'] } : {}),
     },
     delta: {
       user_input: delta.user_input as string,

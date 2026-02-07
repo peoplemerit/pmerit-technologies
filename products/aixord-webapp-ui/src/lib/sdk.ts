@@ -108,8 +108,18 @@ export interface SendOptions {
   /** Session graph context (v4.4) */
   sessionGraph?: {
     current: { number: number; type: string; messageCount: number };
-    lineage: Array<{ number: number; type: string; edgeType: string; summary?: string }>;
+    lineage: Array<{ number: number; type: string; edgeType: string; summary?: string; messageCount?: number }>;
     total: number;
+  };
+  /** Workspace binding context (v4.4 — Session 24) */
+  workspace?: {
+    bound: boolean;
+    folder_name?: string;
+    template?: string;
+    permission_level?: string;
+    scaffold_generated?: boolean;
+    github_connected?: boolean;
+    github_repo?: string;
   };
 }
 
@@ -534,6 +544,7 @@ export class AIXORDSDKClient {
         decisions: options.decisions || [],
         open_questions: [],
         ...(options.sessionGraph && { session_graph: options.sessionGraph }),
+        ...(options.workspace && { workspace: options.workspace }),
       },
       delta: {
         user_input: options.imageRefs?.length

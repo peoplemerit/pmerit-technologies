@@ -891,6 +891,20 @@ export interface RouterRequest {
     constraints?: string[];
     decisions?: string[];
     open_questions?: string[];
+    session_graph?: {
+      current: { number: number; type: string; messageCount: number };
+      lineage: Array<{ number: number; type: string; edgeType: string; summary?: string }>;
+      total: number;
+    };
+    workspace?: {
+      bound: boolean;
+      folder_name?: string;
+      template?: string;
+      permission_level?: string;
+      scaffold_generated?: boolean;
+      github_connected?: boolean;
+      github_repo?: string;
+    };
   };
   delta: {
     user_input: string;
@@ -1284,7 +1298,7 @@ export const evidenceApi = {
   /**
    * Trigger evidence sync from GitHub
    */
-  async sync(projectId: string, token: string): Promise<{
+  async sync(projectId: string, token: string, sessionId?: string): Promise<{
     project_id: string;
     synced_at: string;
     total_fetched: number;
@@ -1299,7 +1313,10 @@ export const evidenceApi = {
       by_type: Record<string, number>;
       by_triad: Record<string, number>;
       errors: string[];
-    }>(`/evidence/sync/${projectId}`, { method: 'POST' }, token);
+    }>(`/evidence/sync/${projectId}`, {
+      method: 'POST',
+      ...(sessionId && { body: JSON.stringify({ session_id: sessionId }) }),
+    }, token);
   },
 
   /**
