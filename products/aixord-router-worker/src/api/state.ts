@@ -60,8 +60,8 @@ const PHASE_EXIT_REQUIREMENTS: Record<string, { gates: string[]; label: string }
     label: 'License, Disclaimer, and Tier gates required to exit Brainstorm',
   },
   'PLAN': {
-    gates: ['GA:ENV', 'GA:FLD'],
-    label: 'Environment and Folder gates required to exit Plan',
+    gates: ['GA:ENV', 'GA:FLD', 'GA:BP', 'GA:IVL'],
+    label: 'Environment, Folder, Blueprint, and Integrity Validation gates required to exit Plan',
   },
   'EXECUTE': {
     gates: ['GW:PRE', 'GW:VAL', 'GW:VER'],
@@ -313,6 +313,65 @@ state.put('/:projectId/gates/:gateId', async (c) => {
 
   if (typeof enabled !== 'boolean') {
     return c.json({ error: 'enabled must be a boolean' }, 400);
+  }
+
+  // Gate auto-check: GA:ENV requires confirmed workspace binding
+  if (gateId === 'GA:ENV' && enabled) {
+    const binding = await c.env.DB.prepare(
+      'SELECT binding_confirmed FROM workspace_bindings WHERE project_id = ?'
+    ).bind(projectId).first<{ binding_confirmed: number }>();
+
+    if (!binding || !binding.binding_confirmed) {
+      return c.json({ error: 'GA:ENV requires completing Workspace Setup (bind project folder and confirm)', gate: 'GA:ENV' }, 403);
+    }
+  }
+
+  // Gate auto-check: GA:FLD requires linked folder in workspace binding
+  if (gateId === 'GA:FLD' && enabled) {
+    const binding = await c.env.DB.prepare(
+      'SELECT folder_name FROM workspace_bindings WHERE project_id = ?'
+    ).bind(projectId).first<{ folder_name: string | null }>();
+
+    if (!binding || !binding.folder_name) {
+      return c.json({ error: 'GA:FLD requires linking a project folder via Workspace Setup', gate: 'GA:FLD' }, 403);
+    }
+  }
+
+  // Gate auto-check: GA:BP requires blueprint structure to exist
+  if (gateId === 'GA:BP' && enabled) {
+    const scopeCount = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM blueprint_scopes WHERE project_id = ?'
+    ).bind(projectId).first<{ count: number }>();
+    const deliverableCount = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM blueprint_deliverables WHERE project_id = ?'
+    ).bind(projectId).first<{ count: number }>();
+    const missingDoD = await c.env.DB.prepare(
+      "SELECT COUNT(*) as count FROM blueprint_deliverables WHERE project_id = ? AND (dod_evidence_spec IS NULL OR dod_evidence_spec = '' OR dod_verification_method IS NULL OR dod_verification_method = '')"
+    ).bind(projectId).first<{ count: number }>();
+
+    if (!scopeCount?.count || scopeCount.count === 0) {
+      return c.json({ error: 'GA:BP requires at least one blueprint scope', gate: 'GA:BP' }, 403);
+    }
+    if (!deliverableCount?.count || deliverableCount.count === 0) {
+      return c.json({ error: 'GA:BP requires at least one deliverable with Definition of Done', gate: 'GA:BP' }, 403);
+    }
+    if (missingDoD?.count && missingDoD.count > 0) {
+      return c.json({ error: `GA:BP blocked: ${missingDoD.count} deliverable(s) missing Definition of Done`, gate: 'GA:BP' }, 403);
+    }
+  }
+
+  // Gate auto-check: GA:IVL requires passing integrity report
+  if (gateId === 'GA:IVL' && enabled) {
+    const latestReport = await c.env.DB.prepare(
+      'SELECT all_passed FROM blueprint_integrity_reports WHERE project_id = ? ORDER BY run_at DESC LIMIT 1'
+    ).bind(projectId).first<{ all_passed: number }>();
+
+    if (!latestReport) {
+      return c.json({ error: 'GA:IVL requires running Integrity Validation first', gate: 'GA:IVL' }, 403);
+    }
+    if (!latestReport.all_passed) {
+      return c.json({ error: 'GA:IVL blocked: latest Integrity Validation did not pass all 5 checks', gate: 'GA:IVL' }, 403);
+    }
   }
 
   // Get current gates

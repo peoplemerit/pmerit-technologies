@@ -1066,3 +1066,94 @@ export interface EngineeringCompliance {
   fitness_status: Array<{ status: string; count: number }>;
   summary: string;
 }
+
+// ============================================================================
+// Blueprint Governance Types — AIXORD v4.5 (L-BPX, L-IVL)
+// ============================================================================
+
+export interface BlueprintScope {
+  id: string;
+  project_id: string;
+  parent_scope_id: string | null;
+  tier: 1 | 2;
+  name: string;
+  purpose: string | null;
+  boundary: string | null;
+  assumptions: string; // JSON array
+  assumption_status: 'OPEN' | 'CONFIRMED' | 'UNKNOWN';
+  inputs: string | null;
+  outputs: string | null;
+  status: 'DRAFT' | 'ACTIVE' | 'COMPLETE' | 'CANCELLED';
+  sort_order: number;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BlueprintDeliverable {
+  id: string;
+  project_id: string;
+  scope_id: string;
+  name: string;
+  description: string | null;
+  upstream_deps: string; // JSON array of deliverable IDs
+  downstream_deps: string; // JSON array of deliverable IDs
+  dependency_type: 'hard' | 'soft';
+  dod_evidence_spec: string | null;
+  dod_verification_method: string | null;
+  dod_quality_bar: string | null;
+  dod_failure_modes: string | null;
+  status: 'DRAFT' | 'READY' | 'IN_PROGRESS' | 'DONE' | 'VERIFIED' | 'LOCKED' | 'BLOCKED' | 'CANCELLED';
+  sort_order: number;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IntegrityCheck {
+  passed: boolean;
+  detail: string;
+}
+
+export interface IntegrityReport {
+  id: string;
+  project_id: string;
+  all_passed: boolean;
+  checks: {
+    formula: IntegrityCheck;
+    structural: IntegrityCheck;
+    dag: IntegrityCheck;
+    deliverable: IntegrityCheck;
+    assumption: IntegrityCheck;
+  };
+  totals: {
+    scopes: number;
+    subscopes: number;
+    deliverables: number;
+  };
+  run_by: string;
+  run_at: string;
+}
+
+export interface BlueprintSummary {
+  scopes: number;
+  subscopes: number;
+  deliverables: number;
+  deliverables_with_dod: number;
+  integrity: { passed: boolean; run_at: string } | null;
+}
+
+export interface DAGNode {
+  id: string;
+  name: string;
+  scope_id: string;
+  status: string;
+}
+
+export interface DAGEdge {
+  from: string;
+  to: string;
+  type: string;
+}

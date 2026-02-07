@@ -11,7 +11,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 interface Tab {
-  id: 'governance' | 'security' | 'evidence' | 'engineering' | 'info';
+  id: 'governance' | 'blueprint' | 'security' | 'evidence' | 'engineering' | 'info';
   label: string;
 }
 
@@ -28,6 +28,7 @@ interface TabBarProps {
 
 const tabs: Tab[] = [
   { id: 'governance', label: 'Governance' },
+  { id: 'blueprint', label: 'Blueprint' },
   { id: 'security', label: 'Security' },
   { id: 'evidence', label: 'Evidence' },
   { id: 'engineering', label: 'Engineering' },

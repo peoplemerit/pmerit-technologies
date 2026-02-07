@@ -12,6 +12,7 @@ interface GovernanceRibbonProps {
   onToggleGate?: (gateId: string) => void;
   isLoading?: boolean;
   phaseError?: string | null;
+  onOpenWorkspaceSetup?: () => void;
 }
 
 const phases = [
@@ -24,7 +25,7 @@ const phases = [
 // Phase exit gate requirements (mirrors backend logic)
 const PHASE_EXIT_REQUIREMENTS: Record<string, string[]> = {
   'BRAINSTORM': ['GA:LIC', 'GA:DIS', 'GA:TIR'],
-  'PLAN': ['GA:ENV', 'GA:FLD'],
+  'PLAN': ['GA:ENV', 'GA:FLD', 'GA:BP', 'GA:IVL'],
   'EXECUTE': ['GW:PRE', 'GW:VAL', 'GW:VER'],
 };
 
@@ -52,6 +53,7 @@ const setupGates = [
   { id: 'GA:CIT', label: 'CIT', title: 'Citations' },
   { id: 'GA:CON', label: 'CON', title: 'Constraints' },
   { id: 'GA:BP', label: 'BP', title: 'Blueprint' },
+  { id: 'GA:IVL', label: 'IVL', title: 'Integrity Validation' },
   { id: 'GA:PS', label: 'PS', title: 'Phase Start' },
   { id: 'GP', label: 'GP', title: 'General Purpose' },
 ];
@@ -67,6 +69,9 @@ const workGates = [
   { id: 'GW:ARC', label: 'ARC', title: 'Archive' },
 ];
 
+// Gates that open workspace wizard instead of toggling directly
+const WORKSPACE_GATES = new Set(['GA:ENV', 'GA:FLD']);
+
 export function GovernanceRibbon({
   currentPhase,
   onSetPhase,
@@ -74,6 +79,7 @@ export function GovernanceRibbon({
   onToggleGate,
   isLoading = false,
   phaseError,
+  onOpenWorkspaceSetup,
 }: GovernanceRibbonProps) {
   const currentPhaseIndex = phases.findIndex(
     (p) => p.id === currentPhase || p.short === currentPhase
@@ -156,19 +162,30 @@ export function GovernanceRibbon({
           <span className="text-gray-500 text-xs w-20 shrink-0">Setup Gates:</span>
           {setupGates.map((gate) => {
             const isPassed = gates[gate.id];
+            const isWorkspaceGate = WORKSPACE_GATES.has(gate.id);
+            const handleClick = () => {
+              // If it's a workspace gate and not yet passed, open the wizard
+              if (isWorkspaceGate && !isPassed && onOpenWorkspaceSetup) {
+                onOpenWorkspaceSetup();
+              } else if (onToggleGate) {
+                onToggleGate(gate.id);
+              }
+            };
             return (
               <button
                 key={gate.id}
-                onClick={() => onToggleGate && onToggleGate(gate.id)}
-                disabled={isLoading || !onToggleGate}
-                title={gate.title}
+                onClick={handleClick}
+                disabled={isLoading || (!onToggleGate && !onOpenWorkspaceSetup)}
+                title={isWorkspaceGate && !isPassed ? `${gate.title} — Click to configure workspace` : gate.title}
                 className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
                   isPassed
                     ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                    : isWorkspaceGate
+                    ? 'bg-violet-500/10 text-violet-400 border border-violet-500/30 hover:bg-violet-500/20'
                     : 'bg-gray-700/50 text-gray-400 border border-gray-600/50 hover:border-gray-500'
                 }`}
               >
-                {isPassed ? '✓' : '○'} {gate.label}
+                {isPassed ? '✓' : isWorkspaceGate ? '⚙' : '○'} {gate.label}
               </button>
             );
           })}

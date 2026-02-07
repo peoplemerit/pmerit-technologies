@@ -48,6 +48,8 @@ import images from './api/images';
 import sessions from './api/sessions';
 import layers from './api/layers';
 import engineering from './api/engineering';
+import blueprint from './api/blueprint';
+import workspace from './api/workspace';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -624,5 +626,11 @@ app.route('/api/v1', layers);
 
 // Engineering Governance routes (AIXORD v4.5 — Part XIV)
 app.route('/api/v1/projects', engineering);
+
+// Blueprint Governance routes (AIXORD v4.5 — L-BPX, L-IVL)
+app.route('/api/v1/projects', blueprint);
+
+// Workspace Binding routes (Unified GA:ENV + GA:FLD)
+app.route('/api/v1/projects', workspace);
 
 export default app;

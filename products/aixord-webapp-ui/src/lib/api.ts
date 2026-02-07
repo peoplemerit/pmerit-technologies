@@ -3368,6 +3368,215 @@ export const engineeringApi = {
 };
 
 // ============================================================================
+// Blueprint Governance Types — AIXORD v4.5 (L-BPX, L-IVL)
+// ============================================================================
+
+export interface BlueprintScope {
+  id: string;
+  project_id: string;
+  parent_scope_id: string | null;
+  tier: 1 | 2;
+  name: string;
+  purpose: string | null;
+  boundary: string | null;
+  assumptions: string;
+  assumption_status: 'OPEN' | 'CONFIRMED' | 'UNKNOWN';
+  inputs: string | null;
+  outputs: string | null;
+  status: 'DRAFT' | 'ACTIVE' | 'COMPLETE' | 'CANCELLED';
+  sort_order: number;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  children?: BlueprintScope[];
+  deliverables?: BlueprintDeliverable[];
+}
+
+export interface BlueprintDeliverable {
+  id: string;
+  project_id: string;
+  scope_id: string;
+  name: string;
+  description: string | null;
+  upstream_deps: string;
+  downstream_deps: string;
+  dependency_type: 'hard' | 'soft';
+  dod_evidence_spec: string | null;
+  dod_verification_method: string | null;
+  dod_quality_bar: string | null;
+  dod_failure_modes: string | null;
+  status: 'DRAFT' | 'READY' | 'IN_PROGRESS' | 'DONE' | 'VERIFIED' | 'LOCKED' | 'BLOCKED' | 'CANCELLED';
+  sort_order: number;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IntegrityCheck {
+  passed: boolean;
+  detail: string;
+}
+
+export interface IntegrityReport {
+  id: string;
+  project_id: string;
+  all_passed: boolean;
+  checks: {
+    formula: IntegrityCheck;
+    structural: IntegrityCheck;
+    dag: IntegrityCheck;
+    deliverable: IntegrityCheck;
+    assumption: IntegrityCheck;
+  };
+  totals: { scopes: number; subscopes: number; deliverables: number };
+  run_by: string;
+  run_at: string;
+}
+
+export interface BlueprintSummary {
+  scopes: number;
+  subscopes: number;
+  deliverables: number;
+  deliverables_with_dod: number;
+  integrity: { passed: boolean; run_at: string } | null;
+}
+
+export interface DAGNode {
+  id: string;
+  name: string;
+  scope_id: string;
+  status: string;
+}
+
+export interface DAGEdge {
+  from: string;
+  to: string;
+  type: string;
+}
+
+export const blueprintApi = {
+  // --- Scopes ---
+  async listScopes(projectId: string, token: string): Promise<BlueprintScope[]> {
+    const result = await request<{ scopes: BlueprintScope[] }>(`/projects/${projectId}/blueprint/scopes`, {}, token);
+    return result.scopes;
+  },
+  async getScope(projectId: string, scopeId: string, token: string): Promise<BlueprintScope> {
+    return request<BlueprintScope>(`/projects/${projectId}/blueprint/scopes/${scopeId}`, {}, token);
+  },
+  async createScope(projectId: string, data: { name: string; parent_scope_id?: string; purpose?: string; boundary?: string; assumptions?: string[]; assumption_status?: string; inputs?: string; outputs?: string; notes?: string }, token: string): Promise<BlueprintScope> {
+    return request<BlueprintScope>(`/projects/${projectId}/blueprint/scopes`, { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+  async updateScope(projectId: string, scopeId: string, data: Partial<{ name: string; purpose: string; boundary: string; assumptions: string[]; assumption_status: string; inputs: string; outputs: string; status: string; sort_order: number; notes: string }>, token: string): Promise<{ id: string; updated_at: string }> {
+    return request<{ id: string; updated_at: string }>(`/projects/${projectId}/blueprint/scopes/${scopeId}`, { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+  async deleteScope(projectId: string, scopeId: string, token: string): Promise<{ deleted: boolean }> {
+    return request<{ deleted: boolean }>(`/projects/${projectId}/blueprint/scopes/${scopeId}`, { method: 'DELETE' }, token);
+  },
+
+  // --- Deliverables ---
+  async listDeliverables(projectId: string, token: string, scopeId?: string): Promise<BlueprintDeliverable[]> {
+    const query = scopeId ? `?scope_id=${scopeId}` : '';
+    const result = await request<{ deliverables: BlueprintDeliverable[] }>(`/projects/${projectId}/blueprint/deliverables${query}`, {}, token);
+    return result.deliverables;
+  },
+  async getDeliverable(projectId: string, deliverableId: string, token: string): Promise<BlueprintDeliverable> {
+    return request<BlueprintDeliverable>(`/projects/${projectId}/blueprint/deliverables/${deliverableId}`, {}, token);
+  },
+  async createDeliverable(projectId: string, data: { scope_id: string; name: string; description?: string; upstream_deps?: string[]; downstream_deps?: string[]; dependency_type?: string; dod_evidence_spec?: string; dod_verification_method?: string; dod_quality_bar?: string; dod_failure_modes?: string; notes?: string }, token: string): Promise<BlueprintDeliverable> {
+    return request<BlueprintDeliverable>(`/projects/${projectId}/blueprint/deliverables`, { method: 'POST', body: JSON.stringify(data) }, token);
+  },
+  async updateDeliverable(projectId: string, deliverableId: string, data: Partial<{ name: string; description: string; scope_id: string; upstream_deps: string[]; downstream_deps: string[]; dependency_type: string; dod_evidence_spec: string; dod_verification_method: string; dod_quality_bar: string; dod_failure_modes: string; status: string; sort_order: number; notes: string }>, token: string): Promise<{ id: string; updated_at: string }> {
+    return request<{ id: string; updated_at: string }>(`/projects/${projectId}/blueprint/deliverables/${deliverableId}`, { method: 'PUT', body: JSON.stringify(data) }, token);
+  },
+  async deleteDeliverable(projectId: string, deliverableId: string, token: string): Promise<{ deleted: boolean }> {
+    return request<{ deleted: boolean }>(`/projects/${projectId}/blueprint/deliverables/${deliverableId}`, { method: 'DELETE' }, token);
+  },
+
+  // --- Integrity Validation ---
+  async runValidation(projectId: string, token: string): Promise<IntegrityReport> {
+    return request<IntegrityReport>(`/projects/${projectId}/blueprint/validate`, { method: 'POST' }, token);
+  },
+  async getIntegrity(projectId: string, token: string): Promise<IntegrityReport | null> {
+    const result = await request<{ report: IntegrityReport | null }>(`/projects/${projectId}/blueprint/integrity`, {}, token);
+    return result.report;
+  },
+
+  // --- DAG ---
+  async getDAG(projectId: string, token: string): Promise<{ nodes: DAGNode[]; edges: DAGEdge[]; total_nodes: number; total_edges: number }> {
+    return request<{ nodes: DAGNode[]; edges: DAGEdge[]; total_nodes: number; total_edges: number }>(`/projects/${projectId}/blueprint/dag`, {}, token);
+  },
+
+  // --- Summary ---
+  async getSummary(projectId: string, token: string): Promise<BlueprintSummary> {
+    return request<BlueprintSummary>(`/projects/${projectId}/blueprint/summary`, {}, token);
+  },
+};
+
+// ============================================================================
+// Workspace Binding Types & API (Unified GA:ENV + GA:FLD)
+// ============================================================================
+
+export interface WorkspaceBinding {
+  id: string;
+  project_id: string;
+  folder_name: string | null;
+  folder_template: string | null;
+  permission_level: string;
+  scaffold_generated: number;
+  github_connected: number;
+  github_repo: string | null;
+  binding_confirmed: number;
+  bound_at: string | null;
+  updated_at: string;
+}
+
+export interface WorkspaceStatus {
+  bound: boolean;
+  folder_linked: boolean;
+  folder_name?: string;
+  folder_template?: string;
+  permission_level?: string;
+  scaffold_generated?: boolean;
+  github_connected: boolean;
+  github_repo?: string | null;
+  confirmed: boolean;
+}
+
+export const workspaceApi = {
+  async getBinding(projectId: string, token: string): Promise<WorkspaceBinding | null> {
+    const result = await request<{ binding: WorkspaceBinding | null }>(`/projects/${projectId}/workspace`, {}, token);
+    return result.binding;
+  },
+
+  async updateBinding(projectId: string, data: {
+    folder_name?: string;
+    folder_template?: string;
+    permission_level?: string;
+    scaffold_generated?: boolean;
+    github_connected?: boolean;
+    github_repo?: string;
+    binding_confirmed?: boolean;
+  }, token: string): Promise<{ success: boolean; updated_at: string }> {
+    return request<{ success: boolean; updated_at: string }>(`/projects/${projectId}/workspace`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }, token);
+  },
+
+  async deleteBinding(projectId: string, token: string): Promise<{ success: boolean }> {
+    return request<{ success: boolean }>(`/projects/${projectId}/workspace`, {
+      method: 'DELETE',
+    }, token);
+  },
+
+  async getStatus(projectId: string, token: string): Promise<WorkspaceStatus> {
+    return request<WorkspaceStatus>(`/projects/${projectId}/workspace/status`, {}, token);
+  },
+};
+
+// ============================================================================
 // Combined API object
 // ============================================================================
 
@@ -3389,6 +3598,8 @@ export const api = {
   layers: layersApi,
   sessions: sessionsApi,
   engineering: engineeringApi,
+  blueprint: blueprintApi,
+  workspace: workspaceApi,
 };
 
 export default api;

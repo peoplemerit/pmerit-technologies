@@ -36,8 +36,12 @@ import { EvidenceRibbon } from '../components/ribbon/EvidenceRibbon';
 import { EngineeringRibbon } from '../components/ribbon/EngineeringRibbon';
 import { SecurityRibbon } from '../components/ribbon/SecurityRibbon';
 import { EngineeringPanel, type EngineeringSection } from '../components/EngineeringPanel';
+import { BlueprintPanel } from '../components/BlueprintPanel';
+import BlueprintRibbon from '../components/ribbon/BlueprintRibbon';
 import { useEngineering } from '../hooks/useEngineering';
+import { useBlueprint } from '../hooks/useBlueprint';
 import { NewSessionModal } from '../components/session/NewSessionModal';
+import { WorkspaceSetupWizard, type WorkspaceBindingData } from '../components/WorkspaceSetupWizard';
 import type { Message, Conversation } from '../components/chat/types';
 
 // ============================================================================
@@ -146,6 +150,15 @@ export function Project() {
   });
   const [engineeringPanelOpen, setEngineeringPanelOpen] = useState(false);
   const [engineeringPanelSection, setEngineeringPanelSection] = useState<EngineeringSection>('sar');
+
+  // Blueprint governance (L-BPX, L-IVL)
+  const blueprint = useBlueprint({
+    projectId: id || null,
+    token: token || null,
+  });
+  const [blueprintPanelOpen, setBlueprintPanelOpen] = useState(false);
+  const [showWorkspaceWizard, setShowWorkspaceWizard] = useState(false);
+  const [workspaceChecked, setWorkspaceChecked] = useState(false);
 
   // ============================================================================
   // Data Fetching
@@ -355,6 +368,27 @@ export function Project() {
     api.router.models().then(data => setAvailableModels(data.classes)).catch(console.error);
   }, [fetchProject, fetchDecisions, fetchCCSStatus, fetchEvidence, fetchImages, fetchGithubRepos]);
 
+  // Auto-detect first-time workspace setup: show wizard if GA:ENV not passed
+  useEffect(() => {
+    if (state && id && token && !workspaceChecked) {
+      setWorkspaceChecked(true);
+      const envPassed = state.gates?.['GA:ENV'];
+      if (!envPassed) {
+        // Check if there's already a workspace binding server-side
+        api.workspace.getStatus(id, token)
+          .then(status => {
+            if (!status.confirmed) {
+              setShowWorkspaceWizard(true);
+            }
+          })
+          .catch(() => {
+            // No binding exists — show wizard for new projects
+            setShowWorkspaceWizard(true);
+          });
+      }
+    }
+  }, [state, id, token, workspaceChecked]);
+
   // Cleanup blob URLs for evidence images on unmount
   useEffect(() => {
     return () => {
@@ -368,6 +402,16 @@ export function Project() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation?.messages]);
+
+  // Load blueprint data when tab is activated
+  useEffect(() => {
+    if (activeTab === 'blueprint' && id && token) {
+      blueprint.loadScopes();
+      blueprint.loadDeliverables();
+      blueprint.loadSummary();
+      blueprint.loadIntegrity();
+    }
+  }, [activeTab]);
 
   // ============================================================================
   // Handlers
@@ -402,6 +446,34 @@ export function Project() {
       }
     }
   };
+
+  const handleWorkspaceComplete = useCallback(async (binding: WorkspaceBindingData) => {
+    if (!id || !token) return;
+    try {
+      // Save binding to backend (convert null to undefined for API compatibility)
+      await api.workspace.updateBinding(id, {
+        folder_name: binding.folder_name ?? undefined,
+        folder_template: binding.folder_template ?? undefined,
+        permission_level: binding.permission_level,
+        scaffold_generated: binding.scaffold_generated,
+        github_connected: binding.github_connected,
+        github_repo: binding.github_repo ?? undefined,
+        binding_confirmed: binding.binding_confirmed,
+      }, token);
+      // Toggle GA:ENV and GA:FLD gates
+      if (binding.folder_name) {
+        await toggleGate('GA:FLD', true);
+      }
+      if (binding.binding_confirmed) {
+        await toggleGate('GA:ENV', true);
+      }
+      setShowWorkspaceWizard(false);
+    } catch (err) {
+      console.error('Workspace setup failed:', err);
+      // Still close wizard — binding was saved even if gate toggle failed
+      setShowWorkspaceWizard(false);
+    }
+  }, [id, token, toggleGate]);
 
   const handleGitHubConnect = useCallback(async () => {
     if (!id || !token) return;
@@ -810,6 +882,7 @@ export function Project() {
             onToggleGate={handleToggleGate}
             isLoading={isLoading}
             phaseError={phaseError}
+            onOpenWorkspaceSetup={() => setShowWorkspaceWizard(true)}
           />
         )}
         {activeTab === 'security' && id && token && (
@@ -834,6 +907,26 @@ export function Project() {
             recentEvidence={recentEvidence}
             onDeleteImage={handleDeleteImage}
             isLoading={isLoading}
+          />
+        )}
+        {activeTab === 'blueprint' && (
+          <BlueprintRibbon
+            summary={blueprint.summary}
+            scopes={blueprint.scopes}
+            deliverables={blueprint.deliverables}
+            integrityReport={blueprint.integrityReport}
+            isLoading={blueprint.isLoading}
+            onOpenPanel={() => setBlueprintPanelOpen(true)}
+            onRunValidation={async () => {
+              await blueprint.runValidation();
+              await blueprint.loadSummary();
+            }}
+            onDeleteScope={async (scopeId) => {
+              await blueprint.deleteScope(scopeId);
+            }}
+            onDeleteDeliverable={async (deliverableId) => {
+              await blueprint.deleteDeliverable(deliverableId);
+            }}
           />
         )}
         {activeTab === 'engineering' && (
@@ -1045,6 +1138,34 @@ export function Project() {
           initialSection={engineeringPanelSection}
           onClose={() => setEngineeringPanelOpen(false)}
           onUpdate={() => engineering.loadCompliance()}
+        />
+      )}
+
+      {/* Blueprint Governance Panel (L-BPX, L-IVL) */}
+      {blueprintPanelOpen && id && token && (
+        <BlueprintPanel
+          projectId={id}
+          token={token}
+          onClose={() => setBlueprintPanelOpen(false)}
+          onUpdate={async () => {
+            await blueprint.loadScopes();
+            await blueprint.loadDeliverables();
+            await blueprint.loadSummary();
+          }}
+        />
+      )}
+
+      {/* Workspace Setup Wizard (Unified GA:ENV + GA:FLD) */}
+      {showWorkspaceWizard && id && token && (
+        <WorkspaceSetupWizard
+          projectId={id}
+          onComplete={handleWorkspaceComplete}
+          onSkip={() => setShowWorkspaceWizard(false)}
+          githubConnection={githubConnection}
+          onGitHubConnect={handleGitHubConnect}
+          onGitHubDisconnect={handleGitHubDisconnect}
+          onGitHubSelectRepo={handleGitHubSelectRepo}
+          githubRepos={githubRepos}
         />
       )}
 
