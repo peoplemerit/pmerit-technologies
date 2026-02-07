@@ -18,7 +18,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserSettings } from '../contexts/UserSettingsContext';
 import { useProjectState } from '../hooks/useApi';
-import { api, phaseToShort, type Project as ProjectType, type Decision, type CCSGateStatus, type SessionType, type EdgeType } from '../lib/api';
+import { api, APIError, phaseToShort, type Project as ProjectType, type Decision, type CCSGateStatus, type SessionType, type EdgeType } from '../lib/api';
 import { useAIXORDSDK, GateBlockedError, AIExposureBlockedError } from '../lib/sdk';
 import { useSessions } from '../hooks/useSessions';
 import { MessageBubble } from '../components/chat/MessageBubble';
@@ -26,6 +26,7 @@ import { ImageUpload, type PendingImage } from '../components/chat/ImageUpload';
 import { formatAttachmentsForContext, type AttachedFile } from '../components/FileAttachment';
 import { CCSIncidentBanner } from '../components/CCSIncidentBanner';
 import { CCSIncidentPanel } from '../components/CCSIncidentPanel';
+import { CCSCreateIncidentModal } from '../components/CCSCreateIncidentModal';
 import { TabBar } from '../components/layout/TabBar';
 import { Ribbon } from '../components/layout/Ribbon';
 import { StatusBar } from '../components/layout/StatusBar';
@@ -33,6 +34,7 @@ import { GovernanceRibbon } from '../components/ribbon/GovernanceRibbon';
 import { InfoRibbon } from '../components/ribbon/InfoRibbon';
 import { EvidenceRibbon } from '../components/ribbon/EvidenceRibbon';
 import { EngineeringRibbon } from '../components/ribbon/EngineeringRibbon';
+import { SecurityRibbon } from '../components/ribbon/SecurityRibbon';
 import { EngineeringPanel, type EngineeringSection } from '../components/EngineeringPanel';
 import { useEngineering } from '../hooks/useEngineering';
 import { NewSessionModal } from '../components/session/NewSessionModal';
@@ -88,11 +90,16 @@ export function Project() {
 
   // Evidence state
   const [githubConnection, setGithubConnection] = useState<any>(null);
-  const [recentEvidence] = useState<any[]>([]);
+  const [recentEvidence, setRecentEvidence] = useState<Array<{ id: string; url: string; filename: string; evidenceType: string }>>([]);
+  const [githubRepos, setGithubRepos] = useState<Array<{ owner: string; name: string; full_name: string; private: boolean }>>([]);
 
   // CCS state
   const [ccsStatus, setCcsStatus] = useState<CCSGateStatus | null>(null);
   const [showCCSPanel, setShowCCSPanel] = useState(false);
+  const [showCCSCreate, setShowCCSCreate] = useState(false);
+
+  // Phase transition error (Tier 1 enforcement)
+  const [phaseError, setPhaseError] = useState<string | null>(null);
 
   // Governance state from hook
   const {
@@ -128,6 +135,9 @@ export function Project() {
     token: token || null,
     userId: user?.id || null,
   });
+
+  // D10-D11: Session metrics from backend
+  const [sessionMetrics, setSessionMetrics] = useState<import('../lib/api').SessionMetrics | null>(null);
 
   // Engineering governance (Part XIV)
   const engineering = useEngineering({
@@ -179,6 +189,72 @@ export function Project() {
       }
     } catch {
       // Evidence fetch is non-critical
+    }
+  }, [id, token]);
+
+  const fetchImages = useCallback(async () => {
+    if (!id || !token) return;
+    try {
+      // Fetch both user-uploaded images and GitHub evidence
+      const [images, evidence] = await Promise.allSettled([
+        api.images.list(id, token),
+        api.evidence.list(id, token),
+      ]);
+
+      const evidenceItems: typeof recentEvidence = [];
+
+      if (images.status === 'fulfilled') {
+        const imgList = (images.value as any).images || [];
+        // Fetch each image as blob with auth header to create displayable URLs
+        const blobResults = await Promise.allSettled(
+          imgList.map(async (img: any) => {
+            const res = await fetch(api.images.getUrl(id, img.id), {
+              headers: { 'Authorization': `Bearer ${token}` },
+            });
+            if (!res.ok) return null;
+            const blob = await res.blob();
+            return { img, blobUrl: URL.createObjectURL(blob) };
+          })
+        );
+        for (const result of blobResults) {
+          if (result.status === 'fulfilled' && result.value) {
+            evidenceItems.push({
+              id: result.value.img.id,
+              url: result.value.blobUrl,
+              filename: result.value.img.filename,
+              evidenceType: result.value.img.evidence_type || 'SCREENSHOT',
+            });
+          }
+        }
+      }
+
+      if (evidence.status === 'fulfilled') {
+        const evList = (evidence.value as any).evidence || [];
+        for (const ev of evList) {
+          if (!evidenceItems.find(e => e.id === ev.id)) {
+            evidenceItems.push({
+              id: ev.id,
+              url: ev.url || '',
+              filename: ev.title || ev.filename || 'evidence',
+              evidenceType: ev.evidence_type || ev.type || 'GITHUB',
+            });
+          }
+        }
+      }
+
+      setRecentEvidence(evidenceItems);
+    } catch {
+      // Non-critical
+    }
+  }, [id, token]);
+
+  const fetchGithubRepos = useCallback(async () => {
+    if (!id || !token) return;
+    try {
+      const result = await api.github.listRepos(id, token);
+      setGithubRepos((result as any).repos || []);
+    } catch {
+      // May not have GitHub connected
     }
   }, [id, token]);
 
@@ -234,10 +310,16 @@ export function Project() {
     }
   }, [id, token, project, activeSession]);
 
-  // Re-fetch messages when active session changes
+  // Re-fetch messages and metrics when active session changes
   useEffect(() => {
     if (project && activeSession) {
       fetchMessages();
+      // D10: Fetch session metrics from backend
+      if (id && token) {
+        api.sessions.getMetrics(id, activeSession.id, token)
+          .then(setSessionMetrics)
+          .catch(() => setSessionMetrics(null));
+      }
     }
   }, [activeSession?.id]);
 
@@ -268,8 +350,19 @@ export function Project() {
     fetchDecisions();
     fetchCCSStatus();
     fetchEvidence();
+    fetchImages();
+    fetchGithubRepos();
     api.router.models().then(data => setAvailableModels(data.classes)).catch(console.error);
-  }, [fetchProject, fetchDecisions, fetchCCSStatus, fetchEvidence]);
+  }, [fetchProject, fetchDecisions, fetchCCSStatus, fetchEvidence, fetchImages, fetchGithubRepos]);
+
+  // Cleanup blob URLs for evidence images on unmount
+  useEffect(() => {
+    return () => {
+      recentEvidence.forEach((e) => {
+        if (e.url.startsWith('blob:')) URL.revokeObjectURL(e.url);
+      });
+    };
+  }, [recentEvidence]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -295,10 +388,18 @@ export function Project() {
   };
 
   const handleSetPhase = async (phase: string) => {
+    setPhaseError(null);
     try {
       await setPhase(phase);
     } catch (err) {
-      console.error('Failed to set phase:', err);
+      if (err instanceof APIError && err.statusCode === 403) {
+        const missing = (err as any).missingGates as string[] | undefined;
+        setPhaseError(missing
+          ? `${err.message} (missing: ${missing.join(', ')})`
+          : err.message);
+      } else {
+        console.error('Failed to set phase:', err);
+      }
     }
   };
 
@@ -321,6 +422,92 @@ export function Project() {
       console.error('GitHub disconnect failed:', err);
     }
   }, [id, token]);
+
+  const handleCreateCCSIncident = useCallback(async (data: {
+    credentialType: import('../lib/api').CredentialType;
+    credentialName: string;
+    exposureSource: import('../lib/api').ExposureSource;
+    exposureDescription: string;
+    impactAssessment: string;
+    affectedSystems?: string[];
+  }) => {
+    if (!id || !token) return;
+    try {
+      await api.ccs.createIncident(id, data, token);
+      setShowCCSCreate(false);
+      await fetchCCSStatus();
+    } catch (err) {
+      console.error('Failed to create CCS incident:', err);
+    }
+  }, [id, token, fetchCCSStatus]);
+
+  const handleGitHubSelectRepo = useCallback(async (repoOwner: string, repoName: string) => {
+    if (!id || !token) return;
+    try {
+      await api.github.selectRepo(id, repoOwner, repoName, token);
+      setGithubConnection({ connected: true, repo_owner: repoOwner, repo_name: repoName });
+      await fetchEvidence();
+    } catch (err) {
+      console.error('Failed to select repo:', err);
+    }
+  }, [id, token, fetchEvidence]);
+
+  const handleEvidenceSync = useCallback(async () => {
+    if (!id || !token) return;
+    try {
+      await api.evidence.sync(id, token);
+      await fetchEvidence();
+      await fetchImages();
+    } catch (err) {
+      console.error('Evidence sync failed:', err);
+    }
+  }, [id, token, fetchEvidence, fetchImages]);
+
+  const handleDeleteImage = useCallback(async (imageId: string) => {
+    if (!id || !token) return;
+    try {
+      await api.images.delete(id, imageId, token);
+      setRecentEvidence(prev => prev.filter(e => e.id !== imageId));
+    } catch (err) {
+      console.error('Failed to delete image:', err);
+    }
+  }, [id, token]);
+
+  // Bridge: api.messages.clear
+  const handleClearMessages = useCallback(async () => {
+    if (!id || !token) return;
+    try {
+      await api.messages.clear(id, token);
+      setConversation(prev => prev ? { ...prev, messages: [], updatedAt: new Date() } : prev);
+      setSessionCost(0);
+      setSessionTokens(0);
+    } catch (err) {
+      console.error('Failed to clear messages:', err);
+    }
+  }, [id, token]);
+
+  // Bridge: api.projects.update
+  const handleUpdateProject = useCallback(async (data: { name?: string; objective?: string }) => {
+    if (!id || !token) return;
+    try {
+      const updated = await api.projects.update(id, data, token);
+      setProject(updated);
+    } catch (err) {
+      console.error('Failed to update project:', err);
+    }
+  }, [id, token]);
+
+  // D9: Clipboard image paste handler
+  const handlePasteImage = useCallback((file: File) => {
+    const preview = URL.createObjectURL(file);
+    const image: PendingImage = {
+      file,
+      preview,
+      evidenceType: 'SCREENSHOT',
+      caption: '',
+    };
+    setPendingImages((prev) => [...prev, image]);
+  }, []);
 
   // Image upload handlers
   const handleAddImage = useCallback((image: PendingImage) => {
@@ -622,6 +809,14 @@ export function Project() {
             gates={state.gates}
             onToggleGate={handleToggleGate}
             isLoading={isLoading}
+            phaseError={phaseError}
+          />
+        )}
+        {activeTab === 'security' && id && token && (
+          <SecurityRibbon
+            projectId={id}
+            token={token}
+            isLoading={isLoading}
           />
         )}
         {activeTab === 'evidence' && (
@@ -632,7 +827,12 @@ export function Project() {
             lastSync={githubConnection?.last_sync}
             onConnect={handleGitHubConnect}
             onDisconnect={handleGitHubDisconnect}
+            onSelectRepo={handleGitHubSelectRepo}
+            onSync={handleEvidenceSync}
+            repos={githubRepos}
+            needsRepoSelection={githubConnection?.connected && (!githubConnection?.repo_name || githubConnection?.repo_name === 'PENDING')}
             recentEvidence={recentEvidence}
+            onDeleteImage={handleDeleteImage}
             isLoading={isLoading}
           />
         )}
@@ -646,8 +846,10 @@ export function Project() {
             }}
           />
         )}
-        {activeTab === 'info' && project && (
+        {activeTab === 'info' && project && id && token && (
           <InfoRibbon
+            projectId={id}
+            token={token}
             projectName={project.name}
             objective={project.objective}
             realityClassification={project.realityClassification}
@@ -656,13 +858,27 @@ export function Project() {
             sessionCost={sessionCost}
             sessionTokens={sessionTokens}
             messageCount={conversation?.messages.length || 0}
+            sessionMetrics={sessionMetrics}
             availableModels={availableModels || undefined}
             sessions={sessions}
             activeSessionId={activeSession?.id}
             onSwitchSession={switchSession}
+            onUpdateProject={handleUpdateProject}
           />
         )}
       </Ribbon>
+
+      {/* CCS Report Button (when no active incident) */}
+      {(!ccsStatus?.active_incident || ccsStatus?.GA_CCS === 0) && (
+        <div className="px-4 py-1 flex justify-end">
+          <button
+            onClick={() => setShowCCSCreate(true)}
+            className="text-xs text-red-400 hover:text-red-300 transition-colors"
+          >
+            Report Credential Incident
+          </button>
+        </div>
+      )}
 
       {/* CCS Incident Banner */}
       {ccsStatus?.GA_CCS === 1 && ccsStatus.active_incident && (
@@ -778,7 +994,10 @@ export function Project() {
         isLoading={chatLoading}
         onSendMessage={handleSendMessage}
         onImageClick={() => setShowImageUpload(true)}
+        onPasteImage={handlePasteImage}
+        onClearMessages={handleClearMessages}
         pendingImageCount={pendingImages.length}
+        assistanceMode={settings.preferences.assistanceMode}
       />
 
       {/* Image Upload Modal */}
@@ -826,6 +1045,14 @@ export function Project() {
           initialSection={engineeringPanelSection}
           onClose={() => setEngineeringPanelOpen(false)}
           onUpdate={() => engineering.loadCompliance()}
+        />
+      )}
+
+      {/* CCS Create Incident Modal */}
+      {showCCSCreate && (
+        <CCSCreateIncidentModal
+          onConfirm={handleCreateCCSIncident}
+          onCancel={() => setShowCCSCreate(false)}
         />
       )}
 

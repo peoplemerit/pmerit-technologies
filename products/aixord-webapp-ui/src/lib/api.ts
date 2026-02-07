@@ -664,17 +664,27 @@ export const stateApi = {
    * Set current phase
    * Backend accepts: { phase: 'BRAINSTORM' | 'PLAN' | 'EXECUTE' | 'REVIEW' }
    * Backend returns: { success: true, phase, updated_at }
+   * On 403: throws PhaseTransitionError with missingGates details
    */
   async setPhase(projectId: string, phase: string, token: string): Promise<string> {
-    const response = await request<{ success: boolean; phase: string; updated_at: string }>(
-      `/state/${projectId}/phase`,
-      {
-        method: 'PUT',
-        body: JSON.stringify({ phase }),
+    const res = await fetch(`${API_BASE}/state/${projectId}/phase`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
       },
-      token
-    );
-    return response.phase;
+      body: JSON.stringify({ phase }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (res.status === 403 && data.missingGates) {
+        const err = new APIError(403, 'PHASE_BLOCKED', data.message || data.error);
+        (err as any).missingGates = data.missingGates;
+        throw err;
+      }
+      throw new APIError(res.status, data.code || 'UNKNOWN_ERROR', data.error || 'Unknown error');
+    }
+    return data.phase;
   },
 };
 
@@ -2439,6 +2449,16 @@ export interface UsageHistoryItem {
   code_task_count: number;
 }
 
+/** D16: Per-project metrics */
+export interface ProjectMetrics {
+  project_id: string;
+  project_name: string;
+  sessions: number;
+  messages: number;
+  tokens: number;
+  cost_usd: number;
+}
+
 const usageApi = {
   /**
    * Get current period usage
@@ -2474,6 +2494,14 @@ const usageApi = {
   async history(token: string): Promise<UsageHistoryItem[]> {
     const response = await request<{ history: UsageHistoryItem[] }>('/usage/history', {}, token);
     return response.history;
+  },
+
+  /**
+   * D16: Get per-project metrics
+   */
+  async projectMetrics(token: string): Promise<ProjectMetrics[]> {
+    const response = await request<{ projects: ProjectMetrics[] }>('/usage/projects', {}, token);
+    return response.projects;
   },
 };
 
@@ -2852,6 +2880,30 @@ export interface SessionEdge {
   created_at: string;
 }
 
+/** D10: Session metrics (aggregated from message metadata) */
+export interface SessionMetrics {
+  session_id: string;
+  session_number: number;
+  session_type: string;
+  status: string;
+  started_at: string;
+  closed_at: string | null;
+  messages: {
+    total: number;
+    user: number;
+    assistant: number;
+    system: number;
+  };
+  tokens: {
+    input: number;
+    output: number;
+    total: number;
+  };
+  cost_usd: number;
+  avg_latency_ms: number;
+  model_usage: Record<string, number>;
+}
+
 export const sessionsApi = {
   /**
    * Create a new session
@@ -2927,6 +2979,21 @@ export const sessionsApi = {
   ): Promise<{ session_id: string; outgoing: SessionEdge[]; incoming: SessionEdge[] }> {
     return request<{ session_id: string; outgoing: SessionEdge[]; incoming: SessionEdge[] }>(
       `/projects/${projectId}/sessions/${sessionId}/graph`,
+      {},
+      token
+    );
+  },
+
+  /**
+   * D10: Get session metrics (aggregated usage)
+   */
+  async getMetrics(
+    projectId: string,
+    sessionId: string,
+    token: string
+  ): Promise<SessionMetrics> {
+    return request<SessionMetrics>(
+      `/projects/${projectId}/sessions/${sessionId}/metrics`,
       {},
       token
     );

@@ -22,11 +22,21 @@ interface UsagePeriod {
   costCents: number;
 }
 
+interface ProjectMetric {
+  project_id: string;
+  project_name: string;
+  sessions: number;
+  messages: number;
+  tokens: number;
+  cost_usd: number;
+}
+
 export function Analytics() {
   const { isAuthenticated, token } = useAuth();
   const [currentUsage, setCurrentUsage] = useState<UsagePeriod | null>(null);
   const [history, setHistory] = useState<UsagePeriod[]>([]);
   const [projectCount, setProjectCount] = useState(0);
+  const [projectMetrics, setProjectMetrics] = useState<ProjectMetric[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,10 +47,11 @@ export function Analytics() {
 
     try {
       // Fetch in parallel
-      const [usageRes, historyRes, projectsRes] = await Promise.allSettled([
+      const [usageRes, historyRes, projectsRes, metricsRes] = await Promise.allSettled([
         api.usage.current(token),
         api.usage.history(token),
         api.projects.list(token),
+        api.usage.projectMetrics(token),
       ]);
 
       if (usageRes.status === 'fulfilled') {
@@ -68,6 +79,12 @@ export function Analytics() {
         const p = projectsRes.value as any;
         const list = Array.isArray(p) ? p : p.projects || [];
         setProjectCount(list.length);
+      }
+
+      if (metricsRes.status === 'fulfilled') {
+        const m = metricsRes.value as any;
+        const projects = Array.isArray(m) ? m : m.projects || [];
+        setProjectMetrics(projects);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load analytics');
@@ -184,6 +201,39 @@ export function Analytics() {
               </div>
             )}
           </div>
+
+          {/* Per-Project Metrics (D16 Bridge) */}
+          {projectMetrics.length > 0 && (
+            <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 p-6 mb-8">
+              <h2 className="text-lg font-semibold text-white mb-4">Per-Project Metrics</h2>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-gray-400 border-b border-gray-700/50">
+                    <th className="text-left py-2 font-medium">Project</th>
+                    <th className="text-right py-2 font-medium">Sessions</th>
+                    <th className="text-right py-2 font-medium">Messages</th>
+                    <th className="text-right py-2 font-medium">Tokens</th>
+                    <th className="text-right py-2 font-medium">Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projectMetrics.map((pm) => (
+                    <tr key={pm.project_id} className="border-b border-gray-800/50 hover:bg-gray-700/20">
+                      <td className="py-2">
+                        <Link to={`/project/${pm.project_id}`} className="text-violet-400 hover:text-violet-300">
+                          {pm.project_name}
+                        </Link>
+                      </td>
+                      <td className="py-2 text-right text-gray-300">{pm.sessions}</td>
+                      <td className="py-2 text-right text-gray-300">{pm.messages}</td>
+                      <td className="py-2 text-right text-gray-300">{formatTokens(pm.tokens)}</td>
+                      <td className="py-2 text-right text-gray-300">${pm.cost_usd.toFixed(4)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Usage History Table */}
           <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 p-6">

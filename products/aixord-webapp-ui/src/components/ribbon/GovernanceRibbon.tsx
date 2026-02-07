@@ -11,6 +11,7 @@ interface GovernanceRibbonProps {
   gates: Record<string, boolean>;
   onToggleGate?: (gateId: string) => void;
   isLoading?: boolean;
+  phaseError?: string | null;
 }
 
 const phases = [
@@ -19,6 +20,27 @@ const phases = [
   { id: 'EXECUTE', label: 'Execute', short: 'E' },
   { id: 'REVIEW', label: 'Review', short: 'R' },
 ];
+
+// Phase exit gate requirements (mirrors backend logic)
+const PHASE_EXIT_REQUIREMENTS: Record<string, string[]> = {
+  'BRAINSTORM': ['GA:LIC', 'GA:DIS', 'GA:TIR'],
+  'PLAN': ['GA:ENV', 'GA:FLD'],
+  'EXECUTE': ['GW:PRE', 'GW:VAL', 'GW:VER'],
+};
+
+function getMissingExitGates(currentPhase: string, targetPhase: string, gates: Record<string, boolean>): string[] {
+  const phaseOrder: Record<string, number> = { 'BRAINSTORM': 0, 'PLAN': 1, 'EXECUTE': 2, 'REVIEW': 3 };
+  const currentIdx = phaseOrder[currentPhase] ?? -1;
+  const targetIdx = phaseOrder[targetPhase] ?? -1;
+
+  // Backward transitions always allowed
+  if (targetIdx <= currentIdx) return [];
+
+  const required = PHASE_EXIT_REQUIREMENTS[currentPhase];
+  if (!required) return [];
+
+  return required.filter(g => !gates[g]);
+}
 
 // Setup Gates (from GateTracker)
 const setupGates = [
@@ -51,6 +73,7 @@ export function GovernanceRibbon({
   gates,
   onToggleGate,
   isLoading = false,
+  phaseError,
 }: GovernanceRibbonProps) {
   const currentPhaseIndex = phases.findIndex(
     (p) => p.id === currentPhase || p.short === currentPhase
@@ -76,25 +99,31 @@ export function GovernanceRibbon({
             {phases.map((phase, index) => {
               const isActive = index === currentPhaseIndex;
               const isCompleted = index < currentPhaseIndex;
-              const isClickable = onSetPhase && !isLoading;
+              const missingGates = getMissingExitGates(currentPhase, phase.id, gates);
+              const isBlocked = missingGates.length > 0 && index > currentPhaseIndex;
+              const isClickable = onSetPhase && !isLoading && !isBlocked;
 
               return (
                 <div key={phase.id} className="flex items-center">
                   <button
                     onClick={() => isClickable && onSetPhase(phase.id)}
                     disabled={!isClickable}
+                    title={isBlocked ? `Blocked: missing ${missingGates.join(', ')}` : phase.label}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
                       isActive
                         ? 'bg-violet-600 text-white'
                         : isCompleted
                         ? 'bg-green-500/20 text-green-400'
+                        : isBlocked
+                        ? 'bg-gray-700/30 text-gray-600 cursor-not-allowed'
                         : 'bg-gray-700/50 text-gray-400 hover:text-white'
-                    } ${isClickable ? 'cursor-pointer' : 'cursor-default'}`}
+                    } ${isClickable ? 'cursor-pointer' : isBlocked ? 'cursor-not-allowed' : 'cursor-default'}`}
                   >
                     <span className={`w-2 h-2 rounded-full ${
-                      isActive ? 'bg-white' : isCompleted ? 'bg-green-400' : 'bg-gray-500'
+                      isActive ? 'bg-white' : isCompleted ? 'bg-green-400' : isBlocked ? 'bg-red-400/50' : 'bg-gray-500'
                     }`} />
                     {phase.label}
+                    {isBlocked && <span className="text-red-400/60 text-xs ml-0.5">!</span>}
                   </button>
                   {index < phases.length - 1 && (
                     <div className={`w-6 h-0.5 mx-1 ${
@@ -112,6 +141,13 @@ export function GovernanceRibbon({
           <span className="text-white font-medium">{Math.round((totalComplete / totalGates) * 100)}%</span> Complete
         </div>
       </div>
+
+      {/* Phase transition error */}
+      {phaseError && (
+        <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-300">
+          {phaseError}
+        </div>
+      )}
 
       {/* Gates Row */}
       <div className="space-y-2">

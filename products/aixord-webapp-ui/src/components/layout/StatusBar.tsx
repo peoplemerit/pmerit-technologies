@@ -3,9 +3,14 @@
  *
  * Bottom bar showing key status indicators and chat input.
  * Always visible, consolidates essential info + input area.
+ *
+ * D8: Progressive Disclosure — assistanceMode controls indicator visibility.
+ * D9: Clipboard image paste — onPaste handler for pasting images.
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+
+export type AssistanceLevel = 'GUIDED' | 'ASSISTED' | 'EXPERT';
 
 interface StatusBarProps {
   phase: string;
@@ -16,7 +21,10 @@ interface StatusBarProps {
   isLoading?: boolean;
   onSendMessage: (message: string, mode: 'ECONOMY' | 'BALANCED' | 'PREMIUM') => void;
   onImageClick?: () => void;
+  onPasteImage?: (file: File) => void;
+  onClearMessages?: () => void;
   pendingImageCount?: number;
+  assistanceMode?: AssistanceLevel;
 }
 
 const phaseColors: Record<string, string> = {
@@ -50,7 +58,10 @@ export function StatusBar({
   isLoading = false,
   onSendMessage,
   onImageClick,
+  onPasteImage,
+  onClearMessages,
   pendingImageCount = 0,
+  assistanceMode = 'GUIDED',
 }: StatusBarProps) {
   const [message, setMessage] = useState('');
   const [mode, setMode] = useState<'ECONOMY' | 'BALANCED' | 'PREMIUM'>('BALANCED');
@@ -69,6 +80,24 @@ export function StatusBar({
     }
   };
 
+  // D9: Clipboard image paste handler
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    if (!onPasteImage) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (file) {
+          onPasteImage(file);
+        }
+        return;
+      }
+    }
+  }, [onPasteImage]);
+
   // Auto-resize textarea
   useEffect(() => {
     if (inputRef.current) {
@@ -80,32 +109,44 @@ export function StatusBar({
   const phaseColor = phaseColors[phase] || 'bg-gray-500';
   const phaseLabel = phaseLabels[phase] || phase;
 
+  // D8: Progressive Disclosure — control what indicators are visible
+  const showGates = assistanceMode === 'ASSISTED' || assistanceMode === 'EXPERT';
+  const showCost = assistanceMode === 'ASSISTED' || assistanceMode === 'EXPERT';
+  const showMessages = assistanceMode === 'EXPERT';
+  const showModeSelector = assistanceMode === 'ASSISTED' || assistanceMode === 'EXPERT';
+
   return (
     <div className="flex flex-col bg-gray-900 border-t border-gray-700/50">
       {/* Input Row — compact single line */}
       <div className="h-auto min-h-[48px] flex items-center gap-3 px-4 py-1.5">
         {/* Status Indicators — inline with input */}
         <div className="hidden md:flex items-center gap-3 text-xs shrink-0">
-          {/* Phase */}
+          {/* Phase — always visible */}
           <div className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${phaseColor}`} />
             <span className="text-white font-medium">{phaseLabel}</span>
           </div>
 
-          {/* Gates */}
-          <div className="text-gray-500">
-            <span className="text-gray-300">{gatesComplete}/{gatesTotal}</span>
-          </div>
+          {/* Gates — ASSISTED+ */}
+          {showGates && (
+            <div className="text-gray-500">
+              <span className="text-gray-300">{gatesComplete}/{gatesTotal}</span>
+            </div>
+          )}
 
-          {/* Cost */}
-          <div>
-            <span className="text-green-400">${sessionCost.toFixed(4)}</span>
-          </div>
+          {/* Cost — ASSISTED+ */}
+          {showCost && (
+            <div>
+              <span className="text-green-400">${sessionCost.toFixed(4)}</span>
+            </div>
+          )}
 
-          {/* Messages */}
-          <div className="text-gray-500">
-            <span className="text-gray-300">{messageCount}</span> msgs
-          </div>
+          {/* Messages — EXPERT only */}
+          {showMessages && (
+            <div className="text-gray-500">
+              <span className="text-gray-300">{messageCount}</span> msgs
+            </div>
+          )}
 
           {/* Separator */}
           <div className="w-px h-4 bg-gray-700" />
@@ -129,14 +170,28 @@ export function StatusBar({
           </button>
         )}
 
-        {/* Message Input */}
+        {/* Clear Messages Button */}
+        {onClearMessages && messageCount > 0 && (
+          <button
+            onClick={onClearMessages}
+            className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-gray-800 rounded-lg transition-colors shrink-0"
+            title="Clear messages"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        )}
+
+        {/* Message Input — D9: onPaste for clipboard images */}
         <div className="flex-1 relative">
           <textarea
             ref={inputRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type your message... (Shift+Enter for new line)"
+            onPaste={handlePaste}
+            placeholder={onPasteImage ? "Type or paste an image... (Shift+Enter for new line)" : "Type your message... (Shift+Enter for new line)"}
             rows={1}
             disabled={isLoading}
             className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 transition-colors resize-none disabled:opacity-50"
@@ -144,16 +199,18 @@ export function StatusBar({
           />
         </div>
 
-        {/* Mode Selector */}
-        <select
-          value={mode}
-          onChange={(e) => setMode(e.target.value as typeof mode)}
-          className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-violet-500 transition-colors shrink-0"
-        >
-          <option value="ECONOMY">Fast</option>
-          <option value="BALANCED">Balanced</option>
-          <option value="PREMIUM">Quality</option>
-        </select>
+        {/* Mode Selector — D8: hidden in GUIDED mode */}
+        {showModeSelector && (
+          <select
+            value={mode}
+            onChange={(e) => setMode(e.target.value as typeof mode)}
+            className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-violet-500 transition-colors shrink-0"
+          >
+            <option value="ECONOMY">Fast</option>
+            <option value="BALANCED">Balanced</option>
+            <option value="PREMIUM">Quality</option>
+          </select>
+        )}
 
         {/* Send Button */}
         <button

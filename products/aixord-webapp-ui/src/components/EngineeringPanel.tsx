@@ -17,7 +17,11 @@ import {
   type RollbackStrategy,
   type AlertConfiguration,
   type KnowledgeTransfer,
-  type EngineeringCompliance,
+  type FitnessDimension,
+  type TestLevel,
+  type ReadinessLevel,
+  type AlertSeverity,
+  type KnowledgeTransferType,
 } from '../lib/api';
 
 export type EngineeringSection =
@@ -97,6 +101,101 @@ export function EngineeringPanel({
     setActiveSection(section);
   };
 
+  // CRUD state
+  const [showCreate, setShowCreate] = useState(false);
+  const [createFields, setCreateFields] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const handleCreate = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      switch (activeSection) {
+        case 'sar':
+          await engineeringApi.createSAR(projectId, { title: createFields.title || 'Untitled SAR' }, token);
+          break;
+        case 'contracts':
+          await engineeringApi.createContract(projectId, {
+            contract_name: createFields.name || 'Untitled Contract',
+            producer: createFields.producer || '',
+            consumer: createFields.consumer || '',
+          }, token);
+          break;
+        case 'fitness':
+          await engineeringApi.createFitness(projectId, {
+            metric_name: createFields.name || 'Untitled Metric',
+            dimension: (createFields.dimension as FitnessDimension) || 'PERFORMANCE',
+            target_value: createFields.target || '0',
+          }, token);
+          break;
+        case 'tests':
+          await engineeringApi.createTest(projectId, {
+            test_name: createFields.name || 'Untitled Test',
+            test_level: (createFields.level as TestLevel) || 'INTEGRATION',
+          }, token);
+          break;
+        case 'budget':
+          await engineeringApi.createBudget(projectId, {
+            scope_name: createFields.name || 'Untitled Scope',
+            iteration_ceiling: parseInt(createFields.ceiling || '10', 10),
+            expected_iterations: parseInt(createFields.expected || '5', 10),
+          }, token);
+          break;
+        case 'readiness':
+          await engineeringApi.createReadiness(projectId, {
+            declared_level: (createFields.level as ReadinessLevel) || 'L0',
+          }, token);
+          break;
+        case 'rollback':
+          await engineeringApi.createRollback(projectId, {
+            component_name: createFields.name || 'Untitled Component',
+            rollback_method: createFields.method || 'REDEPLOY',
+          }, token);
+          break;
+        case 'alerts':
+          await engineeringApi.createAlert(projectId, {
+            alert_name: createFields.name || 'Untitled Alert',
+            severity: (createFields.severity as AlertSeverity) || 'SEV3',
+            condition_description: createFields.condition || '',
+          }, token);
+          break;
+        case 'knowledge':
+          await engineeringApi.createKnowledge(projectId, {
+            title: createFields.name || 'Untitled KT',
+            transfer_type: (createFields.type as KnowledgeTransferType) || 'ARCHITECTURE',
+          }, token);
+          break;
+      }
+      setShowCreate(false);
+      setCreateFields({});
+      await loadSection(activeSection);
+      onUpdate?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (section: EngineeringSection, itemId: string) => {
+    try {
+      switch (section) {
+        case 'sar': await engineeringApi.deleteSAR(projectId, itemId, token); break;
+        case 'contracts': await engineeringApi.deleteContract(projectId, itemId, token); break;
+        case 'fitness': await engineeringApi.deleteFitness(projectId, itemId, token); break;
+        case 'tests': await engineeringApi.deleteTest(projectId, itemId, token); break;
+        case 'rollback': await engineeringApi.deleteRollback(projectId, itemId, token); break;
+        case 'alerts': await engineeringApi.deleteAlert(projectId, itemId, token); break;
+        case 'knowledge': await engineeringApi.deleteKnowledge(projectId, itemId, token); break;
+        default: return; // Budget/Readiness may not have delete
+      }
+      await loadSection(section);
+      onUpdate?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete');
+    }
+  };
+
   // Status badge helper
   const statusBadge = (status: string) => {
     const colors: Record<string, string> = {
@@ -126,6 +225,56 @@ export function EngineeringPanel({
     );
   };
 
+  const formInput = (label: string, key: string, placeholder?: string) => (
+    <div>
+      <label className="block text-xs text-gray-400 mb-1">{label}</label>
+      <input
+        type="text"
+        value={createFields[key] || ''}
+        onChange={(e) => setCreateFields(prev => ({ ...prev, [key]: e.target.value }))}
+        placeholder={placeholder}
+        className="w-full px-2 py-1.5 bg-gray-900/50 border border-gray-700 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
+      />
+    </div>
+  );
+
+  const renderCreateForm = () => {
+    switch (activeSection) {
+      case 'sar':
+        return formInput('Title', 'title', 'System Architecture Record title');
+      case 'contracts':
+        return <>{formInput('Contract Name', 'name', 'Contract name')}{formInput('Producer', 'producer', 'Producer service')}{formInput('Consumer', 'consumer', 'Consumer service')}</>;
+      case 'fitness':
+        return <>{formInput('Metric Name', 'name', 'e.g., P95 Latency')}{formInput('Dimension', 'dimension', 'PERFORMANCE|RELIABILITY|SECURITY')}{formInput('Target Value', 'target', 'e.g., 200ms')}</>;
+      case 'tests':
+        return <>{formInput('Test Name', 'name', 'Test name')}{formInput('Level', 'level', 'UNIT|INTEGRATION|SYSTEM|ACCEPTANCE')}</>;
+      case 'budget':
+        return <>{formInput('Scope Name', 'name', 'Scope or feature name')}{formInput('Iteration Ceiling', 'ceiling', '10')}{formInput('Expected Iterations', 'expected', '5')}</>;
+      case 'readiness':
+        return formInput('Declared Level', 'level', 'L0|L1|L2|L3');
+      case 'rollback':
+        return <>{formInput('Component Name', 'name', 'Component name')}{formInput('Rollback Method', 'method', 'REDEPLOY|DATABASE_ROLLBACK|FEATURE_FLAG')}</>;
+      case 'alerts':
+        return <>{formInput('Alert Name', 'name', 'Alert name')}{formInput('Severity', 'severity', 'SEV1|SEV2|SEV3|SEV4')}{formInput('Condition', 'condition', 'Trigger condition')}</>;
+      case 'knowledge':
+        return <>{formInput('Title', 'name', 'KT artifact title')}{formInput('Transfer Type', 'type', 'DEPLOYMENT|MONITORING|TROUBLESHOOTING|ARCHITECTURE|API|DEPENDENCIES')}</>;
+      default:
+        return null;
+    }
+  };
+
+  const deleteBtn = (section: EngineeringSection, itemId: string) => (
+    <button
+      onClick={() => handleDelete(section, itemId)}
+      className="text-gray-500 hover:text-red-400 transition-colors p-1"
+      title="Delete"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+      </svg>
+    </button>
+  );
+
   // Render section content
   const renderContent = () => {
     if (loading) {
@@ -148,6 +297,7 @@ export function EngineeringPanel({
                   <div className="flex items-center gap-2">
                     <span className="text-gray-500 text-xs">v{s.version}</span>
                     {statusBadge(s.status)}
+                    {deleteBtn('sar', s.id)}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-1 text-xs text-gray-400 mt-2">
@@ -173,7 +323,7 @@ export function EngineeringPanel({
               <div key={c.id} className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-white text-sm font-medium">{c.contract_name}</span>
-                  {statusBadge(c.status)}
+                  <div className="flex items-center gap-2">{statusBadge(c.status)}{deleteBtn('contracts', c.id)}</div>
                 </div>
                 <div className="text-xs text-gray-400">
                   <span className="text-violet-400">{c.producer}</span>
@@ -199,7 +349,7 @@ export function EngineeringPanel({
               <div key={f.id} className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-white text-sm font-medium">{f.metric_name}</span>
-                  {statusBadge(f.status)}
+                  <div className="flex items-center gap-2">{statusBadge(f.status)}{deleteBtn('fitness', f.id)}</div>
                 </div>
                 <div className="flex items-center gap-3 text-xs text-gray-400">
                   <span className="text-violet-400">{f.dimension}</span>
@@ -223,6 +373,7 @@ export function EngineeringPanel({
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500">{t.test_level}</span>
                     {statusBadge(t.last_result)}
+                    {deleteBtn('tests', t.id)}
                   </div>
                 </div>
                 {t.description && (
@@ -298,9 +449,12 @@ export function EngineeringPanel({
               <div key={r.id} className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-white text-sm font-medium">{r.component_name}</span>
-                  <span className={`text-xs ${r.rollback_tested ? 'text-green-400' : 'text-yellow-400'}`}>
-                    {r.rollback_tested ? '✓ Tested' : '○ Untested'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs ${r.rollback_tested ? 'text-green-400' : 'text-yellow-400'}`}>
+                      {r.rollback_tested ? '✓ Tested' : '○ Untested'}
+                    </span>
+                    {deleteBtn('rollback', r.id)}
+                  </div>
                 </div>
                 <div className="text-xs text-gray-400">
                   Method: {r.rollback_method}
@@ -325,6 +479,7 @@ export function EngineeringPanel({
                     <span className={`text-xs ${a.enabled ? 'text-green-400' : 'text-gray-500'}`}>
                       {a.enabled ? 'ON' : 'OFF'}
                     </span>
+                    {deleteBtn('alerts', a.id)}
                   </div>
                 </div>
                 <div className="text-xs text-gray-400">{a.condition_description}</div>
@@ -348,6 +503,7 @@ export function EngineeringPanel({
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500">{k.transfer_type}</span>
                     {statusBadge(k.status)}
+                    {deleteBtn('knowledge', k.id)}
                   </div>
                 </div>
                 {k.target_audience && (
@@ -402,6 +558,30 @@ export function EngineeringPanel({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
+          {/* Add button */}
+          <div className="flex justify-end mb-3">
+            <button
+              onClick={() => { setShowCreate(!showCreate); setCreateFields({}); }}
+              className="px-3 py-1.5 text-xs bg-violet-600 hover:bg-violet-500 text-white rounded-lg transition-colors"
+            >
+              {showCreate ? 'Cancel' : `+ Add ${SECTION_LABELS[activeSection]}`}
+            </button>
+          </div>
+
+          {/* Create form */}
+          {showCreate && (
+            <div className="mb-4 p-3 bg-gray-800/50 rounded-lg border border-violet-500/30 space-y-2">
+              {renderCreateForm()}
+              <button
+                onClick={handleCreate}
+                disabled={saving}
+                className="w-full px-3 py-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
+              >
+                {saving ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          )}
+
           {renderContent()}
         </div>
       </div>
@@ -414,7 +594,7 @@ function EmptyState({ label }: { label: string }) {
     <div className="text-center py-8">
       <div className="text-gray-500 text-sm mb-2">{label}</div>
       <p className="text-gray-600 text-xs">
-        Artifacts can be created via the API or AI chat.
+        Use the + Add button above to create one.
       </p>
     </div>
   );

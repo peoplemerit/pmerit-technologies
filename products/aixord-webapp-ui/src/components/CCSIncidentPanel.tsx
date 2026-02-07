@@ -43,7 +43,8 @@ export function CCSIncidentPanel({
   const [incident, setIncident] = useState<(CCSIncident & { artifacts: CCSArtifact[]; verificationTests: CCSVerificationTest[] }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'details' | 'artifacts' | 'verify' | 'attest'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'artifacts' | 'verify' | 'attest' | 'history'>('details');
+  const [incidentHistory, setIncidentHistory] = useState<CCSIncident[]>([]);
 
   // Form states
   const [showArtifactForm, setShowArtifactForm] = useState(false);
@@ -158,7 +159,7 @@ export function CCSIncidentPanel({
 
         {/* Tabs */}
         <div className="flex border-b border-gray-700">
-          {(['details', 'artifacts', 'verify', 'attest'] as const).map((tab) => (
+          {(['details', 'artifacts', 'verify', 'attest', 'history'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -215,6 +216,15 @@ export function CCSIncidentPanel({
               showForm={showAttestForm}
               setShowForm={setShowAttestForm}
               onAttested={loadIncident}
+            />
+          )}
+
+          {activeTab === 'history' && (
+            <IncidentHistoryTab
+              projectId={projectId}
+              token={token}
+              incidents={incidentHistory}
+              onLoad={setIncidentHistory}
             />
           )}
         </div>
@@ -750,6 +760,66 @@ function PhaseTransitionButton({
       Advance to {nextPhase} Phase
       <ChevronRight className="h-4 w-4 ml-2" />
     </button>
+  );
+}
+
+/**
+ * Incident History Tab — Bridge: api.ccs.listIncidents
+ */
+function IncidentHistoryTab({
+  projectId,
+  token,
+  incidents,
+  onLoad,
+}: {
+  projectId: string;
+  token: string;
+  incidents: CCSIncident[];
+  onLoad: (incidents: CCSIncident[]) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (incidents.length === 0) {
+      setLoading(true);
+      api.ccs.listIncidents(projectId, token)
+        .then(result => onLoad(result.incidents))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }
+  }, [projectId, token, incidents.length, onLoad]);
+
+  if (loading) return <div className="text-gray-400 text-sm py-4 text-center">Loading history...</div>;
+
+  if (incidents.length === 0) {
+    return <div className="text-gray-500 text-sm text-center py-8">No incident history.</div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <h4 className="text-sm font-medium text-gray-400">All Incidents</h4>
+      {incidents.map(inc => (
+        <div key={inc.id} className="bg-gray-800 rounded-lg p-3 border border-gray-700/50">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-white text-sm font-medium font-mono">{inc.incidentNumber}</span>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs px-2 py-0.5 rounded ${
+                inc.status === 'ACTIVE' ? 'bg-red-500/20 text-red-400' :
+                inc.status === 'RESOLVED' ? 'bg-green-500/20 text-green-400' :
+                'bg-gray-500/20 text-gray-400'
+              }`}>{inc.status}</span>
+              <span className="text-xs text-gray-500">{inc.phase}</span>
+            </div>
+          </div>
+          <div className="text-xs text-gray-400">
+            <span>{inc.credentialType.replace('_', ' ')}: {inc.credentialName}</span>
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            Created: {new Date(inc.createdAt).toLocaleDateString()}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
