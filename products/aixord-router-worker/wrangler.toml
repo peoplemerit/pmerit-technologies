@@ -29,3 +29,8 @@ FRONTEND_URL = "https://aixord.pmerit.com"
 binding = "DB"
 database_name = "aixord-db"
 database_id = "4222a800-ec94-479b-94d2-f1beaa7d01d9"
+
+# R2 Object Storage - Image Evidence (ENH-4: Path C)
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "aixord-images"

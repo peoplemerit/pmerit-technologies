@@ -40,6 +40,9 @@ export interface Env {
   // D1 Database
   DB: D1Database;
 
+  // R2 Object Storage - Image Evidence (ENH-4)
+  IMAGES: R2Bucket;
+
   // Environment
   ENVIRONMENT: string;
 }
@@ -134,11 +137,38 @@ export interface ArtifactRef {
   hint?: string;
 }
 
+/** Image content for vision API (ENH-4: Session 19 fix) */
+export interface ImageContent {
+  type: 'image';
+  media_type: string; // e.g., 'image/png', 'image/jpeg'
+  base64: string;
+  filename?: string;
+}
+
+/**
+ * Execution Layer Context (Path B: Proactive Debugging)
+ * Passed to AI during Execute phase for layered execution mode
+ */
+export interface ExecutionLayerContext {
+  layer_number: number;
+  title: string;
+  status: 'PENDING' | 'ACTIVE' | 'EXECUTED' | 'VERIFIED' | 'LOCKED' | 'FAILED';
+  expected_inputs?: Record<string, unknown>;
+  expected_outputs?: Record<string, unknown>;
+  locked_layers_count: number;
+  failed_layers_count: number;
+  total_layers: number;
+}
+
 export interface Delta {
   user_input: string;
   selection_ids?: string[];
   changed_constraints?: string[];
   artifact_refs?: ArtifactRef[];
+  /** Image data for vision API (ENH-4) */
+  images?: ImageContent[];
+  /** Execution layer context for layered execution mode (Path B) */
+  execution_layer?: ExecutionLayerContext;
 }
 
 export interface Budget {
@@ -167,6 +197,17 @@ export interface Subscription {
   user_api_key?: string;
 }
 
+/**
+ * Content redaction configuration (SPG-01 — L-SPG3)
+ * Set internally by router when ai_exposure = CONFIDENTIAL
+ */
+export interface RedactionConfig {
+  enabled: boolean;
+  mask_pii: boolean;    // Mask SSN, email, phone patterns
+  mask_phi: boolean;    // Mask medical record numbers, diagnoses
+  mask_minor_data: boolean; // Mask child/minor identifiers
+}
+
 export interface RouterRequest {
   product: Product;
   intent: Intent;
@@ -179,6 +220,8 @@ export interface RouterRequest {
   trace: Trace;
   // PATCH-MOD-01: Optional extended intent for affinity-based routing
   router_intent?: RouterIntent;
+  // SPG-01: Internal redaction config (set by router, not by client)
+  _redaction_config?: RedactionConfig;
 }
 
 export interface VerificationFlag {
@@ -719,4 +762,305 @@ export interface CCSAttestationRequest {
   attestation_statement: string;
   exceptions?: string[];
   risk_acceptance?: string;
+}
+
+// ============================================================================
+// Image Evidence Types (ENH-4: Path C)
+// ============================================================================
+
+/**
+ * Image evidence classification
+ */
+export type ImageEvidenceType =
+  | 'GENERAL'      // Unclassified image
+  | 'CHECKPOINT'   // Checkpoint verification screenshot
+  | 'GATE_PROOF'   // Gate passage proof
+  | 'SCREENSHOT'   // UI/application screenshot
+  | 'DIAGRAM';     // Architecture or flow diagram
+
+/**
+ * Allowed MIME types for image upload
+ */
+export const ALLOWED_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+] as const;
+
+export type AllowedImageMime = typeof ALLOWED_IMAGE_TYPES[number];
+
+/**
+ * Max image size: 10 MB
+ */
+export const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
+/**
+ * Image metadata record (stored in D1)
+ */
+export interface ImageMetadata {
+  id: string;
+  project_id: string;
+  user_id: string;
+  r2_key: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  evidence_type: ImageEvidenceType;
+  caption: string | null;
+  checkpoint_id: string | null;
+  decision_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Image upload response
+ */
+export interface ImageUploadResponse {
+  id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  evidence_type: ImageEvidenceType;
+  url: string;
+  created_at: string;
+}
+
+// =============================================================================
+// PART XIV — ENGINEERING GOVERNANCE (AIXORD v4.5)
+// =============================================================================
+
+/** §64.3 — SAR status */
+export type SARStatus = 'DRAFT' | 'ACTIVE' | 'SUPERSEDED' | 'ARCHIVED';
+
+/** §64.3 — System Architecture Record */
+export interface SAR {
+  id: string;
+  project_id: string;
+  title: string;
+  version: number;
+  status: SARStatus;
+  system_boundary: string | null;
+  component_map: string | null;
+  interface_contracts_summary: string | null;
+  data_flow: string | null;
+  state_ownership: string | null;
+  consistency_model: string | null;
+  failure_domains: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** §64.4 — Interface contract idempotency */
+export type IdempotencyType = 'YES' | 'NO' | 'CONDITIONAL';
+
+/** §64.4 — Interface contract status */
+export type ContractStatus = 'DRAFT' | 'ACTIVE' | 'DEPRECATED' | 'BROKEN';
+
+/** §64.4 — Interface Contract */
+export interface InterfaceContract {
+  id: string;
+  project_id: string;
+  sar_id: string | null;
+  contract_name: string;
+  producer: string;
+  consumer: string;
+  input_shape: string | null;
+  output_shape: string | null;
+  error_contract: string | null;
+  versioning_strategy: string | null;
+  idempotency: IdempotencyType | null;
+  status: ContractStatus;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** §64.6 — Fitness function dimension */
+export type FitnessDimension = 'PERFORMANCE' | 'SCALABILITY' | 'RELIABILITY' | 'SECURITY' | 'COST' | 'OTHER';
+
+/** §64.6 — Fitness function status */
+export type FitnessStatus = 'DEFINED' | 'MEASURING' | 'PASSING' | 'FAILING' | 'NOT_APPLICABLE';
+
+/** §64.6 — Architectural Fitness Function */
+export interface FitnessFunction {
+  id: string;
+  project_id: string;
+  dimension: FitnessDimension;
+  metric_name: string;
+  target_value: string;
+  current_value: string | null;
+  unit: string | null;
+  measurement_method: string | null;
+  verified_at: string | null;
+  status: FitnessStatus;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** §65.3 — Integration test level */
+export type TestLevel = 'UNIT' | 'INTEGRATION' | 'SYSTEM' | 'ACCEPTANCE';
+
+/** §65.3 — Test result */
+export type TestResult = 'PASS' | 'FAIL' | 'SKIP' | 'NOT_RUN';
+
+/** §65.3 — Integration Test */
+export interface IntegrationTest {
+  id: string;
+  project_id: string;
+  contract_id: string | null;
+  test_level: TestLevel;
+  test_name: string;
+  description: string | null;
+  producer: string | null;
+  consumer: string | null;
+  happy_path: string | null;
+  error_path: string | null;
+  boundary_conditions: string | null;
+  last_result: TestResult;
+  last_run_at: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** §66.5 — Iteration budget status */
+export type BudgetStatus = 'ACTIVE' | 'EXHAUSTED' | 'EXCEEDED' | 'CLOSED';
+
+/** §66.5 — Iteration Budget */
+export interface IterationBudget {
+  id: string;
+  project_id: string;
+  scope_name: string;
+  expected_iterations: number;
+  iteration_ceiling: number;
+  actual_iterations: number;
+  time_budget_hours: number | null;
+  time_used_hours: number;
+  status: BudgetStatus;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** §67.2 — Operational readiness level */
+export type ReadinessLevel = 'L0' | 'L1' | 'L2' | 'L3';
+
+/** §67.2 — Operational Readiness */
+export interface OperationalReadiness {
+  id: string;
+  project_id: string;
+  declared_level: ReadinessLevel;
+  current_level: ReadinessLevel;
+  deployment_method: string | null;
+  environment_parity: string | null;
+  config_management: string | null;
+  deployment_verification: string | null;
+  health_endpoint: string | null;
+  logging_strategy: string | null;
+  error_reporting: string | null;
+  key_metrics: string | null;
+  alerting: string | null;
+  dashboards: string | null;
+  tracing: string | null;
+  audit_logging: string | null;
+  incident_response_plan: string | null;
+  runbooks: string | null;
+  sla_definitions: string | null;
+  checklist_json: string | null;
+  verified_at: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** §67.3 — Rollback Strategy */
+export interface RollbackStrategy {
+  id: string;
+  project_id: string;
+  component_name: string;
+  rollback_method: string;
+  rollback_tested: boolean;
+  rollback_tested_at: string | null;
+  recovery_time_target: string | null;
+  data_loss_tolerance: string | null;
+  prerequisites: string | null;
+  procedure: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** §67.4 — Alert severity */
+export type AlertSeverity = 'SEV1' | 'SEV2' | 'SEV3' | 'SEV4';
+
+/** §67.4 — Alert Configuration */
+export interface AlertConfiguration {
+  id: string;
+  project_id: string;
+  alert_name: string;
+  severity: AlertSeverity;
+  condition_description: string;
+  notification_channel: string | null;
+  escalation_path: string | null;
+  enabled: boolean;
+  last_triggered_at: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** §67.6 — Knowledge transfer type */
+export type KnowledgeTransferType = 'DEPLOYMENT' | 'MONITORING' | 'TROUBLESHOOTING' | 'ARCHITECTURE' | 'API' | 'DEPENDENCIES' | 'OTHER';
+
+/** §67.6 — Knowledge transfer status */
+export type KnowledgeTransferStatus = 'DRAFT' | 'REVIEW' | 'PUBLISHED' | 'ARCHIVED';
+
+/** §67.6 — Knowledge Transfer */
+export interface KnowledgeTransfer {
+  id: string;
+  project_id: string;
+  title: string;
+  transfer_type: KnowledgeTransferType;
+  content: string | null;
+  target_audience: string | null;
+  status: KnowledgeTransferStatus;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Engineering Compliance — Aggregate status */
+export interface EngineeringComplianceArea {
+  count?: number;
+  declared_level?: string | null;
+  current_level?: string | null;
+  required: boolean;
+  met: boolean;
+}
+
+/** Engineering Compliance Summary */
+export interface EngineeringCompliance {
+  project_id: string;
+  overall_percentage: number;
+  required_percentage: number;
+  areas: Record<string, EngineeringComplianceArea>;
+  test_results: Array<{ test_level: string; last_result: string; count: number }>;
+  fitness_status: Array<{ status: string; count: number }>;
+  summary: string;
 }

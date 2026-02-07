@@ -4,25 +4,39 @@
  * Handles API calls to Claude models.
  */
 
-import type { Message, CallOptions, ProviderResponse } from '../types';
+import type { Message, CallOptions, ProviderResponse, ImageContent } from '../types';
 import { RouterError } from '../types';
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_VERSION = '2023-06-01';
 
+// Anthropic content block types
+type AnthropicTextBlock = { type: 'text'; text: string };
+type AnthropicImageBlock = {
+  type: 'image';
+  source: {
+    type: 'base64';
+    media_type: string;
+    data: string;
+  };
+};
+type AnthropicContentBlock = AnthropicTextBlock | AnthropicImageBlock;
+type AnthropicContent = string | AnthropicContentBlock[];
+
 /**
- * Call Anthropic Claude API
+ * Call Anthropic Claude API (ENH-4: Now supports vision/images)
  */
 export async function callAnthropic(
   model: string,
   messages: Message[],
   apiKey: string,
-  options: CallOptions = {}
+  options: CallOptions = {},
+  images?: ImageContent[]
 ): Promise<ProviderResponse> {
   // Convert messages to Anthropic format
   // System message goes in system field, not messages array
   let systemPrompt: string | undefined;
-  const anthropicMessages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  const anthropicMessages: Array<{ role: 'user' | 'assistant'; content: AnthropicContent }> = [];
 
   for (const msg of messages) {
     if (msg.role === 'system') {
@@ -32,6 +46,40 @@ export async function callAnthropic(
         role: msg.role as 'user' | 'assistant',
         content: msg.content
       });
+    }
+  }
+
+  // ENH-4: If images are provided, convert the last user message to multimodal format
+  if (images && images.length > 0 && anthropicMessages.length > 0) {
+    const lastIdx = anthropicMessages.length - 1;
+    const lastMsg = anthropicMessages[lastIdx];
+    if (lastMsg.role === 'user') {
+      // Build content array with images + text
+      const contentBlocks: AnthropicContentBlock[] = [];
+
+      // Add images first
+      for (const img of images) {
+        contentBlocks.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: img.media_type,
+            data: img.base64,
+          },
+        });
+      }
+
+      // Add text
+      contentBlocks.push({
+        type: 'text',
+        text: lastMsg.content as string,
+      });
+
+      // Replace with multimodal content
+      anthropicMessages[lastIdx] = {
+        role: 'user',
+        content: contentBlocks,
+      };
     }
   }
 

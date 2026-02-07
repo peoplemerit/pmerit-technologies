@@ -4,24 +4,30 @@
  * Handles API calls to Gemini models.
  */
 
-import type { Message, CallOptions, ProviderResponse } from '../types';
+import type { Message, CallOptions, ProviderResponse, ImageContent } from '../types';
 import { RouterError } from '../types';
 
+// Gemini content part types
+type GeminiTextPart = { text: string };
+type GeminiInlineDataPart = { inline_data: { mime_type: string; data: string } };
+type GeminiPart = GeminiTextPart | GeminiInlineDataPart;
+
 /**
- * Call Google Gemini API
+ * Call Google Gemini API (ENH-4: Now supports vision/images)
  */
 export async function callGoogle(
   model: string,
   messages: Message[],
   apiKey: string,
-  options: CallOptions = {}
+  options: CallOptions = {},
+  images?: ImageContent[]
 ): Promise<ProviderResponse> {
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   // Convert messages to Gemini format
   // System messages become a systemInstruction
   let systemInstruction: string | undefined;
-  const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+  const contents: Array<{ role: 'user' | 'model'; parts: GeminiPart[] }> = [];
 
   for (const msg of messages) {
     if (msg.role === 'system') {
@@ -31,6 +37,33 @@ export async function callGoogle(
         role: msg.role === 'assistant' ? 'model' : 'user',
         parts: [{ text: msg.content }]
       });
+    }
+  }
+
+  // ENH-4: If images are provided, add as inline_data parts to the last user message
+  if (images && images.length > 0 && contents.length > 0) {
+    const lastIdx = contents.length - 1;
+    const lastContent = contents[lastIdx];
+    if (lastContent.role === 'user') {
+      const parts: GeminiPart[] = [];
+
+      // Add images first
+      for (const img of images) {
+        parts.push({
+          inline_data: {
+            mime_type: img.media_type,
+            data: img.base64,
+          },
+        });
+      }
+
+      // Add existing text parts
+      parts.push(...lastContent.parts);
+
+      contents[lastIdx] = {
+        role: 'user',
+        parts,
+      };
     }
   }
 

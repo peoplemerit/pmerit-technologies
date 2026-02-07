@@ -46,15 +46,23 @@ messages.get('/:projectId/messages', async (c) => {
   // Optional query params
   const limit = Math.min(parseInt(c.req.query('limit') || '100'), 500);
   const offset = parseInt(c.req.query('offset') || '0');
+  const sessionId = c.req.query('session_id'); // Filter by session
 
-  const result = await c.env.DB.prepare(`
-    SELECT * FROM messages
-    WHERE project_id = ?
-    ORDER BY created_at ASC
-    LIMIT ? OFFSET ?
-  `).bind(projectId, limit, offset).all<{
+  let query = 'SELECT * FROM messages WHERE project_id = ?';
+  const bindings: (string | number)[] = [projectId];
+
+  if (sessionId) {
+    query += ' AND session_id = ?';
+    bindings.push(sessionId);
+  }
+
+  query += ' ORDER BY created_at ASC LIMIT ? OFFSET ?';
+  bindings.push(limit, offset);
+
+  const result = await c.env.DB.prepare(query).bind(...bindings).all<{
     id: string;
     project_id: string;
+    session_id: string | null;
     role: string;
     content: string;
     metadata: string;
@@ -84,9 +92,10 @@ messages.post('/:projectId/messages', async (c) => {
     role: 'user' | 'assistant' | 'system';
     content: string;
     metadata?: Record<string, unknown>;
+    session_id?: string;
   }>();
 
-  const { role, content, metadata } = body;
+  const { role, content, metadata, session_id } = body;
 
   if (!role || !content) {
     return c.json({ error: 'role and content required' }, 400);
@@ -100,20 +109,29 @@ messages.post('/:projectId/messages', async (c) => {
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(`
-    INSERT INTO messages (id, project_id, role, content, metadata, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO messages (id, project_id, session_id, role, content, metadata, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `).bind(
     messageId,
     projectId,
+    session_id || null,
     role,
     content,
     JSON.stringify(metadata || {}),
     now
   ).run();
 
+  // If session_id provided, increment session's message_count
+  if (session_id) {
+    await c.env.DB.prepare(
+      'UPDATE project_sessions SET message_count = message_count + 1 WHERE id = ?'
+    ).bind(session_id).run();
+  }
+
   return c.json({
     id: messageId,
     project_id: projectId,
+    session_id: session_id || null,
     role,
     content,
     metadata: metadata || {},

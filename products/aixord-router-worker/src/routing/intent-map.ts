@@ -113,23 +113,20 @@ export function getModelClass(
 }
 
 /**
- * Check if a tier allows a specific model class
+ * Check if a tier allows a specific model class.
+ *
+ * NOTE: BYOK bypass is handled at the call site in index.ts via
+ * `request.subscription.key_mode === 'BYOK'`. This function only
+ * checks the tier's class allowance map — no tier-name string matching.
  */
 export function isClassAllowedForTier(
   tier: SubscriptionTier,
   modelClass: ModelClass
 ): boolean {
-  // FIX (Session 13D): BYOK users provide their own API keys — no class restriction
-  // They are paying the provider directly, so we don't gate model quality
-  const BYOK_TIERS: SubscriptionTier[] = ['BYOK_STANDARD', 'MANUSCRIPT_BYOK'];
-  if (BYOK_TIERS.includes(tier)) {
-    return true;
-  }
-
   const TIER_ALLOWED_CLASSES: Record<SubscriptionTier, ModelClass[]> = {
     TRIAL: ['FAST_ECONOMY', 'ULTRA_CHEAP', 'FAST_VERIFY'],
-    MANUSCRIPT_BYOK: ['FAST_ECONOMY', 'ULTRA_CHEAP', 'FAST_VERIFY'],
-    BYOK_STANDARD: ['HIGH_QUALITY', 'FAST_ECONOMY', 'ULTRA_CHEAP', 'FAST_VERIFY'],
+    MANUSCRIPT_BYOK: ['FAST_ECONOMY', 'ULTRA_CHEAP', 'FAST_VERIFY', 'HIGH_QUALITY', 'FRONTIER', 'RAG_VERIFY'],
+    BYOK_STANDARD: ['HIGH_QUALITY', 'FAST_ECONOMY', 'ULTRA_CHEAP', 'FAST_VERIFY', 'FRONTIER', 'RAG_VERIFY'],
     PLATFORM_STANDARD: ['HIGH_QUALITY', 'FAST_ECONOMY', 'ULTRA_CHEAP', 'FAST_VERIFY'],
     PLATFORM_PRO: ['HIGH_QUALITY', 'FRONTIER', 'FAST_VERIFY', 'RAG_VERIFY', 'FAST_ECONOMY', 'ULTRA_CHEAP'],
     ENTERPRISE: ['HIGH_QUALITY', 'FRONTIER', 'FAST_VERIFY', 'RAG_VERIFY', 'FAST_ECONOMY', 'ULTRA_CHEAP']

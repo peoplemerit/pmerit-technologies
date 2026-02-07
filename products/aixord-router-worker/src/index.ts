@@ -44,6 +44,10 @@ import knowledge from './api/knowledge';
 import ccs from './api/ccs';
 import security from './api/security';
 import { usage } from './api/usage';
+import images from './api/images';
+import sessions from './api/sessions';
+import layers from './api/layers';
+import engineering from './api/engineering';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -213,17 +217,21 @@ app.post('/v1/router/execute', async (c) => {
         new Date().toISOString()
       ).run();
 
-      // TODO: Implement content redaction for CONFIDENTIAL level
-      // For now, CONFIDENTIAL allows access with a warning logged
+      // SPG-01: Content redaction for CONFIDENTIAL level (L-SPG3)
       if (aiExposure === 'CONFIDENTIAL') {
+        request._redaction_config = {
+          enabled: true,
+          mask_pii: classification?.pii === 'YES',
+          mask_phi: classification?.phi === 'YES',
+          mask_minor_data: classification?.minor_data === 'YES',
+        };
         console.log(JSON.stringify({
-          type: 'spg01_warning',
+          type: 'spg01_redaction_active',
           project_id: projectId,
           request_id: request.trace.request_id,
-          message: 'CONFIDENTIAL exposure - content should be redacted (not yet implemented)',
-          pii: classification?.pii,
-          phi: classification?.phi,
-          minor_data: classification?.minor_data
+          mask_pii: classification?.pii === 'YES',
+          mask_phi: classification?.phi === 'YES',
+          mask_minor_data: classification?.minor_data === 'YES',
         }));
       }
     }
@@ -604,5 +612,17 @@ app.route('/api/v1/projects', security);
 
 // Usage routes (H1/H2 - Trial and Metering)
 app.route('/api/v1/usage', usage);
+
+// Image routes (ENH-4: Path C — Image Evidence)
+app.route('/api/v1/projects', images);
+
+// Session Graph routes (AIXORD v4.4 — Session Governance)
+app.route('/api/v1/projects', sessions);
+
+// Execution Layers routes (Path B: Proactive Debugging)
+app.route('/api/v1', layers);
+
+// Engineering Governance routes (AIXORD v4.5 — Part XIV)
+app.route('/api/v1/projects', engineering);
 
 export default app;

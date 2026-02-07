@@ -4,7 +4,7 @@
  * Unified interface for calling any provider.
  */
 
-import type { Provider, Message, CallOptions, ProviderResponse, ProviderModel, Env } from '../types';
+import type { Provider, Message, CallOptions, ProviderResponse, ProviderModel, Env, ImageContent } from '../types';
 import { RouterError } from '../types';
 import { callAnthropic, estimateAnthropicCost } from './anthropic';
 import { callOpenAI, estimateOpenAICost } from './openai';
@@ -12,21 +12,22 @@ import { callGoogle, estimateGoogleCost } from './google';
 import { callDeepSeek, estimateDeepSeekCost } from './deepseek';
 
 /**
- * Call a provider with the given model and messages
+ * Call a provider with the given model and messages (ENH-4: Now supports images)
  */
 export async function callProvider(
   candidate: ProviderModel,
   messages: Message[],
   apiKey: string,
-  options: CallOptions = {}
+  options: CallOptions = {},
+  images?: ImageContent[]
 ): Promise<ProviderResponse> {
   switch (candidate.provider) {
     case 'anthropic':
-      return callAnthropic(candidate.model, messages, apiKey, options);
+      return callAnthropic(candidate.model, messages, apiKey, options, images);
     case 'openai':
-      return callOpenAI(candidate.model, messages, apiKey, options);
+      return callOpenAI(candidate.model, messages, apiKey, options, images);
     case 'google':
-      return callGoogle(candidate.model, messages, apiKey, options);
+      return callGoogle(candidate.model, messages, apiKey, options, images);
     case 'deepseek':
       return callDeepSeek(candidate.model, messages, apiKey, options);
     default:

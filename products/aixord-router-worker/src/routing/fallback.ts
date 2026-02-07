@@ -16,6 +16,53 @@ import { RouterError } from '../types';
 import { getCandidates } from './table';
 import { resolveApiKey, isProviderAvailable } from './key-resolver';
 import { callProvider, estimateCost } from '../providers';
+import { redactContent } from '../utils/redaction';
+
+/**
+ * Build layered execution system prompt (Path B: Proactive Debugging)
+ * Added during Execute phase when execution_layer context is provided
+ */
+function buildLayeredExecutionPrompt(layer: NonNullable<RouterRequest['delta']['execution_layer']>): string {
+  const expectedInputs = layer.expected_inputs
+    ? Object.entries(layer.expected_inputs).map(([k, v]) => `  - ${k}: ${v}`).join('\n')
+    : '  (No specific inputs declared)';
+
+  const expectedOutputs = layer.expected_outputs
+    ? Object.entries(layer.expected_outputs).map(([k, v]) => `  - ${k}: ${v}`).join('\n')
+    : '  (No specific outputs declared)';
+
+  return `
+
+=== LAYERED EXECUTION MODE ===
+
+You are executing in LAYERED EXECUTION MODE. Work is divided into discrete layers that must be verified before proceeding.
+
+CURRENT LAYER: ${layer.layer_number} - ${layer.title}
+LAYER STATUS: ${layer.status}
+PROGRESS: ${layer.locked_layers_count} locked, ${layer.failed_layers_count} failed, ${layer.total_layers} total
+
+EXPECTED INPUTS for this layer:
+${expectedInputs}
+
+EXPECTED OUTPUTS for this layer:
+${expectedOutputs}
+
+=== LAYERED EXECUTION RULES ===
+
+1. FOCUS ONLY on this layer's scope - do not work on tasks from other layers
+2. DO NOT reference or modify work from locked layers (they are immutable)
+3. DECLARE any inputs you need that aren't available by saying "LAYER_BLOCKED: [reason]"
+4. At completion, SUMMARIZE what you produced vs. what was expected:
+   - List each expected output and whether it was achieved
+   - Note any enhancements beyond the expected outputs
+   - Note any deviations or partial completions
+5. CONCLUDE with a verification prompt asking the user to confirm before proceeding
+
+If you cannot complete this layer due to missing prerequisites, respond with:
+LAYER_BLOCKED: [detailed reason including what is missing]
+
+=== END LAYERED EXECUTION MODE ===`;
+}
 
 /**
  * Build messages from capsule + delta
@@ -23,8 +70,8 @@ import { callProvider, estimateCost } from '../providers';
 function buildMessages(request: RouterRequest): Message[] {
   const messages: Message[] = [];
 
-  // System message with capsule context
-  const systemPrompt = `You are an AI assistant operating under AIXORD governance.
+  // Base system message with capsule context
+  let systemPrompt = `You are an AI assistant operating under AIXORD governance.
 
 Current context:
 - Objective: ${request.capsule.objective}
@@ -35,6 +82,11 @@ Current context:
 
 ${request.policy_flags.require_citations ? 'IMPORTANT: Provide citations for all claims.' : ''}
 ${request.policy_flags.strict_mode ? 'IMPORTANT: Strict mode enabled. Be precise and accurate.' : ''}`;
+
+  // Path B: Add layered execution instructions during Execute phase
+  if (request.capsule.phase === 'E' && request.delta.execution_layer) {
+    systemPrompt += buildLayeredExecutionPrompt(request.delta.execution_layer);
+  }
 
   messages.push({ role: 'system', content: systemPrompt });
 
@@ -51,6 +103,23 @@ ${request.policy_flags.strict_mode ? 'IMPORTANT: Strict mode enabled. Be precise
 
   if (request.delta.artifact_refs?.length) {
     userContent += `\n\nReferenced artifacts: ${request.delta.artifact_refs.map(a => `${a.id} (${a.type})`).join(', ')}`;
+  }
+
+  // SPG-01: Apply content redaction for CONFIDENTIAL classification (L-SPG3)
+  if (request._redaction_config?.enabled) {
+    const { redacted, redactionCount, redactedTypes } = redactContent(
+      userContent,
+      request._redaction_config
+    );
+    userContent = redacted;
+    if (redactionCount > 0) {
+      console.log(JSON.stringify({
+        type: 'spg01_content_redacted',
+        request_id: request.trace.request_id,
+        redaction_count: redactionCount,
+        redacted_types: redactedTypes,
+      }));
+    }
   }
 
   messages.push({ role: 'user', content: userContent });
@@ -106,7 +175,8 @@ export async function executeWithFallback(
         {
           maxOutputTokens: request.budget.max_output_tokens,
           maxLatencyMs: request.budget.max_latency_ms
-        }
+        },
+        request.delta.images // ENH-4: Pass images for vision API
       );
 
       const latencyMs = Date.now() - startTime;

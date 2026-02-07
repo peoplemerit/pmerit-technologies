@@ -4,27 +4,68 @@
  * Handles API calls to GPT models.
  */
 
-import type { Message, CallOptions, ProviderResponse } from '../types';
+import type { Message, CallOptions, ProviderResponse, ImageContent } from '../types';
 import { RouterError } from '../types';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
+// OpenAI content types for multimodal messages
+type OpenAITextPart = { type: 'text'; text: string };
+type OpenAIImagePart = { type: 'image_url'; image_url: { url: string; detail?: 'auto' | 'low' | 'high' } };
+type OpenAIContentPart = OpenAITextPart | OpenAIImagePart;
+type OpenAIContent = string | OpenAIContentPart[];
+
 /**
- * Call OpenAI API
+ * Call OpenAI API (ENH-4: Now supports vision/images)
  */
 export async function callOpenAI(
   model: string,
   messages: Message[],
   apiKey: string,
-  options: CallOptions = {}
+  options: CallOptions = {},
+  images?: ImageContent[]
 ): Promise<ProviderResponse> {
+  // Build OpenAI messages format
+  const openaiMessages: Array<{ role: string; content: OpenAIContent }> = messages.map(m => ({
+    role: m.role,
+    content: m.content as OpenAIContent
+  }));
+
+  // ENH-4: If images are provided, convert the last user message to multimodal format
+  if (images && images.length > 0 && openaiMessages.length > 0) {
+    const lastIdx = openaiMessages.length - 1;
+    const lastMsg = openaiMessages[lastIdx];
+    if (lastMsg.role === 'user') {
+      const contentParts: OpenAIContentPart[] = [];
+
+      // Add images as base64 data URLs
+      for (const img of images) {
+        contentParts.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:${img.media_type};base64,${img.base64}`,
+            detail: 'auto',
+          },
+        });
+      }
+
+      // Add text
+      contentParts.push({
+        type: 'text',
+        text: lastMsg.content as string,
+      });
+
+      openaiMessages[lastIdx] = {
+        role: 'user',
+        content: contentParts,
+      };
+    }
+  }
+
   const body = {
     model,
     max_tokens: options.maxOutputTokens || 4096,
-    messages: messages.map(m => ({
-      role: m.role,
-      content: m.content
-    }))
+    messages: openaiMessages,
   };
 
   const response = await fetch(OPENAI_API_URL, {
