@@ -212,24 +212,30 @@ projects.delete('/:id', async (c) => {
 
     // Delete child tables in reverse dependency order using batch
     // This handles tables that may or may not have ON DELETE CASCADE
+    // IMPORTANT: Every table with a FK to projects(id) MUST be listed here
     await c.env.DB.batch([
-      // Layer evidence (references execution_layers and images)
+      // Grandchild tables (reference children, not projects directly)
       c.env.DB.prepare(
         'DELETE FROM layer_evidence WHERE layer_id IN (SELECT id FROM execution_layers WHERE project_id = ?)'
       ).bind(projectId),
-      // Blueprint children (deliverables + integrity reports reference scopes)
       c.env.DB.prepare(
         'DELETE FROM blueprint_integrity_reports WHERE scope_id IN (SELECT id FROM blueprint_scopes WHERE project_id = ?)'
       ).bind(projectId),
       c.env.DB.prepare(
         'DELETE FROM blueprint_deliverables WHERE scope_id IN (SELECT id FROM blueprint_scopes WHERE project_id = ?)'
       ).bind(projectId),
-      c.env.DB.prepare('DELETE FROM blueprint_scopes WHERE project_id = ?').bind(projectId),
-      // Session edges (references project_sessions)
       c.env.DB.prepare(
         'DELETE FROM session_edges WHERE from_session_id IN (SELECT id FROM project_sessions WHERE project_id = ?)'
       ).bind(projectId),
-      // Direct project children
+      // CCS children (reference ccs_incidents, not projects)
+      c.env.DB.prepare(
+        'DELETE FROM ccs_artifacts WHERE incident_id IN (SELECT id FROM ccs_incidents WHERE project_id = ?)'
+      ).bind(projectId),
+      c.env.DB.prepare(
+        'DELETE FROM ccs_verification_tests WHERE incident_id IN (SELECT id FROM ccs_incidents WHERE project_id = ?)'
+      ).bind(projectId),
+      // All direct project children (every table with FK to projects.id)
+      c.env.DB.prepare('DELETE FROM blueprint_scopes WHERE project_id = ?').bind(projectId),
       c.env.DB.prepare('DELETE FROM images WHERE project_id = ?').bind(projectId),
       c.env.DB.prepare('DELETE FROM github_evidence WHERE project_id = ?').bind(projectId),
       c.env.DB.prepare('DELETE FROM github_connections WHERE project_id = ?').bind(projectId),
@@ -252,6 +258,8 @@ projects.delete('/:id', async (c) => {
       c.env.DB.prepare('DELETE FROM rollback_strategies WHERE project_id = ?').bind(projectId),
       c.env.DB.prepare('DELETE FROM alert_configurations WHERE project_id = ?').bind(projectId),
       c.env.DB.prepare('DELETE FROM knowledge_transfers WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM artifacts WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM state WHERE project_id = ?').bind(projectId),
       c.env.DB.prepare('DELETE FROM project_state WHERE project_id = ?').bind(projectId),
       // Finally delete the project itself
       c.env.DB.prepare('DELETE FROM projects WHERE id = ? AND owner_id = ?').bind(projectId, userId),

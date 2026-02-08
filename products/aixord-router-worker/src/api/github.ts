@@ -18,8 +18,13 @@ import { requireAuth } from '../middleware/requireAuth';
 
 const github = new Hono<{ Bindings: Env }>();
 
-// All routes require auth
-github.use('/*', requireAuth);
+// Auth on all routes EXCEPT /callback (GitHub redirects there without a Bearer token)
+github.use('/*', async (c, next) => {
+  if (c.req.path.endsWith('/callback')) {
+    return next();
+  }
+  return requireAuth(c, next);
+});
 
 // =============================================================================
 // ENCRYPTION HELPERS
