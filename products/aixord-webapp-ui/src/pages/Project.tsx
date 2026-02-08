@@ -24,6 +24,7 @@ import { useSessions } from '../hooks/useSessions';
 import { MessageBubble } from '../components/chat/MessageBubble';
 import { ImageUpload, type PendingImage } from '../components/chat/ImageUpload';
 import { formatAttachmentsForContext, type AttachedFile } from '../components/FileAttachment';
+import { detectAndResolveFiles } from '../lib/fileDetection';
 import { CCSIncidentBanner } from '../components/CCSIncidentBanner';
 import { CCSIncidentPanel } from '../components/CCSIncidentPanel';
 import { CCSCreateIncidentModal } from '../components/CCSCreateIncidentModal';
@@ -623,7 +624,19 @@ export function Project() {
 
     // Build full message content with attachments
     const attachmentContext = formatAttachmentsForContext(attachedFiles);
-    const fullContent = content + attachmentContext;
+    let fullContent = content + attachmentContext;
+
+    // P0-3: Detect file references and resolve from workspace
+    try {
+      const fileDetection = await detectAndResolveFiles(content, id);
+      if (fileDetection.injectedCount > 0) {
+        fullContent += fileDetection.contextString;
+        console.log(`[FileDetection] Injected ${fileDetection.injectedCount} file(s) from workspace`);
+      }
+    } catch (err) {
+      // File detection is non-blocking — log and continue
+      console.warn('[FileDetection] Detection failed, continuing without file context:', err);
+    }
 
     // Upload pending images
     const uploadedImages: Array<{ id: string; url: string; filename: string; evidenceType: string; caption?: string }> = [];
