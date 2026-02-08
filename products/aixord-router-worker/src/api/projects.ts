@@ -219,14 +219,14 @@ projects.delete('/:id', async (c) => {
         'DELETE FROM layer_evidence WHERE layer_id IN (SELECT id FROM execution_layers WHERE project_id = ?)'
       ).bind(projectId),
       c.env.DB.prepare(
-        'DELETE FROM blueprint_integrity_reports WHERE scope_id IN (SELECT id FROM blueprint_scopes WHERE project_id = ?)'
+        'DELETE FROM blueprint_integrity_reports WHERE project_id = ?'
       ).bind(projectId),
       c.env.DB.prepare(
-        'DELETE FROM blueprint_deliverables WHERE scope_id IN (SELECT id FROM blueprint_scopes WHERE project_id = ?)'
+        'DELETE FROM blueprint_deliverables WHERE project_id = ?'
       ).bind(projectId),
       c.env.DB.prepare(
-        'DELETE FROM session_edges WHERE from_session_id IN (SELECT id FROM project_sessions WHERE project_id = ?)'
-      ).bind(projectId),
+        'DELETE FROM session_edges WHERE from_session_id IN (SELECT id FROM project_sessions WHERE project_id = ?) OR to_session_id IN (SELECT id FROM project_sessions WHERE project_id = ?)'
+      ).bind(projectId, projectId),
       // CCS children (reference ccs_incidents, not projects)
       c.env.DB.prepare(
         'DELETE FROM ccs_artifacts WHERE incident_id IN (SELECT id FROM ccs_incidents WHERE project_id = ?)'
