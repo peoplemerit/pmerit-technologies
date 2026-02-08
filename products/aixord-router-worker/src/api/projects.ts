@@ -191,20 +191,80 @@ projects.put('/:id', async (c) => {
 
 /**
  * DELETE /api/v1/projects/:id
+ *
+ * Explicitly deletes from all child tables in dependency order
+ * before deleting the project itself. This avoids relying on
+ * FK CASCADE behavior in D1/SQLite which is inconsistent.
  */
 projects.delete('/:id', async (c) => {
-  const userId = c.get('userId');
-  const projectId = c.req.param('id');
+  try {
+    const userId = c.get('userId');
+    const projectId = c.req.param('id');
 
-  const result = await c.env.DB.prepare(
-    'DELETE FROM projects WHERE id = ? AND owner_id = ?'
-  ).bind(projectId, userId).run();
+    // Verify project exists and is owned by user
+    const project = await c.env.DB.prepare(
+      'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
+    ).bind(projectId, userId).first();
 
-  if (result.meta.changes === 0) {
-    return c.json({ error: 'Project not found' }, 404);
+    if (!project) {
+      return c.json({ error: 'Project not found' }, 404);
+    }
+
+    // Delete child tables in reverse dependency order using batch
+    // This handles tables that may or may not have ON DELETE CASCADE
+    await c.env.DB.batch([
+      // Layer evidence (references execution_layers and images)
+      c.env.DB.prepare(
+        'DELETE FROM layer_evidence WHERE layer_id IN (SELECT id FROM execution_layers WHERE project_id = ?)'
+      ).bind(projectId),
+      // Blueprint children (deliverables + integrity reports reference scopes)
+      c.env.DB.prepare(
+        'DELETE FROM blueprint_integrity_reports WHERE scope_id IN (SELECT id FROM blueprint_scopes WHERE project_id = ?)'
+      ).bind(projectId),
+      c.env.DB.prepare(
+        'DELETE FROM blueprint_deliverables WHERE scope_id IN (SELECT id FROM blueprint_scopes WHERE project_id = ?)'
+      ).bind(projectId),
+      c.env.DB.prepare('DELETE FROM blueprint_scopes WHERE project_id = ?').bind(projectId),
+      // Session edges (references project_sessions)
+      c.env.DB.prepare(
+        'DELETE FROM session_edges WHERE from_session_id IN (SELECT id FROM project_sessions WHERE project_id = ?)'
+      ).bind(projectId),
+      // Direct project children
+      c.env.DB.prepare('DELETE FROM images WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM github_evidence WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM github_connections WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM workspace_bindings WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM messages WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM decisions WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM execution_layers WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM project_sessions WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM knowledge_artifacts WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM ccs_incidents WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM data_classification WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM ai_exposure_log WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM security_gates WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM system_architecture_records WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM interface_contracts WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM fitness_functions WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM integration_tests WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM iteration_budget WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM operational_readiness WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM rollback_strategies WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM alert_configurations WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM knowledge_transfers WHERE project_id = ?').bind(projectId),
+      c.env.DB.prepare('DELETE FROM project_state WHERE project_id = ?').bind(projectId),
+      // Finally delete the project itself
+      c.env.DB.prepare('DELETE FROM projects WHERE id = ? AND owner_id = ?').bind(projectId, userId),
+    ]);
+
+    return c.json({ success: true });
+  } catch (error) {
+    console.error('Delete project error:', error);
+    return c.json({
+      error: 'Failed to delete project',
+      detail: error instanceof Error ? error.message : String(error)
+    }, 500);
   }
-
-  return c.json({ success: true });
 });
 
 export default projects;
