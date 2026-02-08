@@ -706,8 +706,11 @@ export function Settings() {
                 <div>
                   <label className="block text-sm text-gray-500 mb-1">Email Status</label>
                   <div className="flex items-center gap-2">
-                    <span className="text-amber-400">⚠️ Not verified</span>
-                    <span className="text-xs text-gray-500">(Email verification coming soon)</span>
+                    {user?.emailVerified ? (
+                      <span className="text-green-400">✓ Verified</span>
+                    ) : (
+                      <span className="text-amber-400">⚠️ Not verified</span>
+                    )}
                   </div>
                 </div>
 

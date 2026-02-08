@@ -18,7 +18,6 @@ import {
   readFileContent,
   isTextFile,
   verifyPermission,
-  type FileContent,
 } from './fileSystem';
 
 // ============================================================================

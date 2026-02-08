@@ -33,7 +33,7 @@ export function Signup() {
     }
   };
 
-  // Show success screen after registration with email verification instructions
+  // Show success screen after registration
   if (registrationComplete) {
     return (
       <div className="min-h-[calc(100vh-200px)] flex items-center justify-center px-4">
@@ -50,14 +50,14 @@ export function Signup() {
               </svg>
             </button>
             <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-violet-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h1 className="text-2xl font-bold text-white">Check your email!</h1>
+              <h1 className="text-2xl font-bold text-white">Account created!</h1>
               <p className="text-gray-400 mt-2">
-                We've sent a verification link to
+                Your account has been set up for
               </p>
               <p className="text-white font-medium mt-1">{email}</p>
             </div>
@@ -68,20 +68,14 @@ export function Signup() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div className="text-sm text-violet-300">
-                  <p className="font-medium mb-1">What's next?</p>
-                  <ol className="list-decimal list-inside space-y-1 text-violet-200/80">
-                    <li>Check your inbox for the verification email</li>
-                    <li>Click the verification link</li>
-                    <li>Log in to start using AIXORD</li>
-                  </ol>
+                  <p className="font-medium mb-1">Your 14-day free trial includes:</p>
+                  <ul className="list-disc list-inside space-y-1 text-violet-200/80">
+                    <li>Platform AI keys included (no setup needed)</li>
+                    <li>Full AIXORD governance features</li>
+                    <li>Up to 50 AI requests</li>
+                  </ul>
                 </div>
               </div>
-            </div>
-
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 mb-6">
-              <p className="text-amber-400 text-sm">
-                <strong>Didn't receive the email?</strong> Check your spam folder or wait a few minutes. The verification link expires in 24 hours.
-              </p>
             </div>
 
             <div className="space-y-3">

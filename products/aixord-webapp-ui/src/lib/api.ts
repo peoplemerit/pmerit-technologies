@@ -88,6 +88,7 @@ export interface User {
   email: string;
   name?: string;
   apiKey: string;
+  emailVerified?: boolean;
 }
 
 export interface Project {
@@ -241,6 +242,7 @@ export const authApi = {
       email: response.user.email,
       name: name,
       apiKey: response.token,
+      emailVerified: response.user.emailVerified ?? true,
     };
   },
 
@@ -250,7 +252,7 @@ export const authApi = {
    */
   async login(email: string, password: string): Promise<User> {
     const response = await request<{
-      user: { id: string; email: string };
+      user: { id: string; email: string; emailVerified?: boolean };
       token: string;
       expires_at: string;
     }>('/auth/login', {
@@ -262,22 +264,24 @@ export const authApi = {
       email: response.user.email,
       name: undefined,
       apiKey: response.token,
+      emailVerified: response.user.emailVerified ?? true,
     };
   },
 
   /**
    * Get current user info (validates API key)
-   * Backend returns: { user: { id, email } }
+   * Backend returns: { user: { id, email, emailVerified } }
    */
   async me(token: string): Promise<User> {
     const response = await request<{
-      user: { id: string; email: string };
+      user: { id: string; email: string; emailVerified?: boolean };
     }>('/auth/me', {}, token);
     return {
       id: response.user.id,
       email: response.user.email,
       name: undefined,
       apiKey: token,
+      emailVerified: response.user.emailVerified ?? false,
     };
   },
 

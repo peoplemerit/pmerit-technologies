@@ -110,6 +110,7 @@ interface User {
   email: string;
   name?: string;
   apiKey: string;
+  emailVerified?: boolean;
 }
 
 interface AuthContextType {

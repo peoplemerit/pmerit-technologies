@@ -1064,9 +1064,11 @@ export function Project() {
                 {/* Phase icon */}
                 <div className="text-5xl mb-3">
                   {activeSession?.session_type === 'BRAINSTORM' ? '💡' :
-                   activeSession?.session_type === 'PLAN' ? '📋' :
+                   activeSession?.session_type === 'BLUEPRINT' ? '📋' :
                    activeSession?.session_type === 'EXECUTE' ? '⚡' :
-                   activeSession?.session_type === 'REVIEW' ? '🔍' : '🚀'}
+                   activeSession?.session_type === 'AUDIT' ? '🔍' :
+                   activeSession?.session_type === 'VERIFY_LOCK' ? '🔒' :
+                   activeSession?.session_type === 'DISCOVER' ? '🔭' : '🚀'}
                 </div>
 
                 {/* Project objective */}
@@ -1084,12 +1086,16 @@ export function Project() {
                 <p className="text-gray-400 text-sm max-w-md mb-4">
                   {activeSession?.session_type === 'BRAINSTORM'
                     ? 'Explore ideas, define scope, and identify requirements for your project.'
-                    : activeSession?.session_type === 'PLAN'
+                    : activeSession?.session_type === 'BLUEPRINT'
                     ? 'Structure your implementation approach, define deliverables and architecture.'
                     : activeSession?.session_type === 'EXECUTE'
                     ? 'Implement planned work — write code, create artifacts, build deliverables.'
-                    : activeSession?.session_type === 'REVIEW'
+                    : activeSession?.session_type === 'AUDIT'
                     ? 'Evaluate completed work against your objective and plan next steps.'
+                    : activeSession?.session_type === 'VERIFY_LOCK'
+                    ? 'Final verification and sign-off on completed deliverables.'
+                    : activeSession?.session_type === 'DISCOVER'
+                    ? 'Explore the problem space and gather context.'
                     : 'Start your governed AI conversation below.'}
                 </p>
 
@@ -1106,12 +1112,16 @@ export function Project() {
                   <p className="text-gray-300 text-sm italic">
                     {activeSession?.session_type === 'BRAINSTORM'
                       ? `"Help me break down the scope and identify the key features for this project."`
-                      : activeSession?.session_type === 'PLAN'
+                      : activeSession?.session_type === 'BLUEPRINT'
                       ? `"Create a technical architecture and implementation plan based on our brainstorm."`
                       : activeSession?.session_type === 'EXECUTE'
                       ? `"Let's start implementing the first deliverable from our plan."`
-                      : activeSession?.session_type === 'REVIEW'
+                      : activeSession?.session_type === 'AUDIT'
                       ? `"Review what we've built against the original objective and identify gaps."`
+                      : activeSession?.session_type === 'VERIFY_LOCK'
+                      ? `"Verify all deliverables are complete and ready for sign-off."`
+                      : activeSession?.session_type === 'DISCOVER'
+                      ? `"Help me understand the problem space and gather requirements."`
                       : `"Help me explore ideas and define scope for this project."`}
                   </p>
                 </div>
