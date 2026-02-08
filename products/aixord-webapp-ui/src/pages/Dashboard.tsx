@@ -897,13 +897,14 @@ export function Dashboard() {
                   required
                   rows={3}
                   className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 transition-colors resize-none"
-                  placeholder="Build a..."
+                  placeholder="Describe what you want to build, e.g.: Build a task management app with team collaboration, real-time updates, and calendar integration"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Reality Classification
+                  <span className="ml-1 text-gray-500 text-xs font-normal" title="Tells AIXORD whether this is a new project (Greenfield), building on existing code (Brownfield), or maintaining an older system (Legacy). This affects how governance gates are applied.">ⓘ</span>
                 </label>
                 <select
                   value={newProject.realityClassification}

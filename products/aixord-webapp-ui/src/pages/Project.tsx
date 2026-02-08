@@ -1027,18 +1027,80 @@ export function Project() {
           </div>
         )}
 
+        {/* Workspace Not Bound Banner (P1-3: re-entry path) */}
+        {project && workspaceChecked && workspaceStatus && !workspaceStatus.bound && (
+          <div className="mx-4 mt-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-amber-400 text-sm">⚠️</span>
+              <span className="text-amber-300 text-sm">Workspace not configured — link a project folder for full governance</span>
+            </div>
+            <button
+              onClick={() => setShowWorkspaceWizard(true)}
+              className="px-3 py-1 text-xs bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded hover:bg-amber-500/30 transition-colors"
+            >
+              Set up now
+            </button>
+          </div>
+        )}
+
         {/* Chat Messages */}
         {project && (
           <div className="flex-1 overflow-y-auto p-4">
             {(!conversation || conversation.messages.length === 0) ? (
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <div className="text-6xl mb-4">🚀</div>
-                <h4 className="text-xl font-medium text-white mb-2">Start the conversation</h4>
+              <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                {/* Phase icon */}
+                <div className="text-5xl mb-3">
+                  {activeSession?.session_type === 'BRAINSTORM' ? '💡' :
+                   activeSession?.session_type === 'PLAN' ? '📋' :
+                   activeSession?.session_type === 'EXECUTE' ? '⚡' :
+                   activeSession?.session_type === 'REVIEW' ? '🔍' : '🚀'}
+                </div>
+
+                {/* Project objective */}
+                {project.objective && (
+                  <div className="bg-violet-500/10 border border-violet-500/20 rounded-lg px-4 py-3 mb-4 max-w-lg">
+                    <p className="text-violet-300 text-xs font-medium uppercase tracking-wide mb-1">Project Objective</p>
+                    <p className="text-white text-sm">{project.objective}</p>
+                  </div>
+                )}
+
+                {/* Phase + session context */}
+                <h4 className="text-lg font-medium text-white mb-1">
+                  {activeSession?.session_type || 'BRAINSTORM'} Phase — Session {activeSession?.session_number || 1}
+                </h4>
                 <p className="text-gray-400 text-sm max-w-md mb-4">
-                  Type your message below. The AI will respond following AIXORD governance rules.
+                  {activeSession?.session_type === 'BRAINSTORM'
+                    ? 'Explore ideas, define scope, and identify requirements for your project.'
+                    : activeSession?.session_type === 'PLAN'
+                    ? 'Structure your implementation approach, define deliverables and architecture.'
+                    : activeSession?.session_type === 'EXECUTE'
+                    ? 'Implement planned work — write code, create artifacts, build deliverables.'
+                    : activeSession?.session_type === 'REVIEW'
+                    ? 'Evaluate completed work against your objective and plan next steps.'
+                    : 'Start your governed AI conversation below.'}
                 </p>
-                <div className="text-gray-500 text-xs">
-                  Tip: Click the tabs above to access Governance, Evidence, and Project Info
+
+                {/* Gates status summary */}
+                {gatesComplete !== undefined && gatesTotal !== undefined && (
+                  <div className="text-gray-500 text-xs mb-3">
+                    Governance: {gatesComplete}/{gatesTotal} gates cleared
+                  </div>
+                )}
+
+                {/* Suggested first prompt */}
+                <div className="bg-gray-800/50 border border-gray-700/30 rounded-lg px-4 py-2.5 max-w-md">
+                  <p className="text-gray-500 text-xs mb-1">Try asking:</p>
+                  <p className="text-gray-300 text-sm italic">
+                    {activeSession?.session_type === 'BRAINSTORM'
+                      ? `"Help me break down the scope and identify the key features for this project."`
+                      : activeSession?.session_type === 'PLAN'
+                      ? `"Create a technical architecture and implementation plan based on our brainstorm."`
+                      : activeSession?.session_type === 'EXECUTE'
+                      ? `"Let's start implementing the first deliverable from our plan."`
+                      : activeSession?.session_type === 'REVIEW'
+                      ? `"Review what we've built against the original objective and identify gaps."`
+                      : `"Help me explore ideas and define scope for this project."`}
+                  </p>
                 </div>
               </div>
             ) : (
