@@ -41,87 +41,68 @@ export default function BlueprintRibbon({
   const [showTree, setShowTree] = useState(false);
 
   return (
-    <div className="p-3 space-y-3">
-      {/* Header row */}
+    <div className="space-y-2">
+      {/* Row 1: Header + stats inline + actions */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
           <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">Blueprint</span>
-          <span className="text-[10px] text-gray-500">L-BPX / L-IVL</span>
+          <div className="flex items-center gap-3 text-xs">
+            <span className="text-gray-400">
+              <span className="text-white font-medium">{summary?.scopes || 0}</span> scopes
+              {(summary?.subscopes || 0) > 0 && <span className="text-gray-500"> (+{summary?.subscopes})</span>}
+            </span>
+            <span className="text-gray-400">
+              <span className="text-white font-medium">{summary?.deliverables || 0}</span> deliv
+              <span className="text-gray-500"> ({summary?.deliverables_with_dod || 0} DoD)</span>
+            </span>
+            <span className={`font-medium ${
+              summary?.integrity?.passed ? 'text-green-400' : summary?.integrity ? 'text-red-400' : 'text-gray-500'
+            }`}>
+              {summary?.integrity ? (summary.integrity.passed ? '✓ PASS' : '✗ FAIL') : '— Not run'}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={onRunValidation}
             disabled={isLoading}
-            className="text-[11px] px-2 py-1 rounded bg-violet-600/30 text-violet-300 hover:bg-violet-600/50 disabled:opacity-50"
+            className="text-[11px] px-2 py-0.5 rounded bg-violet-600/30 text-violet-300 hover:bg-violet-600/50 disabled:opacity-50"
           >
             {isLoading ? '...' : '▶ Validate'}
           </button>
           <button
             onClick={onOpenPanel}
-            className="text-[11px] px-2 py-1 rounded bg-gray-600/30 text-gray-300 hover:bg-gray-600/50"
+            className="text-[11px] px-2 py-0.5 rounded bg-gray-600/30 text-gray-300 hover:bg-gray-600/50"
           >
             + Builder
           </button>
         </div>
       </div>
 
-      {/* Stats row */}
-      <div className="flex gap-4">
-        <div className="flex-1 bg-gray-800/50 rounded p-2">
-          <div className="text-[10px] text-gray-500 uppercase">Scopes</div>
-          <div className="text-lg font-bold text-gray-200">{summary?.scopes || 0}</div>
-          {(summary?.subscopes || 0) > 0 && (
-            <div className="text-[10px] text-gray-500">+{summary?.subscopes} sub</div>
-          )}
-        </div>
-        <div className="flex-1 bg-gray-800/50 rounded p-2">
-          <div className="text-[10px] text-gray-500 uppercase">Deliverables</div>
-          <div className="text-lg font-bold text-gray-200">{summary?.deliverables || 0}</div>
-          <div className="text-[10px] text-gray-500">
-            {summary?.deliverables_with_dod || 0}/{summary?.deliverables || 0} DoD
-          </div>
-        </div>
-        <div className="flex-1 bg-gray-800/50 rounded p-2">
-          <div className="text-[10px] text-gray-500 uppercase">Integrity</div>
-          {summary?.integrity ? (
-            <>
-              <div className={`text-lg font-bold ${summary.integrity.passed ? 'text-green-400' : 'text-red-400'}`}>
-                {summary.integrity.passed ? 'PASS' : 'FAIL'}
-              </div>
-              <div className="text-[10px] text-gray-500">
-                {new Date(summary.integrity.run_at).toLocaleDateString()}
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="text-lg font-bold text-gray-500">—</div>
-              <div className="text-[10px] text-gray-500">Not run</div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Integrity checks detail (if report exists) */}
+      {/* Row 2: Integrity checks inline (if report exists) */}
       {integrityReport && (
-        <div className="bg-gray-800/30 rounded p-2">
-          <div className="text-[10px] text-gray-500 uppercase mb-1">5-Check Validation (L-IVL)</div>
-          <div className="grid grid-cols-5 gap-1">
-            {(Object.keys(integrityReport.checks) as Array<keyof typeof integrityReport.checks>).map(key => {
-              const check = integrityReport.checks[key];
-              return (
-                <div key={key} className="text-center" title={check.detail}>
-                  <div className={`text-sm ${check.passed ? 'text-green-400' : 'text-red-400'}`}>
-                    {check.passed ? '✓' : '✗'}
-                  </div>
-                  <div className="text-[9px] text-gray-500 leading-tight">{checkLabels[key]}</div>
-                </div>
-              );
-            })}
-          </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-gray-500 text-xs w-16 shrink-0">Checks:</span>
+          {(Object.keys(integrityReport.checks) as Array<keyof typeof integrityReport.checks>).map(key => {
+            const check = integrityReport.checks[key];
+            return (
+              <span
+                key={key}
+                title={`${checkLabels[key]}: ${check.detail}`}
+                className={`px-1.5 py-0.5 text-xs rounded ${
+                  check.passed
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                }`}
+              >
+                {check.passed ? '✓' : '✗'} {checkLabels[key]?.split(' ')[0]}
+              </span>
+            );
+          })}
         </div>
       )}
 
-      {/* Scope tree toggle */}
+      {/* Row 3: Scope tree toggle (compact) */}
       {scopes.length > 0 && (
         <div>
           <button
@@ -132,7 +113,7 @@ export default function BlueprintRibbon({
             <span>Scope Tree ({scopes.length} scopes, {deliverables.length} deliverables)</span>
           </button>
           {showTree && (
-            <div className="mt-2 max-h-48 overflow-y-auto">
+            <div className="mt-1 max-h-[60px] overflow-y-auto">
               <BlueprintScopeTree
                 scopes={scopes}
                 deliverables={deliverables}

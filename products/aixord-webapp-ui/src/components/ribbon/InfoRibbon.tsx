@@ -1,8 +1,8 @@
 /**
- * InfoRibbon Component (Ribbon-Style Layout)
+ * InfoRibbon Component (Detail Panel — Compact)
  *
- * Contains Project Info, Session Metrics, Session List, and Available Models
- * in a compact four-column layout.
+ * Contains Project Info, Session Metrics, Session Graph, and Models
+ * in compact rows for 140px max height.
  */
 
 import type { ProjectSession, SessionMetrics } from '../../lib/api';
@@ -68,139 +68,97 @@ export function InfoRibbon({
   onUpdateProject,
 }: InfoRibbonProps) {
   return (
-    <div className="grid grid-cols-4 gap-6">
-      {/* Project Info */}
-      <div>
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-          Project
-        </h4>
-        <div className="space-y-1.5">
-          <div>
-            <span className="text-gray-500 text-xs">Name: </span>
-            {onUpdateProject ? (
-              <span
-                className="text-white text-sm cursor-pointer hover:text-violet-400 transition-colors"
-                title="Click to edit"
-                onClick={() => {
-                  const newName = prompt('Project name:', projectName);
-                  if (newName && newName !== projectName) onUpdateProject({ name: newName });
-                }}
-              >
-                {projectName}
-              </span>
-            ) : (
-              <span className="text-white text-sm">{projectName}</span>
-            )}
-          </div>
-          <div>
-            <span className="text-gray-500 text-xs">Objective: </span>
-            <span className="text-gray-300 text-xs line-clamp-2">{objective || 'Not specified'}</span>
-          </div>
-          <div>
-            <span className="text-gray-500 text-xs">Reality: </span>
-            <span className="text-gray-300 text-xs capitalize">{realityClassification?.toLowerCase() || 'N/A'}</span>
-          </div>
-          <div>
-            <span className="text-gray-500 text-xs">Created: </span>
-            <span className="text-gray-300 text-xs">{formatDate(createdAt)}</span>
-          </div>
+    <div className="space-y-2">
+      {/* Row 1: Project info + session metrics inline */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500 text-xs">Project:</span>
+          {onUpdateProject ? (
+            <span
+              className="text-white text-xs font-medium cursor-pointer hover:text-violet-400 transition-colors"
+              title="Click to edit"
+              onClick={() => {
+                const newName = prompt('Project name:', projectName);
+                if (newName && newName !== projectName) onUpdateProject({ name: newName });
+              }}
+            >
+              {projectName}
+            </span>
+          ) : (
+            <span className="text-white text-xs font-medium">{projectName}</span>
+          )}
+          <span className="text-gray-600">·</span>
+          <span className="text-gray-400 text-[10px] capitalize">{realityClassification?.toLowerCase() || 'N/A'}</span>
+          <span className="text-gray-600">·</span>
+          <span className="text-gray-400 text-[10px]">{formatDate(createdAt)}</span>
+        </div>
+        <span className="text-gray-600">|</span>
+        <div className="flex items-center gap-3 text-xs">
+          <span className="text-gray-400">S#{sessionNumber}</span>
+          <span className="text-green-400 font-medium">${(sessionMetrics?.cost_usd ?? sessionCost).toFixed(4)}</span>
+          <span className="text-gray-300">{(sessionMetrics?.tokens.total ?? sessionTokens).toLocaleString()} tok</span>
+          <span className="text-gray-300">{sessionMetrics?.messages.total ?? messageCount} msg</span>
+          <span className="text-gray-400 text-[10px]">
+            {sessionMetrics?.avg_latency_ms
+              ? `${(sessionMetrics.avg_latency_ms / 1000).toFixed(1)}s`
+              : avgLatencyMs !== undefined
+                ? `${(avgLatencyMs / 1000).toFixed(1)}s`
+                : ''}
+          </span>
         </div>
       </div>
 
-      {/* Session Metrics — D11: Uses backend metrics when available */}
-      <div>
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-          Session #{sessionNumber}
-        </h4>
-        <div className="space-y-1.5">
-          <div>
-            <span className="text-gray-500 text-xs">Cost: </span>
-            <span className="text-green-400 text-sm font-medium">
-              ${(sessionMetrics?.cost_usd ?? sessionCost).toFixed(4)}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-500 text-xs">Tokens: </span>
-            <span className="text-white text-sm">
-              {(sessionMetrics?.tokens.total ?? sessionTokens).toLocaleString()}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-500 text-xs">Messages: </span>
-            <span className="text-white text-sm">
-              {sessionMetrics?.messages.total ?? messageCount}
-            </span>
-          </div>
-          <div>
-            <span className="text-gray-500 text-xs">Avg Latency: </span>
-            <span className="text-gray-300 text-xs">
-              {sessionMetrics?.avg_latency_ms
-                ? `${(sessionMetrics.avg_latency_ms / 1000).toFixed(1)}s`
-                : avgLatencyMs !== undefined
-                  ? `${(avgLatencyMs / 1000).toFixed(1)}s`
-                  : 'N/A'}
-            </span>
-          </div>
-          {sessionMetrics?.model_usage && Object.keys(sessionMetrics.model_usage).length > 0 && (
-            <div>
-              <span className="text-gray-500 text-xs">Models: </span>
-              <span className="text-gray-300 text-xs">
-                {Object.entries(sessionMetrics.model_usage)
-                  .map(([model, count]) => `${model.split('-').slice(-2).join('-')}(${count})`)
-                  .join(', ')}
-              </span>
+      {/* Row 2: Objective */}
+      {objective && (
+        <div className="flex items-center gap-2">
+          <span className="text-gray-500 text-xs shrink-0">Objective:</span>
+          <span className="text-gray-300 text-xs truncate">{objective}</span>
+        </div>
+      )}
+
+      {/* Row 3: Session graph/list + Models */}
+      <div className="flex items-start gap-6">
+        <div className="flex-1">
+          <span className="text-gray-500 text-[10px] uppercase">Sessions</span>
+          {sessions && onSwitchSession && projectId && token ? (
+            <div className="max-h-[55px] overflow-y-auto mt-0.5">
+              <SessionGraph
+                projectId={projectId}
+                token={token}
+                sessions={sessions}
+                activeSessionId={activeSessionId || null}
+                onSwitchSession={onSwitchSession}
+              />
             </div>
+          ) : sessions && onSwitchSession ? (
+            <div className="max-h-[55px] overflow-y-auto mt-0.5">
+              <SessionList
+                sessions={sessions}
+                activeSessionId={activeSessionId || null}
+                onSwitchSession={onSwitchSession}
+              />
+            </div>
+          ) : (
+            <p className="text-gray-500 text-[10px]">No sessions</p>
           )}
         </div>
-      </div>
-
-      {/* Sessions (v4.4) with Session Graph */}
-      <div>
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-          Session Graph
-        </h4>
-        {sessions && onSwitchSession && projectId && token ? (
-          <div className="max-h-[140px] overflow-y-auto">
-            <SessionGraph
-              projectId={projectId}
-              token={token}
-              sessions={sessions}
-              activeSessionId={activeSessionId || null}
-              onSwitchSession={onSwitchSession}
-            />
-          </div>
-        ) : sessions && onSwitchSession ? (
-          <div className="max-h-[120px] overflow-y-auto">
-            <SessionList
-              sessions={sessions}
-              activeSessionId={activeSessionId || null}
-              onSwitchSession={onSwitchSession}
-            />
-          </div>
-        ) : (
-          <p className="text-gray-500 text-xs">No sessions</p>
-        )}
-      </div>
-
-      {/* Available Models */}
-      <div>
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-          Models
-        </h4>
-        {availableModels ? (
-          <div className="space-y-1">
-            {Object.entries(availableModels).slice(0, 3).map(([tier, models]) => (
-              <div key={tier}>
-                <span className="text-gray-500 text-xs uppercase">{tier}: </span>
-                <span className="text-gray-300 text-xs">
-                  {models.slice(0, 2).map((m) => m.model.split('-').slice(-2).join('-')).join(', ')}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-gray-500 text-xs">Loading models...</p>
-        )}
+        <div className="min-w-[140px]">
+          <span className="text-gray-500 text-[10px] uppercase">Models</span>
+          {availableModels ? (
+            <div className="mt-0.5 space-y-0.5">
+              {Object.entries(availableModels).slice(0, 2).map(([tier, models]) => (
+                <div key={tier} className="text-[10px]">
+                  <span className="text-gray-500 uppercase">{tier}: </span>
+                  <span className="text-gray-300">
+                    {models.slice(0, 2).map((m) => m.model.split('-').slice(-2).join('-')).join(', ')}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-[10px]">Loading...</p>
+          )}
+        </div>
       </div>
     </div>
   );

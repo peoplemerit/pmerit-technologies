@@ -1,15 +1,17 @@
 /**
- * Project Workspace Page (Ribbon-Style Layout)
+ * Project Workspace Page (Hybrid Ribbon Layout)
  *
- * Ribbon layout with maximized chat area:
+ * Layout with MiniBar (always visible) + Detail Panel (expandable):
  * ┌──────────────────────────────────────────────────────────────────────────┐
- * │ [A] AIXORD     [Governance] [Evidence] [Info]        user@email [Logout] │
+ * │ [A] AIXORD  [☰]  Project Name     [Gov] [BP] [Sec] [Ev] [Eng] [Info]   │ ← TabBar (48px)
  * ├──────────────────────────────────────────────────────────────────────────┤
- * │ [Ribbon content - visible ONLY when tab is active]                       │
+ * │ Phase [B]·[P]·[E]·[R]   ✓5 ○6   BP  SEC  EV           ▓▓▓▓░░ 45%     │ ← MiniBar (36px, always)
  * ├──────────────────────────────────────────────────────────────────────────┤
- * │                            CHAT AREA (85%+ of screen)                    │
+ * │ [Detail panel - visible ONLY when tab is active, max 140px]             │ ← Detail Panel (0-140px)
  * ├──────────────────────────────────────────────────────────────────────────┤
- * │ ● BRAINSTORM │ Gates: 2/10 │ $0.0034 │ 61 msgs │ [📎] [input] [Balanced] │
+ * │                            CHAT AREA (maximized)                        │
+ * ├──────────────────────────────────────────────────────────────────────────┤
+ * │ ● BRAINSTORM │ $0.0034 │ 61 msgs │ [📎] [input] [Balanced]             │ ← StatusBar
  * └──────────────────────────────────────────────────────────────────────────┘
  */
 
@@ -29,6 +31,7 @@ import { CCSIncidentBanner } from '../components/CCSIncidentBanner';
 import { CCSIncidentPanel } from '../components/CCSIncidentPanel';
 import { CCSCreateIncidentModal } from '../components/CCSCreateIncidentModal';
 import { TabBar } from '../components/layout/TabBar';
+import { MiniBar } from '../components/layout/MiniBar';
 import { Ribbon } from '../components/layout/Ribbon';
 import { StatusBar } from '../components/layout/StatusBar';
 import { GovernanceRibbon } from '../components/ribbon/GovernanceRibbon';
@@ -460,6 +463,39 @@ export function Project() {
     }
   };
 
+  // AI-Governance Integration — Phase 2: Auto-evaluate gates after key actions
+  const evaluateGatesAfterAction = useCallback(async () => {
+    if (!id || !token) return;
+    try {
+      const result = await api.state.evaluateGates(id, token);
+      if (result.changed.length > 0) {
+        console.log('[GateEval] Gates auto-updated:', result.changed);
+        fetchState();
+      }
+    } catch (err) {
+      console.warn('[GateEval] Evaluation failed:', err);
+    }
+  }, [id, token, fetchState]);
+
+  // AI-Governance Integration — Phase 3: Handle phase advance from AI suggestion
+  const handlePhaseAdvance = useCallback(async (targetPhase: string) => {
+    if (!id || !token) return;
+    setPhaseError(null);
+    try {
+      await api.state.setPhase(id, targetPhase, token);
+      fetchState();
+    } catch (err) {
+      if (err instanceof APIError && err.statusCode === 403) {
+        const missing = (err as any).missingGates as string[] | undefined;
+        setPhaseError(missing
+          ? `Phase advance blocked (missing: ${missing.join(', ')})`
+          : (err as Error).message);
+      } else {
+        console.error('Phase advance failed:', err);
+      }
+    }
+  }, [id, token, fetchState]);
+
   const handleWorkspaceComplete = useCallback(async (binding: WorkspaceBindingData) => {
     if (!id || !token) return;
     try {
@@ -484,12 +520,14 @@ export function Project() {
       const updatedStatus = await api.workspace.getStatus(id, token);
       setWorkspaceStatus(updatedStatus);
       setShowWorkspaceWizard(false);
+      // Phase 2: Auto-evaluate gates after workspace setup
+      evaluateGatesAfterAction();
     } catch (err) {
       console.error('Workspace setup failed:', err);
       // Still close wizard — binding was saved even if gate toggle failed
       setShowWorkspaceWizard(false);
     }
-  }, [id, token, toggleGate]);
+  }, [id, token, toggleGate, evaluateGatesAfterAction]);
 
   const handleGitHubConnect = useCallback(async () => {
     if (!id || !token) return;
@@ -746,6 +784,14 @@ export function Project() {
           github_connected: workspaceStatus.github_connected || false,
           github_repo: workspaceStatus.github_repo || undefined,
         } : { bound: false },
+        // AI-Governance Integration — Phase 1: Gate & Blueprint awareness
+        gates: state?.gates || undefined,
+        blueprintSummary: blueprint.summary ? {
+          scopes: blueprint.summary.scopes,
+          deliverables: blueprint.summary.deliverables,
+          deliverables_with_dod: blueprint.summary.deliverables_with_dod,
+          integrity_passed: blueprint.summary.integrity?.passed ?? null,
+        } : undefined,
       });
 
       // Create assistant message
@@ -912,7 +958,17 @@ export function Project() {
         sessionNumber={activeSession?.session_number || state?.session.number}
       />
 
-      {/* Ribbon */}
+      {/* MiniBar — always visible governance strip */}
+      {state && (
+        <MiniBar
+          currentPhase={currentPhase}
+          gates={state.gates}
+          onTabClick={handleTabClick}
+          activeTab={activeTab}
+        />
+      )}
+
+      {/* Detail Panel (Ribbon) */}
       <Ribbon activeTab={activeTab} onClose={() => setActiveTab(null)}>
         {activeTab === 'governance' && state && (
           <GovernanceRibbon
@@ -1133,6 +1189,7 @@ export function Project() {
                     key={message.id}
                     message={message}
                     token={token || undefined}
+                    onPhaseAdvance={message.role === 'assistant' ? handlePhaseAdvance : undefined}
                   />
                 ))}
 
@@ -1264,6 +1321,7 @@ export function Project() {
             await blueprint.loadDeliverables();
             await blueprint.loadSummary();
           }}
+          onEvaluateGates={evaluateGatesAfterAction}
         />
       )}
 

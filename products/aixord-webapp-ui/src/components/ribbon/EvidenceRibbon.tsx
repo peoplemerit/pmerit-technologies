@@ -1,8 +1,9 @@
 /**
- * EvidenceRibbon Component (Ribbon-Style Layout)
+ * EvidenceRibbon Component (Detail Panel — Compact)
  *
  * Contains GitHub connection status with repo selection,
  * recent evidence images with management, and evidence sync.
+ * Compacted for 140px max height.
  */
 
 import { useState } from 'react';
@@ -63,143 +64,100 @@ export function EvidenceRibbon({
   };
 
   return (
-    <div className="flex items-start gap-8">
-      {/* GitHub Connection */}
-      <div className="min-w-[280px]">
-        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-          GitHub
-        </h4>
+    <div className="space-y-2">
+      {/* Row 1: GitHub status + actions */}
+      <div className="flex items-center gap-3">
+        <span className="text-gray-500 text-xs w-16 shrink-0">GitHub:</span>
         {isConnected && !needsRepoSelection ? (
-          <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center">
-                  <svg className="w-5 h-5 text-green-400" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
-                  </svg>
-                </div>
-                <div>
-                  <div className="text-white text-sm font-medium">
-                    {repoOwner}/{repoName}
-                  </div>
-                  {lastSync && (
-                    <div className="text-gray-500 text-xs">
-                      Synced {new Date(lastSync).toLocaleString()}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-1">
-                {onSync && (
-                  <button
-                    onClick={onSync}
-                    disabled={isLoading}
-                    className="px-2 py-1 text-xs border border-violet-500/30 text-violet-400 rounded hover:bg-violet-500/10 transition-colors"
-                  >
-                    Sync
-                  </button>
-                )}
-                {onDisconnect && (
-                  <button
-                    onClick={onDisconnect}
-                    disabled={isLoading}
-                    className="px-2 py-1 text-xs border border-red-500/30 text-red-400 rounded hover:bg-red-500/10 transition-colors"
-                  >
-                    Disconnect
-                  </button>
-                )}
-              </div>
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-green-400 text-xs">●</span>
+            <span className="text-white text-xs font-medium">{repoOwner}/{repoName}</span>
+            {lastSync && (
+              <span className="text-gray-500 text-[10px]">
+                synced {new Date(lastSync).toLocaleDateString()}
+              </span>
+            )}
+            <div className="flex gap-1 ml-auto">
+              {onSync && (
+                <button onClick={onSync} disabled={isLoading} className="px-1.5 py-0.5 text-[10px] border border-violet-500/30 text-violet-400 rounded hover:bg-violet-500/10">
+                  Sync
+                </button>
+              )}
+              {onDisconnect && (
+                <button onClick={onDisconnect} disabled={isLoading} className="px-1.5 py-0.5 text-[10px] border border-red-500/30 text-red-400 rounded hover:bg-red-500/10">
+                  Disconnect
+                </button>
+              )}
             </div>
           </div>
         ) : isConnected && needsRepoSelection ? (
-          <div className="space-y-2">
-            <div className="text-sm text-amber-400">Select a repository</div>
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-amber-400 text-xs">Select repo</span>
             {showRepoSelect ? (
-              <div className="space-y-2">
+              <>
                 <select
                   value={selectedRepo}
                   onChange={(e) => setSelectedRepo(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-gray-900/50 border border-gray-700 rounded text-sm text-white focus:outline-none focus:border-violet-500"
+                  className="px-1.5 py-0.5 bg-gray-900/50 border border-gray-700 rounded text-xs text-white focus:outline-none focus:border-violet-500 max-w-[200px]"
                 >
-                  <option value="">Select repo...</option>
+                  <option value="">Select...</option>
                   {repos.map((r) => (
                     <option key={r.full_name} value={r.full_name}>{r.full_name}</option>
                   ))}
                 </select>
-                <div className="flex gap-1">
-                  <button onClick={() => setShowRepoSelect(false)} className="px-2 py-1 text-xs text-gray-400 border border-gray-700 rounded hover:border-gray-600">Cancel</button>
-                  <button onClick={handleRepoSelect} disabled={!selectedRepo} className="px-2 py-1 text-xs bg-violet-600 text-white rounded hover:bg-violet-500 disabled:opacity-50">Select</button>
-                </div>
-              </div>
+                <button onClick={handleRepoSelect} disabled={!selectedRepo} className="px-1.5 py-0.5 text-[10px] bg-violet-600 text-white rounded disabled:opacity-50">OK</button>
+                <button onClick={() => setShowRepoSelect(false)} className="px-1.5 py-0.5 text-[10px] text-gray-400 rounded hover:text-white">Cancel</button>
+              </>
             ) : (
-              <div className="flex gap-1">
-                <button onClick={() => setShowRepoSelect(true)} disabled={repos.length === 0} className="px-3 py-1.5 text-xs bg-violet-600 text-white rounded hover:bg-violet-500 disabled:opacity-50">
-                  {repos.length === 0 ? 'Loading...' : 'Select Repo'}
+              <>
+                <button onClick={() => setShowRepoSelect(true)} disabled={repos.length === 0} className="px-2 py-0.5 text-[10px] bg-violet-600 text-white rounded disabled:opacity-50">
+                  {repos.length === 0 ? 'Loading...' : 'Select'}
                 </button>
                 {onDisconnect && (
-                  <button onClick={onDisconnect} className="px-2 py-1.5 text-xs border border-red-500/30 text-red-400 rounded hover:bg-red-500/10">Disconnect</button>
+                  <button onClick={onDisconnect} className="px-1.5 py-0.5 text-[10px] border border-red-500/30 text-red-400 rounded hover:bg-red-500/10">Disconnect</button>
                 )}
-              </div>
+              </>
             )}
           </div>
         ) : (
-          <button
-            onClick={onConnect}
-            disabled={isLoading || !onConnect}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-sm rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 0C5.374 0 0 5.373 0 12c0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
-            </svg>
+          <button onClick={onConnect} disabled={isLoading || !onConnect} className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-xs rounded transition-colors">
             Connect GitHub
           </button>
         )}
       </div>
 
-      {/* Recent Evidence */}
-      <div className="flex-1">
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-            Recent Evidence
-          </h4>
-          {onViewAllEvidence && recentEvidence.length > 0 && (
-            <button
-              onClick={onViewAllEvidence}
-              className="text-xs text-violet-400 hover:text-violet-300 transition-colors"
-            >
-              View All →
-            </button>
-          )}
-        </div>
+      {/* Row 2: Evidence thumbnails */}
+      <div className="flex items-center gap-3">
+        <span className="text-gray-500 text-xs w-16 shrink-0">Evidence:</span>
         {recentEvidence.length > 0 ? (
-          <div className="flex items-center gap-2 overflow-x-auto">
-            {recentEvidence.slice(0, 6).map((evidence) => (
+          <div className="flex items-center gap-1.5 overflow-x-auto flex-1">
+            {recentEvidence.slice(0, 8).map((evidence) => (
               <div key={evidence.id} className="relative group shrink-0">
                 <button
                   onClick={() => onImageClick?.(evidence.id)}
-                  className="w-16 h-16 rounded-lg bg-gray-700/50 border border-gray-600/50 hover:border-violet-500/50 transition-colors overflow-hidden"
+                  className="w-12 h-12 rounded bg-gray-700/50 border border-gray-600/50 hover:border-violet-500/50 transition-colors overflow-hidden"
                   title={evidence.filename}
                 >
-                  <img
-                    src={evidence.url}
-                    alt={evidence.filename}
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={evidence.url} alt={evidence.filename} className="w-full h-full object-cover" />
                 </button>
                 {onDeleteImage && (
                   <button
                     onClick={() => onDeleteImage(evidence.id)}
-                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Delete"
+                    className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 text-white rounded-full text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     x
                   </button>
                 )}
               </div>
             ))}
+            {onViewAllEvidence && (
+              <button onClick={onViewAllEvidence} className="text-[10px] text-violet-400 hover:text-violet-300 shrink-0">
+                All →
+              </button>
+            )}
           </div>
         ) : (
-          <p className="text-gray-500 text-xs">No evidence uploaded yet</p>
+          <span className="text-gray-500 text-xs">No evidence uploaded</span>
         )}
       </div>
     </div>

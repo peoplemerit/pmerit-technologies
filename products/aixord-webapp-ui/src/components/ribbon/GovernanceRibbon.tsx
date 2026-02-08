@@ -1,7 +1,8 @@
 /**
- * GovernanceRibbon Component (Ribbon-Style Layout)
+ * GovernanceRibbon Component (Detail Panel — Compact)
  *
- * Contains Phase stepper and Gates in a compact horizontal layout.
+ * Phase stepper + gate pills in compact layout for 140px detail panel.
+ * Phase stepper is condensed (MiniBar shows the primary view).
  * Work Gates only shown during Execute/Review phases.
  */
 
@@ -33,17 +34,13 @@ function getMissingExitGates(currentPhase: string, targetPhase: string, gates: R
   const phaseOrder: Record<string, number> = { 'BRAINSTORM': 0, 'PLAN': 1, 'EXECUTE': 2, 'REVIEW': 3 };
   const currentIdx = phaseOrder[currentPhase] ?? -1;
   const targetIdx = phaseOrder[targetPhase] ?? -1;
-
-  // Backward transitions always allowed
   if (targetIdx <= currentIdx) return [];
-
   const required = PHASE_EXIT_REQUIREMENTS[currentPhase];
   if (!required) return [];
-
   return required.filter(g => !gates[g]);
 }
 
-// Setup Gates (from GateTracker)
+// Setup Gates
 const setupGates = [
   { id: 'GA:LIC', label: 'LIC', title: 'License' },
   { id: 'GA:DIS', label: 'DIS', title: 'Disclaimer' },
@@ -69,7 +66,6 @@ const workGates = [
   { id: 'GW:ARC', label: 'ARC', title: 'Archive' },
 ];
 
-// Gates that open workspace wizard instead of toggling directly
 const WORKSPACE_GATES = new Set(['GA:ENV', 'GA:FLD']);
 
 export function GovernanceRibbon({
@@ -88,134 +84,107 @@ export function GovernanceRibbon({
   const showWorkGates = currentPhase === 'EXECUTE' || currentPhase === 'E' ||
                         currentPhase === 'REVIEW' || currentPhase === 'R';
 
-  // Count completed gates
-  const setupComplete = setupGates.filter((g) => gates[g.id]).length;
-  const workComplete = workGates.filter((g) => gates[g.id]).length;
-  const totalComplete = setupComplete + workComplete;
-  const totalGates = setupGates.length + (showWorkGates ? workGates.length : 0);
-
   return (
-    <div className="space-y-4">
-      {/* Phase + Progress Row */}
-      <div className="flex items-center justify-between">
-        {/* Phase Stepper */}
-        <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-sm mr-2">Phase:</span>
-          <div className="flex items-center">
-            {phases.map((phase, index) => {
-              const isActive = index === currentPhaseIndex;
-              const isCompleted = index < currentPhaseIndex;
-              const missingGates = getMissingExitGates(currentPhase, phase.id, gates);
-              const isBlocked = missingGates.length > 0 && index > currentPhaseIndex;
-              const isClickable = onSetPhase && !isLoading && !isBlocked;
-
-              return (
-                <div key={phase.id} className="flex items-center">
-                  <button
-                    onClick={() => isClickable && onSetPhase(phase.id)}
-                    disabled={!isClickable}
-                    title={isBlocked ? `Blocked: missing ${missingGates.join(', ')}` : phase.label}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-violet-600 text-white'
-                        : isCompleted
-                        ? 'bg-green-500/20 text-green-400'
-                        : isBlocked
-                        ? 'bg-gray-700/30 text-gray-600 cursor-not-allowed'
-                        : 'bg-gray-700/50 text-gray-400 hover:text-white'
-                    } ${isClickable ? 'cursor-pointer' : isBlocked ? 'cursor-not-allowed' : 'cursor-default'}`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${
-                      isActive ? 'bg-white' : isCompleted ? 'bg-green-400' : isBlocked ? 'bg-red-400/50' : 'bg-gray-500'
-                    }`} />
-                    {phase.label}
-                    {isBlocked && <span className="text-red-400/60 text-xs ml-0.5">!</span>}
-                  </button>
-                  {index < phases.length - 1 && (
-                    <div className={`w-6 h-0.5 mx-1 ${
-                      isCompleted ? 'bg-green-500' : 'bg-gray-700'
-                    }`} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
+    <div className="space-y-2">
+      {/* Phase Row — compact clickable pills */}
+      <div className="flex items-center gap-2">
+        <span className="text-gray-500 text-xs shrink-0">Phase:</span>
+        <div className="flex items-center gap-0.5">
+          {phases.map((phase, index) => {
+            const isActive = index === currentPhaseIndex;
+            const isCompleted = index < currentPhaseIndex;
+            const missingGates = getMissingExitGates(currentPhase, phase.id, gates);
+            const isBlocked = missingGates.length > 0 && index > currentPhaseIndex;
+            const isClickable = onSetPhase && !isLoading && !isBlocked;
+            return (
+              <div key={phase.id} className="flex items-center">
+                <button
+                  onClick={() => isClickable && onSetPhase(phase.id)}
+                  disabled={!isClickable}
+                  title={isBlocked ? `Blocked: missing ${missingGates.join(', ')}` : phase.label}
+                  className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                    isActive
+                      ? 'bg-violet-600 text-white'
+                      : isCompleted
+                      ? 'bg-green-500/20 text-green-400'
+                      : isBlocked
+                      ? 'bg-gray-700/30 text-gray-600 cursor-not-allowed'
+                      : 'bg-gray-700/50 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  {phase.label}
+                </button>
+                {index < phases.length - 1 && (
+                  <div className={`w-3 h-px mx-0.5 ${isCompleted ? 'bg-green-500' : 'bg-gray-700'}`} />
+                )}
+              </div>
+            );
+          })}
         </div>
-
-        {/* Completion */}
-        <div className="text-sm text-gray-400">
-          <span className="text-white font-medium">{Math.round((totalComplete / totalGates) * 100)}%</span> Complete
-        </div>
+        {phaseError && (
+          <span className="text-red-400 text-xs ml-2 truncate max-w-[200px]" title={phaseError}>
+            {phaseError}
+          </span>
+        )}
       </div>
 
-      {/* Phase transition error */}
-      {phaseError && (
-        <div className="px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg text-xs text-red-300">
-          {phaseError}
-        </div>
-      )}
+      {/* Setup Gates */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-gray-500 text-xs w-16 shrink-0">Setup:</span>
+        {setupGates.map((gate) => {
+          const isPassed = gates[gate.id];
+          const isWorkspaceGate = WORKSPACE_GATES.has(gate.id);
+          const handleClick = () => {
+            if (isWorkspaceGate && !isPassed && onOpenWorkspaceSetup) {
+              onOpenWorkspaceSetup();
+            } else if (onToggleGate) {
+              onToggleGate(gate.id);
+            }
+          };
+          return (
+            <button
+              key={gate.id}
+              onClick={handleClick}
+              disabled={isLoading || (!onToggleGate && !onOpenWorkspaceSetup)}
+              title={isWorkspaceGate && !isPassed ? `${gate.title} — Click to configure workspace` : gate.title}
+              className={`px-1.5 py-0.5 text-xs rounded transition-colors ${
+                isPassed
+                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  : isWorkspaceGate
+                  ? 'bg-violet-500/10 text-violet-400 border border-violet-500/30 hover:bg-violet-500/20'
+                  : 'bg-gray-700/50 text-gray-400 border border-gray-600/50 hover:border-gray-500'
+              }`}
+            >
+              {isPassed ? '✓' : isWorkspaceGate ? '⚙' : '○'} {gate.label}
+            </button>
+          );
+        })}
+      </div>
 
-      {/* Gates Row */}
-      <div className="space-y-2">
-        {/* Setup Gates */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-gray-500 text-xs w-20 shrink-0">Setup Gates:</span>
-          {setupGates.map((gate) => {
+      {/* Work Gates (only in Execute/Review) */}
+      {showWorkGates && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-gray-500 text-xs w-16 shrink-0">Work:</span>
+          {workGates.map((gate) => {
             const isPassed = gates[gate.id];
-            const isWorkspaceGate = WORKSPACE_GATES.has(gate.id);
-            const handleClick = () => {
-              // If it's a workspace gate and not yet passed, open the wizard
-              if (isWorkspaceGate && !isPassed && onOpenWorkspaceSetup) {
-                onOpenWorkspaceSetup();
-              } else if (onToggleGate) {
-                onToggleGate(gate.id);
-              }
-            };
             return (
               <button
                 key={gate.id}
-                onClick={handleClick}
-                disabled={isLoading || (!onToggleGate && !onOpenWorkspaceSetup)}
-                title={isWorkspaceGate && !isPassed ? `${gate.title} — Click to configure workspace` : gate.title}
-                className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+                onClick={() => onToggleGate && onToggleGate(gate.id)}
+                disabled={isLoading || !onToggleGate}
+                title={gate.title}
+                className={`px-1.5 py-0.5 text-xs rounded transition-colors ${
                   isPassed
                     ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                    : isWorkspaceGate
-                    ? 'bg-violet-500/10 text-violet-400 border border-violet-500/30 hover:bg-violet-500/20'
                     : 'bg-gray-700/50 text-gray-400 border border-gray-600/50 hover:border-gray-500'
                 }`}
               >
-                {isPassed ? '✓' : isWorkspaceGate ? '⚙' : '○'} {gate.label}
+                {isPassed ? '✓' : '○'} {gate.label}
               </button>
             );
           })}
         </div>
-
-        {/* Work Gates (only in Execute/Review) */}
-        {showWorkGates && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-gray-500 text-xs w-20 shrink-0">Work Gates:</span>
-            {workGates.map((gate) => {
-              const isPassed = gates[gate.id];
-              return (
-                <button
-                  key={gate.id}
-                  onClick={() => onToggleGate && onToggleGate(gate.id)}
-                  disabled={isLoading || !onToggleGate}
-                  title={gate.title}
-                  className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
-                    isPassed
-                      ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                      : 'bg-gray-700/50 text-gray-400 border border-gray-600/50 hover:border-gray-500'
-                  }`}
-                >
-                  {isPassed ? '✓' : '○'} {gate.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }

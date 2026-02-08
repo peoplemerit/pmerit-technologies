@@ -701,6 +701,25 @@ export const stateApi = {
     }
     return data.phase;
   },
+
+  /**
+   * Evaluate all gate preconditions and auto-flip satisfied gates
+   * AI-Governance Integration — Phase 2: Auto-Satisfaction Rules Engine
+   * Idempotent: safe to call multiple times
+   */
+  async evaluateGates(projectId: string, token: string): Promise<{
+    evaluated: string[];
+    changed: Array<{ gateId: string; from: boolean; to: boolean }>;
+    gates: Record<string, boolean>;
+    phase: string;
+  }> {
+    return request<{
+      evaluated: string[];
+      changed: Array<{ gateId: string; from: boolean; to: boolean }>;
+      gates: Record<string, boolean>;
+      phase: string;
+    }>(`/state/${projectId}/gates/evaluate`, { method: 'POST' }, token);
+  },
 };
 
 // ============================================================================
@@ -919,6 +938,25 @@ export interface RouterRequest {
       scaffold_generated?: boolean;
       github_connected?: boolean;
       github_repo?: string;
+    };
+    // AI-Governance Integration — Phase 1
+    gates?: {
+      setup: Record<string, boolean>;
+      work: Record<string, boolean>;
+      security: Record<string, boolean>;
+    };
+    blueprint_summary?: {
+      scopes: number;
+      deliverables: number;
+      deliverables_with_dod: number;
+      integrity_passed: boolean | null;
+    };
+    phase_exit?: {
+      current_phase: string;
+      required_gates: string[];
+      satisfied_gates: string[];
+      missing_gates: string[];
+      can_advance: boolean;
     };
   };
   delta: {

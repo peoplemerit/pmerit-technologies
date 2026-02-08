@@ -715,15 +715,21 @@ blueprint.get('/:projectId/blueprint/integrity', async (c) => {
     return c.json({ report: null });
   }
 
+  const r = report as Record<string, unknown>;
   return c.json({
     report: {
-      ...(report as Record<string, unknown>),
+      ...r,
       checks: {
-        formula: { passed: !!(report as Record<string, unknown>).check_formula, detail: (report as Record<string, unknown>).check_formula_detail },
-        structural: { passed: !!(report as Record<string, unknown>).check_structural, detail: (report as Record<string, unknown>).check_structural_detail },
-        dag: { passed: !!(report as Record<string, unknown>).check_dag, detail: (report as Record<string, unknown>).check_dag_detail },
-        deliverable: { passed: !!(report as Record<string, unknown>).check_deliverable, detail: (report as Record<string, unknown>).check_deliverable_detail },
-        assumption: { passed: !!(report as Record<string, unknown>).check_assumption, detail: (report as Record<string, unknown>).check_assumption_detail },
+        formula: { passed: !!r.check_formula, detail: r.check_formula_detail },
+        structural: { passed: !!r.check_structural, detail: r.check_structural_detail },
+        dag: { passed: !!r.check_dag, detail: r.check_dag_detail },
+        deliverable: { passed: !!r.check_deliverable, detail: r.check_deliverable_detail },
+        assumption: { passed: !!r.check_assumption, detail: r.check_assumption_detail },
+      },
+      totals: {
+        scopes: r.total_scopes || 0,
+        subscopes: r.total_subscopes || 0,
+        deliverables: r.total_deliverables || 0,
       },
     },
   });

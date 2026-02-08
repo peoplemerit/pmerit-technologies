@@ -14,6 +14,8 @@ interface MessageBubbleProps {
   onSelectOption?: (optionId: string) => void;
   onRetry?: () => void;
   token?: string; // Auth token for image loading
+  /** AI-Governance Integration — Phase 3: Phase advance callback */
+  onPhaseAdvance?: (phase: string) => void;
 }
 
 // Check if message content looks like an error
@@ -34,10 +36,17 @@ function isErrorMessage(content: string): boolean {
   return errorPatterns.some(pattern => pattern.test(content));
 }
 
-export function MessageBubble({ message, onSelectOption, onRetry, token }: MessageBubbleProps) {
+export function MessageBubble({ message, onSelectOption, onRetry, token, onPhaseAdvance }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const isError = (isSystem || message.role === 'assistant') && isErrorMessage(message.content);
+
+  // AI-Governance Integration — Phase 3: Detect phase advance tag
+  const phaseAdvanceMatch = !isUser ? message.content.match(/\[PHASE_ADVANCE:(\w+)\]/) : null;
+  const suggestedPhase = phaseAdvanceMatch ? phaseAdvanceMatch[1] : null;
+  const displayContent = !isUser
+    ? message.content.replace(/\[PHASE_ADVANCE:\w+\]/g, '').trim()
+    : message.content;
 
   // Render error messages with ChatErrorMessage component
   if (isError) {
@@ -67,8 +76,30 @@ export function MessageBubble({ message, onSelectOption, onRetry, token }: Messa
       >
         {/* Message content */}
         <div className="whitespace-pre-wrap text-sm leading-relaxed">
-          {message.content}
+          {displayContent}
         </div>
+
+        {/* AI-Governance Integration — Phase 3: Phase advance suggestion */}
+        {suggestedPhase && onPhaseAdvance && (
+          <div className="mt-3 p-3 bg-violet-500/10 border border-violet-500/30 rounded-lg">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-violet-400 text-sm font-medium">
+                  Ready to advance to {suggestedPhase}
+                </span>
+                <p className="text-gray-400 text-xs mt-0.5">
+                  All exit gates for the current phase are satisfied.
+                </p>
+              </div>
+              <button
+                onClick={() => onPhaseAdvance(suggestedPhase)}
+                className="flex-shrink-0 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm rounded-lg transition-colors"
+              >
+                Advance to {suggestedPhase}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Image attachments (ENH-4) */}
         {message.metadata?.images && message.metadata.images.length > 0 && (

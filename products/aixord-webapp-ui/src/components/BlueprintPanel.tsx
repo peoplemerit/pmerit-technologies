@@ -30,6 +30,8 @@ interface BlueprintPanelProps {
   initialSection?: BlueprintSection;
   onClose: () => void;
   onUpdate?: () => void;
+  /** AI-Governance Integration — Phase 2: Trigger gate re-evaluation after changes */
+  onEvaluateGates?: () => void;
 }
 
 const SECTION_LABELS: Record<BlueprintSection, string> = {
@@ -53,6 +55,7 @@ export function BlueprintPanel({
   initialSection = 'scopes',
   onClose,
   onUpdate,
+  onEvaluateGates,
 }: BlueprintPanelProps) {
   const [activeSection, setActiveSection] = useState<BlueprintSection>(initialSection);
   const [loading, setLoading] = useState(false);
@@ -153,6 +156,7 @@ export function BlueprintPanel({
       setCreateFields({});
       await loadSection('scopes');
       onUpdate?.();
+      onEvaluateGates?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create scope');
     } finally {
@@ -183,6 +187,7 @@ export function BlueprintPanel({
       setCreateFields({});
       await loadSection('deliverables');
       onUpdate?.();
+      onEvaluateGates?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create deliverable');
     } finally {
@@ -225,6 +230,7 @@ export function BlueprintPanel({
       const report = await blueprintApi.runValidation(projectId, token);
       setIntegrityReport(report);
       onUpdate?.();
+      onEvaluateGates?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Validation failed');
     } finally {
@@ -448,7 +454,7 @@ export function BlueprintPanel({
                   </span>
                 </div>
                 <div className="text-xs text-gray-500">
-                  {integrityReport.totals.scopes} scopes · {integrityReport.totals.deliverables} deliverables
+                  {integrityReport.totals?.scopes ?? 0} scopes · {integrityReport.totals?.deliverables ?? 0} deliverables
                 </div>
               </div>
             </div>

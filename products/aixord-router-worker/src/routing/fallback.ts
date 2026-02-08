@@ -150,6 +150,48 @@ ${request.policy_flags.strict_mode ? 'IMPORTANT: Strict mode enabled. Be precise
     }
   }
 
+  // AI-Governance Integration — Phase 1: Gate & Blueprint awareness
+  if (request.capsule.gates) {
+    const g = request.capsule.gates;
+    const setupPassed = Object.entries(g.setup).filter(([, v]) => v).map(([k]) => k);
+    const setupPending = Object.entries(g.setup).filter(([, v]) => !v).map(([k]) => k);
+    const workPassed = Object.entries(g.work).filter(([, v]) => v).map(([k]) => k);
+    const workPending = Object.entries(g.work).filter(([, v]) => !v).map(([k]) => k);
+
+    systemPrompt += `\n\n=== GATE STATUS ===`;
+    systemPrompt += `\nSetup Gates: ${setupPassed.length > 0 ? setupPassed.join(', ') + ' PASSED' : 'none passed'}${setupPending.length > 0 ? '; ' + setupPending.join(', ') + ' PENDING' : ''}`;
+    systemPrompt += `\nWork Gates: ${workPassed.length > 0 ? workPassed.join(', ') + ' PASSED' : 'none passed'}${workPending.length > 0 ? '; ' + workPending.join(', ') + ' PENDING' : ''}`;
+  }
+
+  if (request.capsule.phase_exit) {
+    const pe = request.capsule.phase_exit;
+    if (pe.can_advance) {
+      systemPrompt += `\nPHASE EXIT: All ${pe.current_phase} exit gates satisfied. Project CAN advance to next phase.`;
+    } else {
+      systemPrompt += `\nPHASE EXIT: Cannot leave ${pe.current_phase}. Missing: ${pe.missing_gates.join(', ')}`;
+    }
+  }
+
+  if (request.capsule.blueprint_summary) {
+    const bp = request.capsule.blueprint_summary;
+    systemPrompt += `\nBLUEPRINT: ${bp.scopes} scopes, ${bp.deliverables} deliverables (${bp.deliverables_with_dod} with DoD)${bp.integrity_passed !== null ? `. Integrity: ${bp.integrity_passed ? 'PASSED' : 'FAILED'}` : ''}`;
+  }
+
+  // AI-Governance Integration — Phase 3: Phase advance suggestion
+  if (request.capsule.phase_exit?.can_advance) {
+    const PHASE_NEXT: Record<string, string> = {
+      'BRAINSTORM': 'PLAN', 'PLAN': 'EXECUTE', 'EXECUTE': 'REVIEW',
+    };
+    const nextPhase = PHASE_NEXT[request.capsule.phase_exit.current_phase];
+    if (nextPhase) {
+      systemPrompt += `\n\n=== PHASE ADVANCE AVAILABLE ===
+All exit gates for ${request.capsule.phase_exit.current_phase} are satisfied.
+If you believe the work in this phase is complete and the user asks about next steps or the conversation naturally concludes, suggest advancing by including this exact tag in your response:
+[PHASE_ADVANCE:${nextPhase}]
+Only include this tag when contextually appropriate — do NOT include it on every message.`;
+    }
+  }
+
   // Path B: Add layered execution instructions during Execute phase
   if (request.capsule.phase === 'E' && request.delta.execution_layer) {
     systemPrompt += buildLayeredExecutionPrompt(request.delta.execution_layer);

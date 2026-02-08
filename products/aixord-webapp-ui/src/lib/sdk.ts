@@ -121,6 +121,15 @@ export interface SendOptions {
     github_connected?: boolean;
     github_repo?: string;
   };
+  /** Gate states for governance-aware AI (AI-Gov Integration Phase 1) */
+  gates?: Record<string, boolean>;
+  /** Blueprint summary for governance-aware AI (AI-Gov Integration Phase 1) */
+  blueprintSummary?: {
+    scopes: number;
+    deliverables: number;
+    deliverables_with_dod: number;
+    integrity_passed: boolean | null;
+  };
 }
 
 /**
@@ -196,6 +205,49 @@ export class AIExposureBlockedError extends Error {
     this.exposureLevel = exposureLevel;
     this.reason = reason;
   }
+}
+
+// ============================================================================
+// AI-Governance Integration Helpers (Phase 1)
+// ============================================================================
+
+/** Phase exit gate requirements — mirrors backend state.ts PHASE_EXIT_REQUIREMENTS */
+const PHASE_EXIT_REQUIREMENTS: Record<string, string[]> = {
+  'BRAINSTORM': ['GA:LIC', 'GA:DIS', 'GA:TIR'],
+  'PLAN': ['GA:ENV', 'GA:FLD', 'GA:BP', 'GA:IVL'],
+  'EXECUTE': ['GW:PRE', 'GW:VAL', 'GW:VER'],
+};
+
+/** Categorize flat gate map into setup/work/security buckets */
+function categorizeGates(gates: Record<string, boolean>) {
+  const setup: Record<string, boolean> = {};
+  const work: Record<string, boolean> = {};
+  const security: Record<string, boolean> = {};
+  for (const [k, v] of Object.entries(gates)) {
+    if (k.startsWith('GA:')) setup[k] = v;
+    else if (k.startsWith('GW:')) work[k] = v;
+    else if (k.startsWith('GS:')) security[k] = v;
+  }
+  return { setup, work, security };
+}
+
+/** Compute phase exit status from gate states */
+function computePhaseExit(phase: string | undefined, gates: Record<string, boolean>) {
+  const PHASE_NAMES: Record<string, string> = {
+    'B': 'BRAINSTORM', 'P': 'PLAN', 'E': 'EXECUTE', 'R': 'REVIEW',
+    'BRAINSTORM': 'BRAINSTORM', 'PLAN': 'PLAN', 'EXECUTE': 'EXECUTE', 'REVIEW': 'REVIEW',
+  };
+  const normalized = PHASE_NAMES[phase?.toUpperCase() || 'B'] || 'BRAINSTORM';
+  const required = PHASE_EXIT_REQUIREMENTS[normalized] || [];
+  const satisfied = required.filter(g => gates[g]);
+  const missing = required.filter(g => !gates[g]);
+  return {
+    current_phase: normalized,
+    required_gates: required,
+    satisfied_gates: satisfied,
+    missing_gates: missing,
+    can_advance: missing.length === 0,
+  };
 }
 
 // ============================================================================
@@ -545,6 +597,10 @@ export class AIXORDSDKClient {
         open_questions: [],
         ...(options.sessionGraph && { session_graph: options.sessionGraph }),
         ...(options.workspace && { workspace: options.workspace }),
+        // AI-Governance Integration — Phase 1: Gate & Blueprint awareness
+        ...(options.gates && { gates: categorizeGates(options.gates) }),
+        ...(options.blueprintSummary && { blueprint_summary: options.blueprintSummary }),
+        ...(options.gates && { phase_exit: computePhaseExit(phase, options.gates) }),
       },
       delta: {
         user_input: options.imageRefs?.length

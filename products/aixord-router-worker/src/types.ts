@@ -142,6 +142,25 @@ export interface Capsule {
     github_connected?: boolean;
     github_repo?: string;
   };
+  // AI-Governance Integration — Phase 1: Gate & Blueprint awareness
+  gates?: {
+    setup: Record<string, boolean>;   // GA:* gates
+    work: Record<string, boolean>;    // GW:* gates
+    security: Record<string, boolean>; // GS:* gates
+  };
+  blueprint_summary?: {
+    scopes: number;
+    deliverables: number;
+    deliverables_with_dod: number;
+    integrity_passed: boolean | null;
+  };
+  phase_exit?: {
+    current_phase: string;
+    required_gates: string[];
+    satisfied_gates: string[];
+    missing_gates: string[];
+    can_advance: boolean;
+  };
 }
 
 export interface ArtifactRef {
