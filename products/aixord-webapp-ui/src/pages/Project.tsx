@@ -108,6 +108,7 @@ export function Project() {
 
   // Phase transition error (Tier 1 enforcement)
   const [phaseError, setPhaseError] = useState<string | null>(null);
+  const [isFinalizing, setIsFinalizing] = useState(false);
 
   // Governance state from hook
   const {
@@ -493,6 +494,41 @@ export function Project() {
       } else {
         console.error('Phase advance failed:', err);
       }
+    }
+  }, [id, token, fetchState]);
+
+  // Phase 4: Finalize Phase — formal governance transaction
+  const handleFinalizePhase = useCallback(async (phase: string) => {
+    if (!id || !token) return;
+    setIsFinalizing(true);
+    setPhaseError(null);
+    try {
+      const result = await api.state.finalizePhase(id, phase, token);
+      if (result.success) {
+        // Phase finalized — refresh state to get new phase
+        fetchState();
+        // Add a system message to the chat
+        const successMessage: Message = {
+          id: generateId(),
+          role: 'system',
+          content: `✅ **Phase Finalized**\n\n${result.message}\n\nArtifact checks: ${result.artifact_checks.map(a => `${a.passed ? '✓' : '✗'} ${a.check}: ${a.detail}`).join('\n')}`,
+          timestamp: new Date(),
+        };
+        setConversation((prev) => prev ? {
+          ...prev,
+          messages: [...prev.messages, successMessage],
+          updatedAt: new Date()
+        } : prev);
+      }
+    } catch (err) {
+      if (err instanceof APIError) {
+        setPhaseError(err.message);
+      } else {
+        console.error('Finalize phase failed:', err);
+        setPhaseError('Failed to finalize phase');
+      }
+    } finally {
+      setIsFinalizing(false);
     }
   }, [id, token, fetchState]);
 
@@ -1004,6 +1040,8 @@ export function Project() {
             isLoading={isLoading}
             phaseError={phaseError}
             onOpenWorkspaceSetup={() => setShowWorkspaceWizard(true)}
+            onFinalizePhase={handleFinalizePhase}
+            isFinalizing={isFinalizing}
           />
         )}
         {activeTab === 'security' && id && token && (

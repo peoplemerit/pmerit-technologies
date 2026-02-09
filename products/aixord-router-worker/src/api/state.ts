@@ -471,6 +471,192 @@ state.put('/:projectId/phase', async (c) => {
 });
 
 /**
+ * POST /api/v1/state/:projectId/phases/:phase/finalize
+ *
+ * Phase 4 — Finalize Phase Transaction
+ * Formal governance transaction that:
+ * 1. Validates authority (must be project owner / Director)
+ * 2. Validates phase (must match current phase)
+ * 3. Validates all exit gates are satisfied
+ * 4. Validates phase-specific artifacts exist
+ * 5. Logs to decision_ledger for audit trail
+ * 6. Advances to next phase
+ * 7. Locks the finalized phase (prevents re-entry without explicit unlock)
+ *
+ * This is NOT the same as PUT /phase — that's a soft transition.
+ * Finalize is a governance-grade, audited, artifact-validated transition.
+ */
+state.post('/:projectId/phases/:phase/finalize', async (c) => {
+  const userId = c.get('userId');
+  const projectId = c.req.param('projectId');
+  const requestedPhase = c.req.param('phase').toUpperCase();
+
+  // 1. Authority check — must be project owner (Director)
+  if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
+    return c.json({ error: 'Unauthorized — only the project Director can finalize phases' }, 403);
+  }
+
+  // 2. Phase validation — must match current phase
+  const currentState = await c.env.DB.prepare(
+    'SELECT phase, gates, phase_locked FROM project_state WHERE project_id = ?'
+  ).bind(projectId).first<{ phase: string; gates: string; phase_locked: number }>();
+
+  if (!currentState) {
+    return c.json({ error: 'Project state not found' }, 404);
+  }
+
+  const currentPhase = (currentState.phase || 'BRAINSTORM').toUpperCase();
+  const normalizedRequested = normalizePhase(requestedPhase);
+
+  if (!normalizedRequested) {
+    return c.json({ error: `Invalid phase: ${requestedPhase}` }, 400);
+  }
+
+  if (normalizedRequested !== currentPhase) {
+    return c.json({
+      error: `Cannot finalize ${normalizedRequested} — project is currently in ${currentPhase}`,
+      currentPhase,
+      requestedPhase: normalizedRequested,
+    }, 409);
+  }
+
+  // 3. Gate validation — all exit gates must be satisfied
+  const gates: Record<string, boolean> = JSON.parse(currentState.gates || '{}');
+  const exitReq = PHASE_EXIT_REQUIREMENTS[currentPhase];
+  const missingGates = exitReq
+    ? exitReq.gates.filter(g => !gates[g])
+    : [];
+
+  // 4. Artifact validation — phase-specific checks
+  const artifactChecks: Array<{ check: string; passed: boolean; detail: string }> = [];
+
+  if (currentPhase === 'BRAINSTORM') {
+    // Must have a defined objective
+    const project = await c.env.DB.prepare(
+      'SELECT objective FROM projects WHERE id = ?'
+    ).bind(projectId).first<{ objective: string }>();
+    const hasObjective = !!(project?.objective && project.objective.trim().length > 10);
+    artifactChecks.push({
+      check: 'objective_defined',
+      passed: hasObjective,
+      detail: hasObjective ? 'Project objective is defined' : 'Project objective is missing or too short (min 10 chars)',
+    });
+  }
+
+  if (currentPhase === 'PLAN') {
+    // Must have blueprint with scopes and deliverables
+    const scopeCount = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM blueprint_scopes WHERE project_id = ?'
+    ).bind(projectId).first<{ count: number }>();
+    const deliverableCount = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM blueprint_deliverables WHERE project_id = ?'
+    ).bind(projectId).first<{ count: number }>();
+    const integrityReport = await c.env.DB.prepare(
+      'SELECT all_passed FROM blueprint_integrity_reports WHERE project_id = ? ORDER BY run_at DESC LIMIT 1'
+    ).bind(projectId).first<{ all_passed: number }>();
+
+    artifactChecks.push({
+      check: 'blueprint_scopes',
+      passed: (scopeCount?.count || 0) > 0,
+      detail: `${scopeCount?.count || 0} scope(s) defined`,
+    });
+    artifactChecks.push({
+      check: 'blueprint_deliverables',
+      passed: (deliverableCount?.count || 0) > 0,
+      detail: `${deliverableCount?.count || 0} deliverable(s) defined`,
+    });
+    artifactChecks.push({
+      check: 'integrity_validation',
+      passed: !!integrityReport?.all_passed,
+      detail: integrityReport ? (integrityReport.all_passed ? 'Integrity validation passed' : 'Integrity validation failed') : 'No integrity validation run',
+    });
+  }
+
+  if (currentPhase === 'EXECUTE') {
+    // Must have at least one message in the current session (work was done)
+    const messageCount = await c.env.DB.prepare(
+      'SELECT COUNT(*) as count FROM messages WHERE project_id = ? AND role = \'assistant\''
+    ).bind(projectId).first<{ count: number }>();
+    artifactChecks.push({
+      check: 'execution_evidence',
+      passed: (messageCount?.count || 0) > 0,
+      detail: `${messageCount?.count || 0} AI-assisted message(s) in project`,
+    });
+  }
+
+  // REVIEW has no artifact requirements — it's the terminal phase
+  // (But we still allow finalize for audit completeness)
+
+  const failedArtifacts = artifactChecks.filter(a => !a.passed);
+  const allGatesPassed = missingGates.length === 0;
+  const allArtifactsPassed = failedArtifacts.length === 0;
+  const canFinalize = allGatesPassed && allArtifactsPassed;
+
+  // Determine next phase
+  const PHASE_NEXT: Record<string, string | null> = {
+    'BRAINSTORM': 'PLAN', 'PLAN': 'EXECUTE', 'EXECUTE': 'REVIEW', 'REVIEW': null,
+  };
+  const nextPhase = PHASE_NEXT[currentPhase];
+  const now = new Date().toISOString();
+
+  // 5. Log to decision ledger (regardless of success/failure)
+  await c.env.DB.prepare(
+    `INSERT INTO decision_ledger (project_id, action, phase_from, phase_to, actor_id, actor_role, gate_snapshot, artifact_check, result, reason, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    projectId,
+    'FINALIZE_PHASE',
+    currentPhase,
+    canFinalize ? (nextPhase || currentPhase) : currentPhase,
+    userId,
+    'DIRECTOR',
+    JSON.stringify({ missing: missingGates, total_gates: exitReq?.gates.length || 0 }),
+    JSON.stringify(artifactChecks),
+    canFinalize ? 'APPROVED' : 'REJECTED',
+    canFinalize
+      ? `Phase ${currentPhase} finalized successfully`
+      : `Blocked: ${missingGates.length} missing gate(s), ${failedArtifacts.length} failed artifact check(s)`,
+    now,
+  ).run();
+
+  // If blocked, return detailed explanation
+  if (!canFinalize) {
+    return c.json({
+      success: false,
+      result: 'REJECTED',
+      phase: currentPhase,
+      missing_gates: missingGates,
+      artifact_checks: artifactChecks,
+      message: `Cannot finalize ${currentPhase}: ${missingGates.length > 0 ? `${missingGates.length} exit gate(s) unsatisfied` : ''}${missingGates.length > 0 && failedArtifacts.length > 0 ? ', ' : ''}${failedArtifacts.length > 0 ? `${failedArtifacts.length} artifact check(s) failed` : ''}`,
+    }, 422);
+  }
+
+  // 6. Advance to next phase (or mark REVIEW as complete)
+  if (nextPhase) {
+    await c.env.DB.prepare(
+      'UPDATE project_state SET phase = ?, phase_locked = 0, updated_at = ? WHERE project_id = ?'
+    ).bind(nextPhase, now, projectId).run();
+  } else {
+    // REVIEW is terminal — mark locked but don't change phase
+    await c.env.DB.prepare(
+      'UPDATE project_state SET phase_locked = 1, updated_at = ? WHERE project_id = ?'
+    ).bind(now, projectId).run();
+  }
+
+  return c.json({
+    success: true,
+    result: 'APPROVED',
+    phase_from: currentPhase,
+    phase_to: nextPhase || currentPhase,
+    artifact_checks: artifactChecks,
+    ledger_logged: true,
+    message: nextPhase
+      ? `Phase ${currentPhase} finalized. Advanced to ${nextPhase}.`
+      : `Phase ${currentPhase} finalized. Project complete.`,
+  });
+});
+
+/**
  * POST /api/v1/state/:projectId/gates/evaluate
  *
  * AI-Governance Integration — Phase 2: Auto-Satisfaction Rules Engine

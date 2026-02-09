@@ -14,6 +14,8 @@ interface GovernanceRibbonProps {
   isLoading?: boolean;
   phaseError?: string | null;
   onOpenWorkspaceSetup?: () => void;
+  onFinalizePhase?: (phase: string) => void;
+  isFinalizing?: boolean;
 }
 
 const phases = [
@@ -76,6 +78,8 @@ export function GovernanceRibbon({
   isLoading = false,
   phaseError,
   onOpenWorkspaceSetup,
+  onFinalizePhase,
+  isFinalizing = false,
 }: GovernanceRibbonProps) {
   const currentPhaseIndex = phases.findIndex(
     (p) => p.id === currentPhase || p.short === currentPhase
@@ -184,6 +188,44 @@ export function GovernanceRibbon({
             );
           })}
         </div>
+      )}
+
+      {/* Finalize Phase Button — Phase 4 governance transaction */}
+      {onFinalizePhase && currentPhase !== 'REVIEW' && (
+        (() => {
+          const exitGates = PHASE_EXIT_REQUIREMENTS[currentPhase];
+          const missing = exitGates ? exitGates.filter(g => !gates[g]) : [];
+          const canFinalize = missing.length === 0;
+          const PHASE_NEXT: Record<string, string> = {
+            'BRAINSTORM': 'Plan', 'PLAN': 'Execute', 'EXECUTE': 'Review',
+          };
+          const nextLabel = PHASE_NEXT[currentPhase] || 'Next';
+          return (
+            <div className="pt-2 border-t border-gray-700/30">
+              <button
+                onClick={() => onFinalizePhase(currentPhase)}
+                disabled={!canFinalize || isLoading || isFinalizing}
+                title={canFinalize
+                  ? `Finalize ${currentPhase} phase and advance to ${nextLabel}`
+                  : `Cannot finalize: missing ${missing.join(', ')}`}
+                className={`w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  canFinalize
+                    ? 'bg-violet-600 hover:bg-violet-500 text-white'
+                    : 'bg-gray-700/30 text-gray-600 cursor-not-allowed'
+                }`}
+              >
+                {isFinalizing ? (
+                  <span className="flex items-center justify-center gap-1.5">
+                    <span className="animate-spin rounded-full h-3 w-3 border border-white border-t-transparent" />
+                    Finalizing…
+                  </span>
+                ) : (
+                  <>Finalize {currentPhase.charAt(0) + currentPhase.slice(1).toLowerCase()} → {nextLabel}</>
+                )}
+              </button>
+            </div>
+          );
+        })()
       )}
     </div>
   );

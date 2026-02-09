@@ -720,6 +720,33 @@ export const stateApi = {
       phase: string;
     }>(`/state/${projectId}/gates/evaluate`, { method: 'POST' }, token);
   },
+
+  /**
+   * Finalize a phase — formal governance transaction
+   * Phase 4: Validates authority, gates, artifacts, logs to decision ledger,
+   * and advances to next phase.
+   */
+  async finalizePhase(projectId: string, phase: string, token: string): Promise<{
+    success: boolean;
+    result: 'APPROVED' | 'REJECTED';
+    phase_from: string;
+    phase_to: string;
+    artifact_checks: Array<{ check: string; passed: boolean; detail: string }>;
+    missing_gates?: string[];
+    message: string;
+    ledger_logged?: boolean;
+  }> {
+    return request<{
+      success: boolean;
+      result: 'APPROVED' | 'REJECTED';
+      phase_from: string;
+      phase_to: string;
+      artifact_checks: Array<{ check: string; passed: boolean; detail: string }>;
+      missing_gates?: string[];
+      message: string;
+      ledger_logged?: boolean;
+    }>(`/state/${projectId}/phases/${phase}/finalize`, { method: 'POST' }, token);
+  },
 };
 
 // ============================================================================
