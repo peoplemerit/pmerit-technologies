@@ -24,8 +24,8 @@ projects.use('/*', requireAuth);
 projects.post('/', async (c) => {
   try {
     const userId = c.get('userId');
-    const body = await c.req.json<{ name?: string; objective?: string; reality_classification?: string }>();
-    const { name, objective, reality_classification } = body;
+    const body = await c.req.json<{ name?: string; objective?: string; reality_classification?: string; project_type?: string }>();
+    const { name, objective, reality_classification, project_type } = body;
 
     if (!name) {
       return c.json({ error: 'Project name required' }, 400);
@@ -34,20 +34,30 @@ projects.post('/', async (c) => {
     const projectId = crypto.randomUUID();
     const now = new Date().toISOString();
     const realityClass = reality_classification || 'GREENFIELD';
+    const VALID_PROJECT_TYPES = ['software', 'general', 'research', 'legal', 'personal'];
+    const projectTypeValue = VALID_PROJECT_TYPES.includes(project_type || '') ? project_type! : 'software';
 
     // Create project
     await c.env.DB.prepare(
-      'INSERT INTO projects (id, owner_id, name, objective, reality_classification, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).bind(projectId, userId, name, objective || null, realityClass, now, now).run();
+      'INSERT INTO projects (id, owner_id, name, objective, reality_classification, project_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).bind(projectId, userId, name, objective || null, realityClass, projectTypeValue, now, now).run();
 
-    // Initialize state with full AIXORD v4.3 gate structure (GA: = setup, GW: = work)
+    // Initialize state with AIXORD gate structure (GA: = setup, GW: = work)
+    // Non-software project types get reduced gates — skip blueprint/engineering-specific gates
+    const isSoftware = projectTypeValue === 'software';
     const initialGates: Record<string, boolean> = {
-      // Setup gates (GA: prefix)
-      'GA:LIC': false, 'GA:DIS': false, 'GA:TIR': false, 'GA:ENV': false, 'GA:FLD': false,
-      'GA:CIT': false, 'GA:CON': false, 'GA:BP': false, 'GA:IVL': false, 'GA:PS': false, 'GA:GP': false,
-      // Work gates (GW: prefix)
-      'GW:PRE': false, 'GW:VAL': false, 'GW:DOC': false, 'GW:QA': false,
-      'GW:DEP': false, 'GW:VER': false, 'GW:ARC': false,
+      // Setup gates (GA: prefix) — core gates for all project types
+      'GA:LIC': false, 'GA:DIS': false, 'GA:TIR': false,
+      'GA:ENV': false, 'GA:FLD': false,
+      'GA:CIT': false, 'GA:CON': false,
+      // Blueprint/Integrity gates — software only (auto-passed for non-software)
+      'GA:BP': !isSoftware, 'GA:IVL': !isSoftware,
+      'GA:PS': false, 'GA:GP': false,
+      // Work gates (GW: prefix) — reduced for non-software
+      'GW:PRE': false, 'GW:VAL': false, 'GW:DOC': false,
+      'GW:QA': !isSoftware,   // Auto-passed for non-software
+      'GW:DEP': !isSoftware,  // Auto-passed for non-software
+      'GW:VER': false, 'GW:ARC': false,
     };
 
     // Security gates (SPG-01)
@@ -83,7 +93,7 @@ projects.post('/', async (c) => {
 
     const initialCapsule = {
       session: { number: 1, phase: 'BRAINSTORM', messageCount: 0, startedAt: now, lastCheckpoint: null },
-      project: { name, objective: objective || null },
+      project: { name, objective: objective || null, type: projectTypeValue },
       reality: { class: realityClass, constraints: [] },
       // AIXORD v4.3 additions
       data_classification: initialDataClassification,
@@ -117,6 +127,7 @@ projects.post('/', async (c) => {
       name,
       objective: objective || null,
       reality_classification: realityClass,
+      project_type: projectTypeValue,
       created_at: now,
       updated_at: now
     }, 201);

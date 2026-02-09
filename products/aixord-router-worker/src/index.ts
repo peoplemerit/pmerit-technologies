@@ -273,6 +273,14 @@ app.post('/v1/router/execute', async (c) => {
     // Governance lives outside the model — in the Router, not in prompts.
     // ═══════════════════════════════════════════════════════════════════
     if (projectId) {
+      // Look up project_type alongside gate check (single extra query)
+      const projectRow = await c.env.DB.prepare(
+        'SELECT project_type FROM projects WHERE id = ?'
+      ).bind(projectId).first<{ project_type: string }>();
+      if (projectRow?.project_type) {
+        (request.capsule as unknown as Record<string, unknown>).project_type = projectRow.project_type;
+      }
+
       const phaseRow = await c.env.DB.prepare(
         'SELECT phase, gates FROM project_state WHERE project_id = ?'
       ).bind(projectId).first<{ phase: string; gates: string }>();

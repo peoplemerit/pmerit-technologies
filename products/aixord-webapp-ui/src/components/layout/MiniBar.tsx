@@ -11,6 +11,8 @@ interface MiniBarProps {
   gates: Record<string, boolean>;
   onTabClick: (tabId: string) => void;
   activeTab: string | null;
+  /** Tabs to hide (e.g., for non-software project types) */
+  hiddenTabs?: string[];
 }
 
 const phases = [
@@ -29,7 +31,7 @@ const ALL_WORK_GATES = [
   'GW:PRE', 'GW:VAL', 'GW:DOC', 'GW:QA', 'GW:DEP', 'GW:VER', 'GW:ARC',
 ];
 
-export function MiniBar({ currentPhase, gates, onTabClick, activeTab }: MiniBarProps) {
+export function MiniBar({ currentPhase, gates, onTabClick, activeTab, hiddenTabs = [] }: MiniBarProps) {
   const currentPhaseIndex = phases.findIndex(
     (p) => p.id === currentPhase || p.label === currentPhase
   );
@@ -93,7 +95,7 @@ export function MiniBar({ currentPhase, gates, onTabClick, activeTab }: MiniBarP
         </button>
 
         {/* Quick tab shortcuts */}
-        {(['blueprint', 'security', 'evidence'] as const).map((tab) => (
+        {(['blueprint', 'security', 'evidence'] as const).filter(t => !hiddenTabs.includes(t)).map((tab) => (
           <button
             key={tab}
             onClick={() => onTabClick(tab)}

@@ -17,7 +17,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useProjects } from '../hooks/useApi';
 import { ProjectCard } from '../components/ProjectCard';
-import { messagesApi, api, type Project, type ChatMessage, type UsageData } from '../lib/api';
+import { messagesApi, api, type Project, type ProjectType, type ChatMessage, type UsageData } from '../lib/api';
 import { TrialBanner } from '../components/TrialBanner';
 import { UsageMeter } from '../components/UsageMeter';
 import { OnboardingChecklist } from '../components/onboarding/OnboardingChecklist';
@@ -408,6 +408,7 @@ export function Dashboard() {
     name: '',
     objective: '',
     realityClassification: 'GREENFIELD' as RealityClassification,
+    projectType: 'software' as ProjectType,
   });
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -919,6 +920,29 @@ export function Dashboard() {
                   <option value="GREENFIELD">Greenfield - New project from scratch</option>
                   <option value="BROWNFIELD">Brownfield - Existing codebase</option>
                   <option value="LEGACY">Legacy - Maintaining older system</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Project Type
+                  <span className="ml-1 text-gray-500 text-xs font-normal" title="Non-software types reduce required gates — Blueprint, Integrity, QA, and Dependencies gates are auto-satisfied.">ⓘ</span>
+                </label>
+                <select
+                  value={newProject.projectType}
+                  onChange={(e) =>
+                    setNewProject({
+                      ...newProject,
+                      projectType: e.target.value as ProjectType,
+                    })
+                  }
+                  className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-violet-500 transition-colors"
+                >
+                  <option value="software">Software — Full governance (Blueprint, Security, Engineering)</option>
+                  <option value="general">General — Standard governance (no Blueprint required)</option>
+                  <option value="research">Research — Exploration-focused (reduced gates)</option>
+                  <option value="legal">Legal — Document-focused (reduced gates)</option>
+                  <option value="personal">Personal — Lightweight governance</option>
                 </select>
               </div>
 

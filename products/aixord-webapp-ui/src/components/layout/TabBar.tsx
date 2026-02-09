@@ -24,6 +24,8 @@ interface TabBarProps {
   onNewSession?: () => void;
   projectId?: string;
   sessionNumber?: number;
+  /** Tabs to hide (e.g., for non-software project types) */
+  hiddenTabs?: string[];
 }
 
 const tabs: Tab[] = [
@@ -52,6 +54,7 @@ export function TabBar({
   onNewSession,
   projectId,
   sessionNumber,
+  hiddenTabs = [],
 }: TabBarProps) {
   const [navOpen, setNavOpen] = useState(false);
   const navRef = useRef<HTMLDivElement>(null);
@@ -139,7 +142,7 @@ export function TabBar({
 
       {/* Tabs */}
       <div className="flex items-center gap-1">
-        {tabs.map((tab) => (
+        {tabs.filter((tab) => !hiddenTabs.includes(tab.id)).map((tab) => (
           <button
             key={tab.id}
             onClick={() => onTabClick(tab.id)}

@@ -434,6 +434,10 @@ export function Project() {
   // Handlers
   // ============================================================================
 
+  // Non-software projects hide Blueprint/Security/Engineering tabs
+  const isSoftwareProject = !project || project.projectType === 'software';
+  const hiddenTabs = isSoftwareProject ? [] : ['blueprint', 'security', 'engineering'];
+
   const handleTabClick = (tabId: string) => {
     setActiveTab(activeTab === tabId ? null : tabId);
   };
@@ -1017,6 +1021,7 @@ export function Project() {
         onNewSession={handleNewSession}
         projectId={id}
         sessionNumber={activeSession?.session_number || state?.session.number}
+        hiddenTabs={hiddenTabs}
       />
 
       {/* MiniBar — always visible governance strip */}
@@ -1026,6 +1031,7 @@ export function Project() {
           gates={state.gates}
           onTabClick={handleTabClick}
           activeTab={activeTab}
+          hiddenTabs={hiddenTabs}
         />
       )}
 

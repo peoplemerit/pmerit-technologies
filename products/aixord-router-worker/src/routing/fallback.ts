@@ -161,14 +161,31 @@ function buildMessages(request: RouterRequest): Message[] {
   const phaseName = PHASE_NAMES[request.capsule.phase] || request.capsule.phase;
   const payload = PHASE_PAYLOADS[phaseName];
 
+  // Project type context — adapts AI behavior for non-software projects
+  const projectType = (request.capsule as unknown as Record<string, unknown>).project_type as string || 'software';
+  const PROJECT_TYPE_LABELS: Record<string, string> = {
+    software: 'Software Development',
+    general: 'General Project',
+    research: 'Research & Analysis',
+    legal: 'Legal / Document Review',
+    personal: 'Personal Project',
+  };
+  const projectTypeLabel = PROJECT_TYPE_LABELS[projectType] || 'Software Development';
+
   // Base system message with AIXORD governance framing
   let systemPrompt = `You are an AIXORD-governed AI assistant. AIXORD ensures AI work is structured, auditable, and aligned with the user's project objectives.
 
 PROJECT OBJECTIVE: ${request.capsule.objective || '(Not yet defined)'}
+PROJECT TYPE: ${projectTypeLabel}
 PHASE: ${phaseName}
 ${request.capsule.constraints.length > 0 ? `CONSTRAINTS: ${request.capsule.constraints.join('; ')}` : ''}
 ${request.capsule.decisions.length > 0 ? `DECISIONS: ${request.capsule.decisions.join('; ')}` : ''}
 ${request.capsule.open_questions.length > 0 ? `OPEN QUESTIONS: ${request.capsule.open_questions.join('; ')}` : ''}`;
+
+  // Non-software project type adaptation
+  if (projectType !== 'software') {
+    systemPrompt += `\nNOTE: This is a ${projectTypeLabel.toLowerCase()} project. Blueprint, security, and engineering tabs are not applicable. Focus on the project objective within the governance framework. Adapt terminology to fit this domain.`;
+  }
 
   // Phase Awareness Payload — compact bounded context
   if (payload) {

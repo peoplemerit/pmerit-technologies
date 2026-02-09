@@ -91,11 +91,14 @@ export interface User {
   emailVerified?: boolean;
 }
 
+export type ProjectType = 'software' | 'general' | 'research' | 'legal' | 'personal';
+
 export interface Project {
   id: string;
   name: string;
   objective: string;
   realityClassification: 'GREENFIELD' | 'BROWNFIELD' | 'LEGACY';
+  projectType: ProjectType;
   createdAt: string;
   updatedAt: string;
 }
@@ -319,6 +322,7 @@ interface BackendProject {
   objective: string;
   owner_id?: string;
   reality_classification: string;
+  project_type?: string;
   conserved_scopes?: string | null;
   created_at: string;
   updated_at: string;
@@ -350,11 +354,17 @@ function transformProject(raw: BackendProject): Project {
     ? normalizedReality as Project['realityClassification']
     : 'GREENFIELD';
 
+  const VALID_PROJECT_TYPES: ProjectType[] = ['software', 'general', 'research', 'legal', 'personal'];
+  const projectType: ProjectType = VALID_PROJECT_TYPES.includes(raw.project_type as ProjectType)
+    ? raw.project_type as ProjectType
+    : 'software';
+
   return {
     id: raw.id,
     name: raw.name || 'Untitled Project',
     objective: raw.objective || '',
     realityClassification: finalReality,
+    projectType,
     createdAt: normalizeDate(raw.created_at) || new Date().toISOString(),
     updatedAt: normalizeDate(raw.updated_at) || new Date().toISOString(),
   };
@@ -387,6 +397,7 @@ export const projectsApi = {
       name: string;
       objective: string;
       realityClassification: 'GREENFIELD' | 'BROWNFIELD' | 'LEGACY';
+      projectType?: ProjectType;
     },
     token: string
   ): Promise<Project> {
@@ -395,6 +406,7 @@ export const projectsApi = {
       name: data.name,
       objective: data.objective,
       reality_classification: data.realityClassification,
+      project_type: data.projectType || 'software',
     };
     // Backend returns flat project response (not wrapped in { project: ... })
     const response = await request<BackendProject>('/projects', {
