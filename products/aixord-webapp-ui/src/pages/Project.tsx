@@ -844,7 +844,10 @@ export function Project() {
       setSessionTokens(prev => prev + sdkResponse.usage.inputTokens + sdkResponse.usage.outputTokens);
 
       // Phase 2: Auto-evaluate gates after message exchange (GA:DIS, GA:LIC, GA:TIR may flip)
+      // Immediate eval for any synchronous gate changes
       evaluateGatesAfterAction();
+      // Delayed re-eval to catch backend waitUntil() async gate updates
+      setTimeout(() => evaluateGatesAfterAction(), 2500);
 
     } catch (err) {
       console.error('Failed to send message:', err);
