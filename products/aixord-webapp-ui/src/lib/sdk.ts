@@ -207,6 +207,30 @@ export class AIExposureBlockedError extends Error {
   }
 }
 
+/**
+ * Error when server-side hard gate enforcement blocks the AI call.
+ * This is the Phase 4 enforcement: the Router itself refuses to call
+ * the model when required governance gates are not satisfied.
+ * Governance lives OUTSIDE the model — in the Router, not in prompts.
+ */
+export interface GovernanceBlockGate {
+  key: string;
+  label: string;
+  action: string;
+}
+
+export class GovernanceBlockError extends Error {
+  public readonly failedGates: GovernanceBlockGate[];
+  public readonly phase: string;
+
+  constructor(failedGates: GovernanceBlockGate[], phase: string, message: string) {
+    super(message);
+    this.name = 'GovernanceBlockError';
+    this.failedGates = failedGates;
+    this.phase = phase;
+  }
+}
+
 // ============================================================================
 // AI-Governance Integration Helpers (Phase 1)
 // ============================================================================
@@ -640,6 +664,18 @@ export class AIXORDSDKClient {
           wasRedacted: exposureResult.requiresRedaction,
         },
       };
+    }
+
+    // 4b. Hard Gate Enforcement (Phase 4) — Router may block AI call
+    // When the backend returns type: 'governance_block', the AI model was
+    // NOT called. Governance lives outside the model — in the Router.
+    const rawResponse = routerResponse as unknown as Record<string, unknown>;
+    if (rawResponse.type === 'governance_block') {
+      throw new GovernanceBlockError(
+        (rawResponse.failed_gates as GovernanceBlockGate[]) || [],
+        (rawResponse.phase as string) || 'UNKNOWN',
+        (rawResponse.message as string) || 'Blocked by AIXORD Governance',
+      );
     }
 
     // 5. Build SDK response — map backend status to SDK status vocabulary

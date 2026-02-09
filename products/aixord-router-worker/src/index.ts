@@ -267,6 +267,67 @@ app.post('/v1/router/execute', async (c) => {
       }
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // HARD GATE ENFORCEMENT (Phase 4)
+    // AI model is NOT called when required gates for the current phase fail.
+    // Governance lives outside the model — in the Router, not in prompts.
+    // ═══════════════════════════════════════════════════════════════════
+    if (projectId) {
+      const phaseRow = await c.env.DB.prepare(
+        'SELECT phase, gates FROM project_state WHERE project_id = ?'
+      ).bind(projectId).first<{ phase: string; gates: string }>();
+
+      if (phaseRow) {
+        const currentPhase = (phaseRow.phase || 'BRAINSTORM').toUpperCase();
+        const gateMap: Record<string, boolean> = JSON.parse(phaseRow.gates || '{}');
+
+        // Per-phase required gates (cumulative — later phases inherit earlier requirements)
+        const PHASE_REQUIRED_GATES: Record<string, string[]> = {
+          BRAINSTORM: ['GA:LIC', 'GA:DIS', 'GA:TIR'],
+          PLAN:       ['GA:LIC', 'GA:DIS', 'GA:TIR', 'GA:ENV'],
+          EXECUTE:    ['GA:LIC', 'GA:DIS', 'GA:TIR', 'GA:ENV', 'GA:BP', 'GA:IVL'],
+          REVIEW:     ['GA:LIC', 'GA:DIS', 'GA:TIR', 'GA:ENV', 'GA:BP', 'GA:IVL'],
+        };
+
+        const GATE_ACTIONS: Record<string, string> = {
+          'GA:LIC': 'Confirm your license/subscription tier',
+          'GA:DIS': 'Acknowledge the platform disclaimer',
+          'GA:TIR': 'Subscription tier must be active',
+          'GA:ENV': 'Bind a workspace in the Workspace Wizard',
+          'GA:FLD': 'Select a project folder',
+          'GA:BP':  'Create at least one scope with deliverables in the Blueprint tab',
+          'GA:IVL': 'Pass integrity validation on your blueprint',
+        };
+
+        const required = PHASE_REQUIRED_GATES[currentPhase] || [];
+        const failedGates = required
+          .filter(key => !gateMap[key])
+          .map(key => ({
+            key,
+            label: key.replace('GA:', ''),
+            action: GATE_ACTIONS[key] || 'Satisfy this gate requirement',
+          }));
+
+        if (failedGates.length > 0) {
+          // DO NOT CALL THE AI MODEL — return governance block
+          console.log(JSON.stringify({
+            type: 'governance_block',
+            project_id: projectId,
+            phase: currentPhase,
+            failed_gates: failedGates.map(g => g.key),
+            request_id: request.trace.request_id,
+          }));
+
+          return c.json({
+            type: 'governance_block',
+            failed_gates: failedGates,
+            phase: currentPhase,
+            message: `Blocked by AIXORD Governance — ${failedGates.length} required gate(s) unsatisfied for ${currentPhase} phase.`,
+          } as Record<string, unknown>, 200);
+        }
+      }
+    }
+
     // PATCH-MOD-01: Determine effective intent for affinity-based selection
     // If router_intent is provided, use it; otherwise default from base intent
     const effectiveRouterIntent: RouterIntent = request.router_intent || (request.intent as RouterIntent);

@@ -48,6 +48,56 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
     ? message.content.replace(/\[PHASE_ADVANCE:\w+\]/g, '').trim()
     : message.content;
 
+  // Phase 4: Governance Block Card — distinct from AI messages
+  const isGovernanceBlock = !!(message.metadata as Record<string, unknown>)?.governance_block;
+  if (isGovernanceBlock) {
+    const meta = message.metadata as Record<string, unknown>;
+    const failedGates = (meta.failed_gates as Array<{ key: string; label: string; action: string }>) || [];
+    const phase = (meta.phase as string) || 'UNKNOWN';
+    return (
+      <div className="flex justify-start mb-4">
+        <div className="max-w-[85%] bg-violet-900/20 border border-violet-500/40 rounded-xl px-5 py-4">
+          {/* Header */}
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-full bg-violet-600/30 flex items-center justify-center">
+              <svg className="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <div>
+              <span className="text-violet-300 text-sm font-semibold">AIXORD Governance Block</span>
+              <span className="text-gray-500 text-xs ml-2">Phase: {phase}</span>
+            </div>
+          </div>
+          {/* Explanation */}
+          <p className="text-gray-300 text-sm mb-3">
+            The AI model was <strong className="text-violet-300">not called</strong> — {failedGates.length} required gate{failedGates.length !== 1 ? 's' : ''} must be satisfied.
+          </p>
+          {/* Gate list */}
+          <div className="space-y-1.5 mb-3">
+            {failedGates.map((gate) => (
+              <div key={gate.key} className="flex items-start gap-2 text-sm">
+                <span className="text-red-400 mt-0.5">○</span>
+                <div>
+                  <span className="text-gray-200 font-medium">{gate.label}</span>
+                  <span className="text-gray-500 ml-2">— {gate.action}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Hint */}
+          <p className="text-gray-500 text-xs">
+            Open the <strong className="text-gray-400">Governance</strong> tab or click the gate pills to resolve.
+          </p>
+          {/* Timestamp */}
+          <div className="text-xs mt-2 text-gray-600">
+            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Render error messages with ChatErrorMessage component
   if (isError) {
     return (

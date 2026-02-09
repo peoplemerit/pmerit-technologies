@@ -21,7 +21,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUserSettings } from '../contexts/UserSettingsContext';
 import { useProjectState } from '../hooks/useApi';
 import { api, APIError, phaseToShort, type Project as ProjectType, type Decision, type CCSGateStatus, type SessionType, type EdgeType } from '../lib/api';
-import { useAIXORDSDK, GateBlockedError, AIExposureBlockedError } from '../lib/sdk';
+import { useAIXORDSDK, GateBlockedError, AIExposureBlockedError, GovernanceBlockError } from '../lib/sdk';
 import { useSessions } from '../hooks/useSessions';
 import { MessageBubble } from '../components/chat/MessageBubble';
 import { ImageUpload, type PendingImage } from '../components/chat/ImageUpload';
@@ -853,7 +853,25 @@ export function Project() {
       console.error('Failed to send message:', err);
 
       let errorContent: string;
-      if (err instanceof GateBlockedError) {
+      let errorRole: 'system' | 'assistant' = 'system';
+      let errorMetadata: Record<string, unknown> | undefined = undefined;
+
+      if (err instanceof GovernanceBlockError) {
+        // Phase 4: Hard Gate Enforcement — Router blocked the AI call
+        // Governance lives OUTSIDE the model. The AI was never called.
+        const gateLines = err.failedGates.map(g =>
+          `• **${g.label}** — ${g.action}`
+        ).join('\n');
+        errorContent = `🛡️ **AIXORD Governance Block**\n\n` +
+          `The AI model was **not called** — ${err.failedGates.length} required gate(s) must be satisfied for the **${err.phase}** phase.\n\n` +
+          `**Required actions:**\n${gateLines}\n\n` +
+          `Open the **Governance** tab or click the gate pills above to resolve.`;
+        errorMetadata = {
+          governance_block: true,
+          phase: err.phase,
+          failed_gates: err.failedGates,
+        };
+      } else if (err instanceof GateBlockedError) {
         const failedGates = err.gateResults.filter(g => !g.passed);
         const gateExplanations = failedGates.map(g => `- ${g.gate}: ${g.reason || 'Not completed'}`).join('\n');
         errorContent = `Setup Required\n\nSome project setup steps need to be completed before the AI can execute work.\n\nGates that need attention:\n${gateExplanations}\n\nOpen the Governance tab to review and complete the required gates.`;
@@ -865,9 +883,10 @@ export function Project() {
 
       const errorMessage: Message = {
         id: generateId(),
-        role: 'system',
+        role: errorRole,
         content: errorContent,
-        timestamp: new Date()
+        timestamp: new Date(),
+        ...(errorMetadata && { metadata: errorMetadata }),
       };
 
       setConversation((prev) => prev ? {
