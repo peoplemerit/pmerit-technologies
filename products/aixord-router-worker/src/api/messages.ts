@@ -12,6 +12,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { triggerGateEvaluation } from '../services/gateRules';
 
 const messages = new Hono<{ Bindings: Env }>();
 
@@ -126,6 +127,11 @@ messages.post('/:projectId/messages', async (c) => {
     await c.env.DB.prepare(
       'UPDATE project_sessions SET message_count = message_count + 1 WHERE id = ?'
     ).bind(session_id).run();
+  }
+
+  // Phase 2: Auto-evaluate gates after message creation (GA:DIS triggers on first user message)
+  if (role === 'user') {
+    c.executionCtx.waitUntil(triggerGateEvaluation(c.env.DB, projectId, userId));
   }
 
   return c.json({

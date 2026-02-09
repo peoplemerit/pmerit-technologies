@@ -13,6 +13,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { evaluateAllGates } from '../services/gateRules';
 
 const state = new Hono<{ Bindings: Env }>();
 
@@ -451,7 +452,12 @@ state.put('/:projectId/phase', async (c) => {
  *
  * AI-Governance Integration — Phase 2: Auto-Satisfaction Rules Engine
  * Re-evaluates all gate preconditions and auto-flips satisfied gates.
+ * Uses declarative rules from services/gateRules.ts.
  * Idempotent: calling twice with no data changes produces zero writes.
+ *
+ * Now evaluates ALL gate rules including:
+ *   - GA:LIC, GA:DIS, GA:TIR (Brainstorm exit)
+ *   - GA:ENV, GA:FLD, GA:BP, GA:IVL (Plan exit)
  */
 state.post('/:projectId/gates/evaluate', async (c) => {
   const userId = c.get('userId');
@@ -461,78 +467,8 @@ state.post('/:projectId/gates/evaluate', async (c) => {
     return c.json({ error: 'Project not found' }, 404);
   }
 
-  // Get current gates
-  const current = await c.env.DB.prepare(
-    'SELECT gates, phase FROM project_state WHERE project_id = ?'
-  ).bind(projectId).first<{ gates: string; phase: string }>();
-
-  const gates = JSON.parse(current?.gates || '{}');
-  const evaluated: string[] = [];
-  const changed: Array<{ gateId: string; from: boolean; to: boolean }> = [];
-
-  // === GA:ENV — Workspace binding confirmed ===
-  evaluated.push('GA:ENV');
-  const binding = await c.env.DB.prepare(
-    'SELECT binding_confirmed, folder_name FROM workspace_bindings WHERE project_id = ?'
-  ).bind(projectId).first<{ binding_confirmed: number; folder_name: string | null }>();
-  const envSatisfied = !!(binding && binding.binding_confirmed);
-  if (envSatisfied !== !!gates['GA:ENV']) {
-    changed.push({ gateId: 'GA:ENV', from: !!gates['GA:ENV'], to: envSatisfied });
-    gates['GA:ENV'] = envSatisfied;
-  }
-
-  // === GA:FLD — Folder linked ===
-  evaluated.push('GA:FLD');
-  const fldSatisfied = !!(binding && binding.folder_name);
-  if (fldSatisfied !== !!gates['GA:FLD']) {
-    changed.push({ gateId: 'GA:FLD', from: !!gates['GA:FLD'], to: fldSatisfied });
-    gates['GA:FLD'] = fldSatisfied;
-  }
-
-  // === GA:BP — Blueprint structure (scopes + deliverables + all DoDs) ===
-  evaluated.push('GA:BP');
-  const scopeCount = await c.env.DB.prepare(
-    'SELECT COUNT(*) as count FROM blueprint_scopes WHERE project_id = ?'
-  ).bind(projectId).first<{ count: number }>();
-  const deliverableCount = await c.env.DB.prepare(
-    'SELECT COUNT(*) as count FROM blueprint_deliverables WHERE project_id = ?'
-  ).bind(projectId).first<{ count: number }>();
-  const missingDoD = await c.env.DB.prepare(
-    "SELECT COUNT(*) as count FROM blueprint_deliverables WHERE project_id = ? AND (dod_evidence_spec IS NULL OR dod_evidence_spec = '' OR dod_verification_method IS NULL OR dod_verification_method = '')"
-  ).bind(projectId).first<{ count: number }>();
-  const bpSatisfied = (scopeCount?.count ?? 0) > 0
-    && (deliverableCount?.count ?? 0) > 0
-    && (missingDoD?.count ?? 1) === 0;
-  if (bpSatisfied !== !!gates['GA:BP']) {
-    changed.push({ gateId: 'GA:BP', from: !!gates['GA:BP'], to: bpSatisfied });
-    gates['GA:BP'] = bpSatisfied;
-  }
-
-  // === GA:IVL — Latest integrity validation passes ===
-  evaluated.push('GA:IVL');
-  const latestReport = await c.env.DB.prepare(
-    'SELECT all_passed FROM blueprint_integrity_reports WHERE project_id = ? ORDER BY run_at DESC LIMIT 1'
-  ).bind(projectId).first<{ all_passed: number }>();
-  const ivlSatisfied = !!(latestReport && latestReport.all_passed);
-  if (ivlSatisfied !== !!gates['GA:IVL']) {
-    changed.push({ gateId: 'GA:IVL', from: !!gates['GA:IVL'], to: ivlSatisfied });
-    gates['GA:IVL'] = ivlSatisfied;
-  }
-
-  // Persist changes if any gates flipped
-  if (changed.length > 0) {
-    const now = new Date().toISOString();
-    await c.env.DB.prepare(
-      'UPDATE project_state SET gates = ?, updated_at = ? WHERE project_id = ?'
-    ).bind(JSON.stringify(gates), now, projectId).run();
-  }
-
-  return c.json({
-    evaluated,
-    changed,
-    gates,
-    phase: current?.phase || 'BRAINSTORM',
-  });
+  const result = await evaluateAllGates(c.env.DB, projectId, userId);
+  return c.json(result);
 });
 
 export default state;

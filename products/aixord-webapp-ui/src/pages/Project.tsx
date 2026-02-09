@@ -843,6 +843,9 @@ export function Project() {
       setSessionCost(prev => prev + sdkResponse.usage.costUsd);
       setSessionTokens(prev => prev + sdkResponse.usage.inputTokens + sdkResponse.usage.outputTokens);
 
+      // Phase 2: Auto-evaluate gates after message exchange (GA:DIS, GA:LIC, GA:TIR may flip)
+      evaluateGatesAfterAction();
+
     } catch (err) {
       console.error('Failed to send message:', err);
 

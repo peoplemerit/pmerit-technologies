@@ -13,6 +13,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { triggerGateEvaluation } from '../services/gateRules';
 
 const blueprint = new Hono<{ Bindings: Env }>();
 
@@ -97,6 +98,9 @@ blueprint.post('/:projectId/blueprint/scopes', async (c) => {
     body.inputs || null, body.outputs || null,
     body.notes || null, userId, now, now
   ).run();
+
+  // Phase 2: Auto-evaluate gates after scope creation (GA:BP may flip)
+  c.executionCtx.waitUntil(triggerGateEvaluation(c.env.DB, projectId, userId));
 
   return c.json({
     id, project_id: projectId, tier, name: body.name,
@@ -202,6 +206,9 @@ blueprint.put('/:projectId/blueprint/scopes/:scopeId', async (c) => {
   await c.env.DB.prepare(
     `UPDATE blueprint_scopes SET ${sets.join(', ')} WHERE id = ? AND project_id = ?`
   ).bind(...params).run();
+
+  // Phase 2: Auto-evaluate gates after scope update
+  c.executionCtx.waitUntil(triggerGateEvaluation(c.env.DB, projectId, userId));
 
   return c.json({ id: scopeId, updated_at: now });
 });
@@ -419,6 +426,9 @@ blueprint.put('/:projectId/blueprint/deliverables/:deliverableId', async (c) => 
   await c.env.DB.prepare(
     `UPDATE blueprint_deliverables SET ${sets.join(', ')} WHERE id = ? AND project_id = ?`
   ).bind(...params).run();
+
+  // Phase 2: Auto-evaluate gates after deliverable update (DoD completion may flip GA:BP)
+  c.executionCtx.waitUntil(triggerGateEvaluation(c.env.DB, projectId, userId));
 
   return c.json({ id: deliverableId, updated_at: now });
 });
@@ -674,6 +684,9 @@ blueprint.post('/:projectId/blueprint/validate', async (c) => {
     deliverables.reduce((sum, d) => sum + JSON.parse(d.upstream_deps || '[]').length, 0),
     userId, now
   ).run();
+
+  // Phase 2: Auto-evaluate gates after validation (GA:IVL flips based on all_passed)
+  c.executionCtx.waitUntil(triggerGateEvaluation(c.env.DB, projectId, userId));
 
   return c.json({
     id: reportId,

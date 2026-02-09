@@ -15,6 +15,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { triggerGateEvaluation } from '../services/gateRules';
 
 const workspace = new Hono<{ Bindings: Env }>();
 
@@ -130,6 +131,9 @@ workspace.put('/:projectId/workspace', async (c) => {
       now
     ).run();
   }
+
+  // Phase 2: Auto-evaluate gates after workspace binding change (GA:ENV, GA:FLD)
+  c.executionCtx.waitUntil(triggerGateEvaluation(c.env.DB, projectId, userId));
 
   return c.json({ success: true, updated_at: now });
 });
