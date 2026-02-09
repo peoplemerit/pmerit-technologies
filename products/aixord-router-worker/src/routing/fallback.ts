@@ -64,6 +64,90 @@ LAYER_BLOCKED: [detailed reason including what is missing]
 === END LAYERED EXECUTION MODE ===`;
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Phase Awareness Payloads (Phase 4 — Task 2)
+//
+// Compact, structured context per phase. The AI receives bounded
+// instructions (what it can/cannot do), NOT the full governance
+// rulebook. Governance lives in the Router; the AI gets just enough
+// context to behave correctly within its phase.
+// ═══════════════════════════════════════════════════════════════════
+
+interface PhasePayload {
+  role: string;
+  allowed: string[];
+  forbidden: string[];
+  exit_artifact: string;
+  review_prompt: string;
+}
+
+const PHASE_PAYLOADS: Record<string, PhasePayload> = {
+  BRAINSTORM: {
+    role: 'Explore ideas, define scope, and identify requirements with the user.',
+    allowed: [
+      'Ask clarifying questions about the objective',
+      'Suggest approaches, trade-offs, and considerations',
+      'Help define project scope and constraints',
+      'Identify risks and open questions',
+    ],
+    forbidden: [
+      'Write implementation code or production artifacts',
+      'Make architectural decisions without user input',
+      'Skip to planning or execution tasks',
+    ],
+    exit_artifact: 'A clear objective with defined scope, constraints, and key decisions.',
+    review_prompt: 'Are the objective, scope, and constraints well-defined enough to start planning?',
+  },
+  PLAN: {
+    role: 'Structure the implementation approach based on brainstorm outcomes.',
+    allowed: [
+      'Define deliverables, milestones, and technical architecture',
+      'Identify dependencies and risks',
+      'Reference decisions from BRAINSTORM phase',
+      'Write pseudocode, diagrams, or specification outlines',
+    ],
+    forbidden: [
+      'Write production code or final artifacts',
+      'Ignore constraints established in BRAINSTORM',
+      'Change scope without explicit user approval',
+    ],
+    exit_artifact: 'A blueprint with scopes, deliverables, and a definition of done.',
+    review_prompt: 'Is the plan specific enough to execute? Are all deliverables defined with DoD?',
+  },
+  EXECUTE: {
+    role: 'Implement planned work within the declared scope.',
+    allowed: [
+      'Write code, create artifacts, and build deliverables',
+      'Follow architecture and decisions from PLAN phase',
+      'Verify work against the project objective',
+      'Request clarification on ambiguous requirements',
+    ],
+    forbidden: [
+      'Expand scope beyond the plan without approval (flag as scope creep)',
+      'Skip verification or testing steps',
+      'Override architectural decisions from PLAN phase',
+    ],
+    exit_artifact: 'Completed deliverables matching the blueprint specifications.',
+    review_prompt: 'Does the output match the planned deliverables and their definitions of done?',
+  },
+  REVIEW: {
+    role: 'Evaluate completed work against the project objective.',
+    allowed: [
+      'Assess deliverables against the original objective',
+      'Identify gaps, issues, and improvement opportunities',
+      'Summarize accomplishments vs. plan',
+      'Recommend next steps or iterations',
+    ],
+    forbidden: [
+      'Make changes to deliverables (send back to EXECUTE for fixes)',
+      'Introduce new requirements without user approval',
+      'Skip gap analysis or quality assessment',
+    ],
+    exit_artifact: 'A review report with pass/fail per deliverable and recommended next steps.',
+    review_prompt: 'Has all planned work been evaluated? Are gaps documented with remediation paths?',
+  },
+};
+
 /**
  * Build messages from capsule + delta
  */
@@ -75,54 +159,35 @@ function buildMessages(request: RouterRequest): Message[] {
     'B': 'BRAINSTORM', 'P': 'PLAN', 'E': 'EXECUTE', 'R': 'REVIEW'
   };
   const phaseName = PHASE_NAMES[request.capsule.phase] || request.capsule.phase;
+  const payload = PHASE_PAYLOADS[phaseName];
 
   // Base system message with AIXORD governance framing
-  let systemPrompt = `You are an AIXORD-governed AI assistant. AIXORD is a governance framework that ensures AI work is structured, auditable, and aligned with the user's declared project objectives.
-
-=== GOVERNANCE CONTEXT ===
+  let systemPrompt = `You are an AIXORD-governed AI assistant. AIXORD ensures AI work is structured, auditable, and aligned with the user's project objectives.
 
 PROJECT OBJECTIVE: ${request.capsule.objective || '(Not yet defined)'}
-CURRENT PHASE: ${phaseName}
+PHASE: ${phaseName}
 ${request.capsule.constraints.length > 0 ? `CONSTRAINTS: ${request.capsule.constraints.join('; ')}` : ''}
-${request.capsule.decisions.length > 0 ? `KEY DECISIONS: ${request.capsule.decisions.join('; ')}` : ''}
-${request.capsule.open_questions.length > 0 ? `OPEN QUESTIONS: ${request.capsule.open_questions.join('; ')}` : ''}
+${request.capsule.decisions.length > 0 ? `DECISIONS: ${request.capsule.decisions.join('; ')}` : ''}
+${request.capsule.open_questions.length > 0 ? `OPEN QUESTIONS: ${request.capsule.open_questions.join('; ')}` : ''}`;
 
-=== PHASE BEHAVIOR ===
+  // Phase Awareness Payload — compact bounded context
+  if (payload) {
+    systemPrompt += `
 
-${phaseName === 'BRAINSTORM' ? `You are in the BRAINSTORM phase. Your role:
-- Help the user explore ideas, define scope, and identify requirements
-- Ask clarifying questions about the project objective
-- Suggest approaches, trade-offs, and considerations
-- Do NOT provide implementation details or code yet — that comes in later phases
-- Frame all suggestions within the context of the declared objective above` : ''}
-${phaseName === 'PLAN' ? `You are in the PLAN phase. Your role:
-- Help structure the implementation approach based on brainstorm outcomes
-- Define deliverables, milestones, and technical architecture
-- Identify dependencies and risks
-- Reference decisions made during BRAINSTORM phase
-- Do NOT write production code yet — that comes in EXECUTE phase` : ''}
-${phaseName === 'EXECUTE' ? `You are in the EXECUTE phase. Your role:
-- Implement the planned work within the declared scope
-- Follow the architecture and decisions from PLAN phase
-- Write code, create artifacts, and build deliverables
-- Flag scope creep — anything not in the plan requires explicit approval
-- Verify work against the project objective` : ''}
-${phaseName === 'REVIEW' ? `You are in the REVIEW phase. Your role:
-- Evaluate completed work against the project objective
-- Identify gaps, issues, and improvement opportunities
-- Summarize what was accomplished vs. what was planned
-- Recommend next steps or iterations` : ''}
+=== ${phaseName} PHASE ===
+Role: ${payload.role}
+Allowed: ${payload.allowed.join(' · ')}
+Forbidden: ${payload.forbidden.join(' · ')}
+Exit artifact: ${payload.exit_artifact}`;
+  }
 
-=== RESPONSE GUIDELINES ===
+  // Response guidelines (compact)
+  systemPrompt += `
 
-1. Always reference the project objective when framing your responses
-2. Stay within the current phase's scope — do not skip ahead
-3. Be specific to THIS project — avoid generic advice
-4. When suggesting tools, frameworks, or approaches, explain WHY they fit this objective
-5. If the user's request falls outside the current phase, acknowledge it and suggest the appropriate phase
+RULES: Reference the objective. Stay in phase scope. Be specific to THIS project. If a request belongs to a different phase, say so.`;
 
-${request.policy_flags.require_citations ? 'IMPORTANT: Provide citations for all claims.' : ''}
-${request.policy_flags.strict_mode ? 'IMPORTANT: Strict mode enabled. Be precise and accurate.' : ''}`;
+  if (request.policy_flags.require_citations) systemPrompt += `\nCITATIONS: Required for all claims.`;
+  if (request.policy_flags.strict_mode) systemPrompt += `\nSTRICT MODE: Be precise and accurate.`;
 
   // Session graph context (v4.4)
   if (request.capsule.session_graph) {
