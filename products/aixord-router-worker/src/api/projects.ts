@@ -40,13 +40,14 @@ projects.post('/', async (c) => {
       'INSERT INTO projects (id, owner_id, name, objective, reality_classification, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).bind(projectId, userId, name, objective || null, realityClass, now, now).run();
 
-    // Initialize state with full AIXORD v4.3 gate structure
-    const initialGates = {
-      // Setup gates (10-step)
-      LIC: false, DIS: false, TIR: false, ENV: false, FLD: false,
-      CIT: false, CON: false, OBJ: false, RA: false, DC: false,
-      // Execution gates
-      FX: false, PD: false, PR: false, BP: false, MS: false, VA: false, HO: false
+    // Initialize state with full AIXORD v4.3 gate structure (GA: = setup, GW: = work)
+    const initialGates: Record<string, boolean> = {
+      // Setup gates (GA: prefix)
+      'GA:LIC': false, 'GA:DIS': false, 'GA:TIR': false, 'GA:ENV': false, 'GA:FLD': false,
+      'GA:CIT': false, 'GA:CON': false, 'GA:BP': false, 'GA:IVL': false, 'GA:PS': false, 'GA:GP': false,
+      // Work gates (GW: prefix)
+      'GW:PRE': false, 'GW:VAL': false, 'GW:DOC': false, 'GW:QA': false,
+      'GW:DEP': false, 'GW:VER': false, 'GW:ARC': false,
     };
 
     // Security gates (SPG-01)

@@ -23,7 +23,7 @@ const phases = [
 // All known gates
 const ALL_SETUP_GATES = [
   'GA:LIC', 'GA:DIS', 'GA:TIR', 'GA:ENV', 'GA:FLD',
-  'GA:CIT', 'GA:CON', 'GA:BP', 'GA:IVL', 'GA:PS', 'GP',
+  'GA:CIT', 'GA:CON', 'GA:BP', 'GA:IVL', 'GA:PS', 'GA:GP',
 ];
 const ALL_WORK_GATES = [
   'GW:PRE', 'GW:VAL', 'GW:DOC', 'GW:QA', 'GW:DEP', 'GW:VER', 'GW:ARC',

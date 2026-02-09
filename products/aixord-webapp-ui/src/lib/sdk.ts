@@ -341,15 +341,15 @@ export class AIXORDSDKClient {
     // RC-6 FIX: Check gates from state (already loaded during init)
     // No separate API call to /security/gates needed
     if (this.state?.gates) {
-      // GP (Governance Passed) - formula must be bound
-      const gpPassed = this.state.gates['GP'] ?? false;
+      // GA:GP (Governance Passed) - formula must be bound
+      const gpPassed = this.state.gates['GA:GP'] ?? false;
       results.push({
-        gate: 'GP',
+        gate: 'GA:GP',
         passed: gpPassed,
         reason: gpPassed ? undefined : 'Please complete the required setup gates in the Governance panel.',
-        blocking: true, // GP is blocking in Execute/Review
+        blocking: true, // GA:GP is blocking in Execute/Review
       });
-      if (!gpPassed) blockingGates.push('GP');
+      if (!gpPassed) blockingGates.push('GA:GP');
 
       // Check security gates from state.securityGates if available
       if (this.state.securityGates) {

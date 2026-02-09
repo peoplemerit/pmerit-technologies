@@ -1,56 +1,62 @@
 /**
  * Gate Tracker Component (D4)
  *
- * Displays and manages AIXORD gates (17 gates per v4.3).
+ * Displays and manages AIXORD gates.
+ * All gate keys use canonical prefixed format: GA: (setup), GW: (work).
  *
  * Features:
  * - Visual gate chips with pass/pending states
  * - Setup vs Work gate categories
  * - Progress bar
  * - Router integration ready
- *
- * v4.3 Update: Added FLD, CIT, CON, DC gates per AIXORD governance spec
  */
 
-// UI-specific gate type (v4.3 complete set)
+// UI-specific gate type — canonical prefixed keys
 type GateID =
-  | 'LIC' | 'DIS' | 'TIR' | 'ENV' | 'FLD' | 'CIT' | 'CON' | 'OBJ' | 'RA' | 'DC'
-  | 'FX' | 'PD' | 'PR' | 'BP' | 'MS' | 'VA' | 'HO';
+  | 'GA:LIC' | 'GA:DIS' | 'GA:TIR' | 'GA:ENV' | 'GA:FLD'
+  | 'GA:CIT' | 'GA:CON' | 'GA:BP' | 'GA:IVL' | 'GA:PS' | 'GA:GP'
+  | 'GW:PRE' | 'GW:VAL' | 'GW:DOC' | 'GW:QA' | 'GW:DEP' | 'GW:VER' | 'GW:ARC';
 
 interface GateDefinition {
   name: string;
   description: string;
   phase: 'SETUP' | 'WORK';
+  /** Short label for display (no prefix) */
+  label: string;
 }
 
-// AIXORD Gate Definitions (v4.3)
-// Inlined to avoid dependency on @aixord/core until package is built
+// AIXORD Gate Definitions — canonical GA:/GW: prefixed keys
 const GATES: Record<GateID, GateDefinition> = {
-  // SETUP GATES (10-step per v4.3)
-  LIC: { name: 'License', description: 'Director has accepted governance terms', phase: 'SETUP' },
-  DIS: { name: 'Disclosure', description: 'AI limitations and risks acknowledged', phase: 'SETUP' },
-  TIR: { name: 'Tier', description: 'Subscription tier selected and validated', phase: 'SETUP' },
-  ENV: { name: 'Environment', description: 'Working environment configured', phase: 'SETUP' },
-  FLD: { name: 'Folder', description: 'Project folder/workspace established', phase: 'SETUP' },
-  CIT: { name: 'Citation', description: 'Citation and source requirements defined', phase: 'SETUP' },
-  CON: { name: 'Constraints', description: 'Project constraints and boundaries documented', phase: 'SETUP' },
-  OBJ: { name: 'Objective', description: 'Project objective clearly defined', phase: 'SETUP' },
-  RA: { name: 'Reality Assessment', description: 'Reality classification completed', phase: 'SETUP' },
-  DC: { name: 'Data Classification', description: 'Data sensitivity classification completed', phase: 'SETUP' },
+  // SETUP GATES (GA: prefix)
+  'GA:LIC': { name: 'License', label: 'LIC', description: 'Director has accepted governance terms', phase: 'SETUP' },
+  'GA:DIS': { name: 'Disclaimer', label: 'DIS', description: 'AI limitations and risks acknowledged', phase: 'SETUP' },
+  'GA:TIR': { name: 'Tier', label: 'TIR', description: 'Subscription tier selected and validated', phase: 'SETUP' },
+  'GA:ENV': { name: 'Environment', label: 'ENV', description: 'Working environment configured', phase: 'SETUP' },
+  'GA:FLD': { name: 'Folder', label: 'FLD', description: 'Project folder/workspace established', phase: 'SETUP' },
+  'GA:CIT': { name: 'Citations', label: 'CIT', description: 'Citation and source requirements defined', phase: 'SETUP' },
+  'GA:CON': { name: 'Constraints', label: 'CON', description: 'Project constraints and boundaries documented', phase: 'SETUP' },
+  'GA:BP':  { name: 'Blueprint', label: 'BP', description: 'Technical blueprint artifact with scopes and deliverables', phase: 'SETUP' },
+  'GA:IVL': { name: 'Integrity Validation', label: 'IVL', description: 'Blueprint integrity validation passed', phase: 'SETUP' },
+  'GA:PS':  { name: 'Phase Start', label: 'PS', description: 'Phase start conditions satisfied', phase: 'SETUP' },
+  'GA:GP':  { name: 'General Purpose', label: 'GP', description: 'General purpose gate', phase: 'SETUP' },
 
-  // WORK GATES (7)
-  FX: { name: 'Fix', description: 'Issue or requirement identified for resolution', phase: 'WORK' },
-  PD: { name: 'Project Document', description: 'Project document artifact created', phase: 'WORK' },
-  PR: { name: 'Progress', description: 'Meaningful progress checkpoint reached', phase: 'WORK' },
-  BP: { name: 'Blueprint', description: 'Technical blueprint artifact locked', phase: 'WORK' },
-  MS: { name: 'Master Scope', description: 'Master scope artifact approved', phase: 'WORK' },
-  VA: { name: 'Validation', description: 'Output validated against requirements', phase: 'WORK' },
-  HO: { name: 'Handoff', description: 'Handoff artifact created for transition', phase: 'WORK' },
+  // WORK GATES (GW: prefix)
+  'GW:PRE': { name: 'Prerequisites', label: 'PRE', description: 'Execution prerequisites verified', phase: 'WORK' },
+  'GW:VAL': { name: 'Validation', label: 'VAL', description: 'Output validated against requirements', phase: 'WORK' },
+  'GW:DOC': { name: 'Documentation', label: 'DOC', description: 'Documentation artifacts produced', phase: 'WORK' },
+  'GW:QA':  { name: 'Quality Assurance', label: 'QA', description: 'Quality checks completed', phase: 'WORK' },
+  'GW:DEP': { name: 'Dependencies', label: 'DEP', description: 'Dependencies resolved', phase: 'WORK' },
+  'GW:VER': { name: 'Verification', label: 'VER', description: 'Deliverables verified against DoD', phase: 'WORK' },
+  'GW:ARC': { name: 'Archive', label: 'ARC', description: 'Session archived for audit trail', phase: 'WORK' },
 };
 
-// v4.3: 10 Setup Gates + 7 Work Gates = 17 total
-const SETUP_GATES: GateID[] = ['LIC', 'DIS', 'TIR', 'ENV', 'FLD', 'CIT', 'CON', 'OBJ', 'RA', 'DC'];
-const WORK_GATES: GateID[] = ['FX', 'PD', 'PR', 'BP', 'MS', 'VA', 'HO'];
+const SETUP_GATES: GateID[] = [
+  'GA:LIC', 'GA:DIS', 'GA:TIR', 'GA:ENV', 'GA:FLD',
+  'GA:CIT', 'GA:CON', 'GA:BP', 'GA:IVL', 'GA:PS', 'GA:GP',
+];
+const WORK_GATES: GateID[] = [
+  'GW:PRE', 'GW:VAL', 'GW:DOC', 'GW:QA', 'GW:DEP', 'GW:VER', 'GW:ARC',
+];
 
 interface GateTrackerProps {
   gates: Record<string, boolean>;
@@ -94,7 +100,7 @@ function GateChip({
             <circle cx="12" cy="12" r="10" strokeWidth={2} />
           </svg>
         )}
-        {gateId}
+        {definition.label}
       </span>
     </button>
   );

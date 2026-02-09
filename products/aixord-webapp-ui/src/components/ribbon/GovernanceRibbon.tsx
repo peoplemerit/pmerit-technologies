@@ -52,7 +52,7 @@ const setupGates = [
   { id: 'GA:BP', label: 'BP', title: 'Blueprint' },
   { id: 'GA:IVL', label: 'IVL', title: 'Integrity Validation' },
   { id: 'GA:PS', label: 'PS', title: 'Phase Start' },
-  { id: 'GP', label: 'GP', title: 'General Purpose' },
+  { id: 'GA:GP', label: 'GP', title: 'General Purpose' },
 ];
 
 // Work Gates
