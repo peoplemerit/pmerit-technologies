@@ -238,6 +238,35 @@ app.post('/v1/router/execute', async (c) => {
       }
     }
 
+    // Enrich capsule with authoritative security_gates from DB
+    // Fixes: capsule security_gates can be stale when sent from client
+    if (projectId && request.capsule) {
+      const secGates = await c.env.DB.prepare(
+        'SELECT gs_dc, gs_dp, gs_ac, gs_ai, gs_jr, gs_rt FROM security_gates WHERE project_id = ?'
+      ).bind(projectId).first<{
+        gs_dc: number; gs_dp: number; gs_ac: number;
+        gs_ai: number; gs_jr: number; gs_rt: number;
+      }>();
+
+      if (secGates) {
+        const enriched = {
+          GS_DC: !!secGates.gs_dc,
+          GS_DP: !!secGates.gs_dp,
+          GS_AC: !!secGates.gs_ac,
+          GS_AI: !!secGates.gs_ai,
+          GS_JR: !!secGates.gs_jr,
+          GS_RT: !!secGates.gs_rt,
+        };
+        // Update both legacy field and typed gates.security
+        request.capsule.security_gates = enriched;
+        if (!request.capsule.gates) {
+          request.capsule.gates = { setup: {}, work: {}, security: enriched };
+        } else {
+          request.capsule.gates.security = enriched;
+        }
+      }
+    }
+
     // PATCH-MOD-01: Determine effective intent for affinity-based selection
     // If router_intent is provided, use it; otherwise default from base intent
     const effectiveRouterIntent: RouterIntent = request.router_intent || (request.intent as RouterIntent);

@@ -145,11 +145,34 @@ state.get('/:projectId', async (c) => {
     return c.json({ error: 'State not found' }, 404);
   }
 
+  const capsule = JSON.parse(projectState.capsule || '{}');
+
+  // Enrich capsule with authoritative security_gates from DB table
+  // The capsule JSON can become stale when security gates are updated
+  // via the security API — always read the source-of-truth table.
+  const secGates = await c.env.DB.prepare(
+    'SELECT gs_dc, gs_dp, gs_ac, gs_ai, gs_jr, gs_rt FROM security_gates WHERE project_id = ?'
+  ).bind(projectId).first<{
+    gs_dc: number; gs_dp: number; gs_ac: number;
+    gs_ai: number; gs_jr: number; gs_rt: number;
+  }>();
+
+  if (secGates) {
+    capsule.security_gates = {
+      GS_DC: !!secGates.gs_dc,
+      GS_DP: !!secGates.gs_dp,
+      GS_AC: !!secGates.gs_ac,
+      GS_AI: !!secGates.gs_ai,
+      GS_JR: !!secGates.gs_jr,
+      GS_RT: !!secGates.gs_rt,
+    };
+  }
+
   return c.json({
     project_id: projectState.project_id,
     phase: projectState.phase,
     gates: JSON.parse(projectState.gates || '{}'),
-    capsule: JSON.parse(projectState.capsule || '{}'),
+    capsule,
     updated_at: projectState.updated_at
   });
 });

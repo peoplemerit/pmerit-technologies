@@ -161,6 +161,8 @@ export interface Capsule {
     missing_gates: string[];
     can_advance: boolean;
   };
+  // Legacy capsule field from project creation (kept in sync with gates.security)
+  security_gates?: Record<string, boolean>;
 }
 
 export interface ArtifactRef {
