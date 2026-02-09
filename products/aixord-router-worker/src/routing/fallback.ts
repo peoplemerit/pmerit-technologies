@@ -195,7 +195,8 @@ ${request.capsule.open_questions.length > 0 ? `OPEN QUESTIONS: ${request.capsule
 Role: ${payload.role}
 Allowed: ${payload.allowed.join(' · ')}
 Forbidden: ${payload.forbidden.join(' · ')}
-Exit artifact: ${payload.exit_artifact}`;
+Exit artifact: ${payload.exit_artifact}
+Review question: ${payload.review_prompt}`;
   }
 
   // Response guidelines (compact)
@@ -259,18 +260,43 @@ RULES: Reference the objective. Stay in phase scope. Be specific to THIS project
     systemPrompt += `\nBLUEPRINT: ${bp.scopes} scopes, ${bp.deliverables} deliverables (${bp.deliverables_with_dod} with DoD)${bp.integrity_passed !== null ? `. Integrity: ${bp.integrity_passed ? 'PASSED' : 'FAILED'}` : ''}`;
   }
 
-  // AI-Governance Integration — Phase 3: Phase advance suggestion
+  // AI-Governance Integration — Phase 3: Phase advance via Review Packet
+  // The AI must ALWAYS prepare a Director Review Packet before suggesting
+  // phase transition. This is the behavioral layer that makes governance
+  // feel intentional — the Director is guided, not left to guess.
   if (request.capsule.phase_exit?.can_advance) {
     const PHASE_NEXT: Record<string, string> = {
       'BRAINSTORM': 'PLAN', 'PLAN': 'EXECUTE', 'EXECUTE': 'REVIEW',
     };
-    const nextPhase = PHASE_NEXT[request.capsule.phase_exit.current_phase];
-    if (nextPhase) {
+    const currentPhase = request.capsule.phase_exit.current_phase;
+    const nextPhase = PHASE_NEXT[currentPhase];
+    if (nextPhase && payload) {
       systemPrompt += `\n\n=== PHASE ADVANCE AVAILABLE ===
-All exit gates for ${request.capsule.phase_exit.current_phase} are satisfied.
-If you believe the work in this phase is complete and the user asks about next steps or the conversation naturally concludes, suggest advancing by including this exact tag in your response:
-[PHASE_ADVANCE:${nextPhase}]
-Only include this tag when contextually appropriate — do NOT include it on every message.`;
+All exit gates for ${currentPhase} are satisfied.
+When you believe the work in this phase is substantively complete, or the user asks about next steps, you MUST present a REVIEW PACKET before suggesting transition. Do NOT suggest advancing without this packet. Do NOT include it on every message — only when contextually appropriate.
+
+REVIEW PACKET FORMAT (mandatory before any phase advance suggestion):
+---
+**${currentPhase} Phase Review**
+
+**Summary:** [2-4 sentences: what was accomplished in this phase]
+
+**Review Question:** ${payload.review_prompt}
+
+**Open Questions:**
+- [List any unresolved questions — mark as BLOCKING or OPTIONAL]
+- (If none, state "No open questions remain.")
+
+**Suggested Adjustments:**
+- [Any refinements worth considering before moving on]
+- (If none, state "No adjustments needed.")
+
+**Transition:** If you are satisfied, click **Finalize ${currentPhase}** to advance to ${nextPhase}.
+If not, tell me what to adjust and I will update the phase output.
+---
+
+After presenting the Review Packet, include this tag at the END of your response:
+[PHASE_ADVANCE:${nextPhase}]`;
     }
   }
 
