@@ -738,26 +738,34 @@ export const stateApi = {
    * Phase 4: Validates authority, gates, artifacts, logs to decision ledger,
    * and advances to next phase.
    */
-  async finalizePhase(projectId: string, phase: string, token: string): Promise<{
+  async finalizePhase(projectId: string, phase: string, token: string, overrideOptions?: {
+    override_warnings: boolean;
+    override_reason: string;
+  }): Promise<{
     success: boolean;
-    result: 'APPROVED' | 'REJECTED';
+    result: 'APPROVED' | 'REJECTED' | 'WARNINGS';
     phase_from: string;
     phase_to: string;
     artifact_checks: Array<{ check: string; passed: boolean; detail: string }>;
+    warnings?: Array<{ check: string; passed: boolean; detail: string }>;
     missing_gates?: string[];
     message: string;
     ledger_logged?: boolean;
   }> {
     return request<{
       success: boolean;
-      result: 'APPROVED' | 'REJECTED';
+      result: 'APPROVED' | 'REJECTED' | 'WARNINGS';
       phase_from: string;
       phase_to: string;
       artifact_checks: Array<{ check: string; passed: boolean; detail: string }>;
+      warnings?: Array<{ check: string; passed: boolean; detail: string }>;
       missing_gates?: string[];
       message: string;
       ledger_logged?: boolean;
-    }>(`/state/${projectId}/phases/${phase}/finalize`, { method: 'POST' }, token);
+    }>(`/state/${projectId}/phases/${phase}/finalize`, {
+      method: 'POST',
+      ...(overrideOptions ? { body: JSON.stringify(overrideOptions) } : {}),
+    }, token);
   },
 };
 
@@ -4097,6 +4105,107 @@ export const workspaceApi = {
 };
 
 // ============================================================================
+// Project Continuity API (HANDOFF-PCC-01)
+// ============================================================================
+
+export interface ContinuityCapsule {
+  project_id: string;
+  objective: string;
+  current_phase: string;
+  phase_since: string;
+  sessions_in_phase: number;
+  session_timeline: Array<{
+    number: number;
+    type: string;
+    status: string;
+    summary: string | null;
+    phase: string;
+    message_count: number;
+    closed_at: string | null;
+  }>;
+  selected_approach: { option_name: string; rationale: string } | null;
+  rejected_approaches: Array<{ option_name: string; kill_reason: string }>;
+  key_decisions: Array<{
+    id: string;
+    action: string;
+    summary: string | null;
+    result: string;
+    reason: string;
+    created_at: string;
+  }>;
+  active_work: Array<{
+    deliverable_name: string;
+    status: string;
+    priority: string;
+    progress_percent: number;
+  }>;
+  open_escalations: Array<{ deliverable_name: string; decision_needed: string }>;
+  known_constraints: string[];
+  total_sessions: number;
+  total_decisions: number;
+  total_deliverables: number;
+  completed_deliverables: number;
+  pinned_items: Array<{
+    id: string;
+    pin_type: string;
+    target_id: string;
+    label: string | null;
+    pinned_at: string;
+  }>;
+}
+
+export interface ContinuityPin {
+  id: string;
+  pin_type: string;
+  target_id: string;
+  label: string | null;
+  pinned_by: string;
+  pinned_at: string;
+}
+
+export const continuityApi = {
+  async getCapsule(projectId: string, token: string): Promise<ContinuityCapsule> {
+    return request<ContinuityCapsule>(`/projects/${projectId}/continuity`, {}, token);
+  },
+
+  async getSessionSummary(projectId: string, sessionId: string, token: string): Promise<{
+    session: Record<string, unknown>;
+    decisions: Array<Record<string, unknown>>;
+  }> {
+    return request(`/projects/${projectId}/continuity/sessions/${sessionId}`, {}, token);
+  },
+
+  async getDecisions(projectId: string, token: string, action?: string): Promise<{
+    decisions: Array<Record<string, unknown>>;
+  }> {
+    const params = action ? `?action=${action}` : '';
+    return request(`/projects/${projectId}/continuity/decisions${params}`, {}, token);
+  },
+
+  async getArtifacts(projectId: string, token: string, type?: string): Promise<Record<string, unknown>> {
+    const params = type ? `?type=${type}` : '';
+    return request(`/projects/${projectId}/continuity/artifacts${params}`, {}, token);
+  },
+
+  async getPins(projectId: string, token: string): Promise<{ pins: ContinuityPin[] }> {
+    return request<{ pins: ContinuityPin[] }>(`/projects/${projectId}/continuity/pins`, {}, token);
+  },
+
+  async createPin(projectId: string, pin: { pin_type: string; target_id: string; label?: string }, token: string): Promise<ContinuityPin> {
+    return request<ContinuityPin>(`/projects/${projectId}/continuity/pins`, {
+      method: 'POST',
+      body: JSON.stringify(pin),
+    }, token);
+  },
+
+  async deletePin(projectId: string, pinId: string, token: string): Promise<void> {
+    await request<void>(`/projects/${projectId}/continuity/pins/${pinId}`, {
+      method: 'DELETE',
+    }, token);
+  },
+};
+
+// ============================================================================
 // Combined API object
 // ============================================================================
 
@@ -4120,6 +4229,7 @@ export const api = {
   engineering: engineeringApi,
   blueprint: blueprintApi,
   workspace: workspaceApi,
+  continuity: continuityApi,
 };
 
 export default api;

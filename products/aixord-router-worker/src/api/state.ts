@@ -493,6 +493,12 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
   const projectId = c.req.param('projectId');
   const requestedPhase = c.req.param('phase').toUpperCase();
 
+  // Parse optional override flags for quality warnings
+  const body: { override_warnings?: boolean; override_reason?: string } = await c.req.json<{
+    override_warnings?: boolean;
+    override_reason?: string;
+  }>().catch(() => ({}));
+
   // 1. Authority check — must be project owner (Director)
   if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
     return c.json({ error: 'Unauthorized — only the project Director can finalize phases' }, 403);
@@ -531,6 +537,7 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
 
   // 4. Artifact validation — phase-specific checks
   const artifactChecks: Array<{ check: string; passed: boolean; detail: string }> = [];
+  const warnChecks: Array<{ check: string; passed: boolean; detail: string }> = [];
 
   if (currentPhase === 'BRAINSTORM') {
     // B0: Must have a defined objective
@@ -570,12 +577,18 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
 
       const validation = validateBrainstormArtifact(options, assumptions, decisionCriteria, killConditions);
 
-      // Add only BLOCK checks to artifact checks (WARN checks don't prevent finalize)
+      // Separate BLOCK checks (prevent finalize) from WARN checks (quality warnings)
       for (const check of validation.checks) {
         if (check.level === 'BLOCK') {
           artifactChecks.push({
             check: `brainstorm_${check.check}`,
             passed: check.passed,
+            detail: check.detail,
+          });
+        } else if (check.level === 'WARN' && !check.passed) {
+          warnChecks.push({
+            check: `brainstorm_${check.check}`,
+            passed: false,
             detail: check.detail,
           });
         }
@@ -584,13 +597,15 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
   }
 
   if (currentPhase === 'PLAN') {
-    // Must have blueprint with scopes and deliverables
+    // P1: Must have blueprint scopes
     const scopeCount = await c.env.DB.prepare(
       'SELECT COUNT(*) as count FROM blueprint_scopes WHERE project_id = ?'
     ).bind(projectId).first<{ count: number }>();
+    // P2: Must have deliverables
     const deliverableCount = await c.env.DB.prepare(
       'SELECT COUNT(*) as count FROM blueprint_deliverables WHERE project_id = ?'
     ).bind(projectId).first<{ count: number }>();
+    // P3: Integrity validation must pass
     const integrityReport = await c.env.DB.prepare(
       'SELECT all_passed FROM blueprint_integrity_reports WHERE project_id = ? ORDER BY run_at DESC LIMIT 1'
     ).bind(projectId).first<{ all_passed: number }>();
@@ -610,27 +625,143 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
       passed: !!integrityReport?.all_passed,
       detail: integrityReport ? (integrityReport.all_passed ? 'Integrity validation passed' : 'Integrity validation failed') : 'No integrity validation run',
     });
+
+    // P4: Every scope must have a defined boundary
+    const scopesNoBoundary = await c.env.DB.prepare(
+      `SELECT COUNT(*) as count FROM blueprint_scopes
+       WHERE project_id = ? AND (boundary IS NULL OR boundary = '')`
+    ).bind(projectId).first<{ count: number }>();
+    artifactChecks.push({
+      check: 'scope_boundaries_defined',
+      passed: (scopesNoBoundary?.count || 0) === 0,
+      detail: (scopesNoBoundary?.count || 0) === 0
+        ? 'All scopes have defined boundaries'
+        : `${scopesNoBoundary?.count} scope(s) missing boundary definition`,
+    });
+
+    // P5: Every deliverable must have a Definition of Done
+    const delivsNoDod = await c.env.DB.prepare(
+      `SELECT COUNT(*) as count FROM blueprint_deliverables
+       WHERE project_id = ? AND (dod_evidence_spec IS NULL OR dod_evidence_spec = '')`
+    ).bind(projectId).first<{ count: number }>();
+    artifactChecks.push({
+      check: 'deliverables_have_dod',
+      passed: (delivsNoDod?.count || 0) === 0,
+      detail: (delivsNoDod?.count || 0) === 0
+        ? 'All deliverables have Definition of Done'
+        : `${delivsNoDod?.count} deliverable(s) missing Definition of Done (dod_evidence_spec)`,
+    });
+
+    // P6: No orphan deliverables (every deliverable must belong to a valid scope)
+    const orphanDelivs = await c.env.DB.prepare(
+      `SELECT COUNT(*) as count FROM blueprint_deliverables bd
+       LEFT JOIN blueprint_scopes bs ON bs.id = bd.scope_id AND bs.project_id = bd.project_id
+       WHERE bd.project_id = ? AND bs.id IS NULL`
+    ).bind(projectId).first<{ count: number }>();
+    artifactChecks.push({
+      check: 'no_orphan_deliverables',
+      passed: (orphanDelivs?.count || 0) === 0,
+      detail: (orphanDelivs?.count || 0) === 0
+        ? 'All deliverables belong to valid scopes'
+        : `${orphanDelivs?.count} deliverable(s) not linked to any scope`,
+    });
   }
 
   if (currentPhase === 'EXECUTE') {
-    // Must have at least one message in the current session (work was done)
+    // E1: Must have at least one AI-assisted message (work was done)
     const messageCount = await c.env.DB.prepare(
       'SELECT COUNT(*) as count FROM messages WHERE project_id = ? AND role = \'assistant\''
     ).bind(projectId).first<{ count: number }>();
     artifactChecks.push({
-      check: 'execution_evidence',
+      check: 'execution_messages_exist',
       passed: (messageCount?.count || 0) > 0,
       detail: `${messageCount?.count || 0} AI-assisted message(s) in project`,
     });
+
+    // E2-E4: Task assignment checks (only when TDL is in use)
+    const assignmentStats = await c.env.DB.prepare(
+      `SELECT
+         COUNT(*) as total,
+         SUM(CASE WHEN status IN ('ASSIGNED', 'IN_PROGRESS') THEN 1 ELSE 0 END) as unresolved,
+         SUM(CASE WHEN status = 'ACCEPTED' THEN 1 ELSE 0 END) as accepted,
+         SUM(CASE WHEN status = 'BLOCKED' THEN 1 ELSE 0 END) as blocked
+       FROM task_assignments WHERE project_id = ?`
+    ).bind(projectId).first<{ total: number; unresolved: number; accepted: number; blocked: number }>();
+
+    const totalAssignments = assignmentStats?.total || 0;
+    if (totalAssignments > 0) {
+      // E2: All assignments must be resolved (no ASSIGNED or IN_PROGRESS remaining)
+      const unresolved = assignmentStats?.unresolved || 0;
+      const blocked = assignmentStats?.blocked || 0;
+      artifactChecks.push({
+        check: 'assignments_resolved',
+        passed: unresolved === 0 && blocked === 0,
+        detail: unresolved === 0 && blocked === 0
+          ? `All ${totalAssignments} assignment(s) resolved`
+          : `${unresolved} unfinished + ${blocked} blocked assignment(s) remain — must be SUBMITTED/ACCEPTED/REJECTED before finalization`,
+      });
+
+      // E3: At least one deliverable must have been accepted
+      const accepted = assignmentStats?.accepted || 0;
+      artifactChecks.push({
+        check: 'deliverables_accepted',
+        passed: accepted > 0,
+        detail: accepted > 0
+          ? `${accepted} deliverable(s) accepted by Director`
+          : 'No deliverables accepted — at least one must be reviewed and accepted',
+      });
+
+      // E4: All submitted/accepted assignments must have submission evidence
+      const noEvidence = await c.env.DB.prepare(
+        `SELECT COUNT(*) as count FROM task_assignments
+         WHERE project_id = ? AND status IN ('SUBMITTED', 'ACCEPTED')
+           AND (submission_evidence IS NULL OR submission_evidence = '' OR submission_evidence = '[]')`
+      ).bind(projectId).first<{ count: number }>();
+      artifactChecks.push({
+        check: 'submission_evidence_exists',
+        passed: (noEvidence?.count || 0) === 0,
+        detail: (noEvidence?.count || 0) === 0
+          ? 'All submitted work includes evidence'
+          : `${noEvidence?.count} submission(s) missing evidence — each submission must include verification artifacts`,
+      });
+    }
   }
 
-  // REVIEW has no artifact requirements — it's the terminal phase
-  // (But we still allow finalize for audit completeness)
+  if (currentPhase === 'REVIEW') {
+    // R1: Must have review activity (at least 2 assistant messages in REVIEW-phase sessions)
+    const reviewMsgCount = await c.env.DB.prepare(
+      `SELECT COUNT(*) as count FROM messages m
+       JOIN project_sessions ps ON ps.id = m.session_id AND ps.project_id = m.project_id
+       WHERE m.project_id = ? AND m.role = 'assistant' AND ps.phase IN ('REVIEW', 'R')`
+    ).bind(projectId).first<{ count: number }>();
+    artifactChecks.push({
+      check: 'review_activity',
+      passed: (reviewMsgCount?.count || 0) >= 2,
+      detail: (reviewMsgCount?.count || 0) >= 2
+        ? `${reviewMsgCount?.count} review message(s) — sufficient review activity`
+        : `Only ${reviewMsgCount?.count || 0} review message(s) — at least 2 required to confirm review was conducted`,
+    });
+
+    // R2: Active REVIEW session should have a summary
+    const reviewSession = await c.env.DB.prepare(
+      `SELECT summary FROM project_sessions
+       WHERE project_id = ? AND phase IN ('REVIEW', 'R') AND status = 'ACTIVE'
+       ORDER BY session_number DESC LIMIT 1`
+    ).bind(projectId).first<{ summary: string | null }>();
+    const hasSummary = !!(reviewSession?.summary && reviewSession.summary.trim().length >= 20);
+    artifactChecks.push({
+      check: 'review_summary_exists',
+      passed: hasSummary,
+      detail: hasSummary
+        ? 'Review session has summary'
+        : 'Review session summary missing or too short (min 20 chars) — summarize review findings before finalizing',
+    });
+  }
 
   const failedArtifacts = artifactChecks.filter(a => !a.passed);
   const allGatesPassed = missingGates.length === 0;
   const allArtifactsPassed = failedArtifacts.length === 0;
-  const canFinalize = allGatesPassed && allArtifactsPassed;
+  const hasWarnings = warnChecks.length > 0;
 
   // Determine next phase
   const PHASE_NEXT: Record<string, string | null> = {
@@ -638,6 +769,13 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
   };
   const nextPhase = PHASE_NEXT[currentPhase];
   const now = new Date().toISOString();
+
+  // Three-way decision:
+  // 1. REJECTED — BLOCK checks or gate checks fail (hard stop)
+  // 2. WARNINGS — BLOCKs pass but WARN checks fail, no override provided (soft stop)
+  // 3. APPROVED — all pass, or warnings overridden with reason
+  const canFinalize = allGatesPassed && allArtifactsPassed;
+  const warningsOverridden = hasWarnings && body.override_warnings && body.override_reason?.trim();
 
   // 5. Log to decision ledger (regardless of success/failure)
   await c.env.DB.prepare(
@@ -659,7 +797,7 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
     now,
   ).run();
 
-  // If blocked, return detailed explanation
+  // If BLOCK-level checks fail, return hard rejection
   if (!canFinalize) {
     return c.json({
       success: false,
@@ -667,8 +805,42 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
       phase: currentPhase,
       missing_gates: missingGates,
       artifact_checks: artifactChecks,
+      warnings: warnChecks,
       message: `Cannot finalize ${currentPhase}: ${missingGates.length > 0 ? `${missingGates.length} exit gate(s) unsatisfied` : ''}${missingGates.length > 0 && failedArtifacts.length > 0 ? ', ' : ''}${failedArtifacts.length > 0 ? `${failedArtifacts.length} artifact check(s) failed` : ''}`,
     }, 422);
+  }
+
+  // If warnings exist and no override provided, return soft stop for Director confirmation
+  if (hasWarnings && !warningsOverridden) {
+    return c.json({
+      success: false,
+      result: 'WARNINGS',
+      phase: currentPhase,
+      can_finalize: true,
+      warnings: warnChecks,
+      artifact_checks: artifactChecks,
+      message: `Phase ${currentPhase} has ${warnChecks.length} quality warning(s). Override with reason to proceed.`,
+    }, 200);
+  }
+
+  // If warnings overridden, log the quality override to decision_ledger
+  if (warningsOverridden) {
+    await c.env.DB.prepare(
+      `INSERT INTO decision_ledger (project_id, action, phase_from, phase_to, actor_id, actor_role, gate_snapshot, artifact_check, result, reason, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      projectId,
+      'QUALITY_OVERRIDE',
+      currentPhase,
+      nextPhase || currentPhase,
+      userId,
+      'DIRECTOR',
+      JSON.stringify({ overridden_warnings: warnChecks.map(w => w.check) }),
+      JSON.stringify(warnChecks),
+      'APPROVED',
+      body.override_reason!.trim(),
+      now,
+    ).run();
   }
 
   // 6. Advance to next phase (or mark REVIEW as complete)

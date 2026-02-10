@@ -48,9 +48,9 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
   // HANDOFF-VD-CI-01 A1: Detect brainstorm artifact block
   const hasBrainstormArtifact = !isUser && /=== BRAINSTORM ARTIFACT ===/.test(message.content);
 
-  // HANDOFF-TDL-01 Task 7: Parse structured AI output blocks
+  // HANDOFF-TDL-01 Task 7 + HANDOFF-PCC-01: Parse structured AI output blocks
   interface ParsedBlock {
-    type: 'PROGRESS UPDATE' | 'SUBMISSION' | 'ESCALATION' | 'STANDUP';
+    type: 'PROGRESS UPDATE' | 'SUBMISSION' | 'ESCALATION' | 'STANDUP' | 'RETRIEVE' | 'CONTINUITY CONFLICT';
     fields: Record<string, string>;
   }
   const parsedBlocks: ParsedBlock[] = [];
@@ -60,6 +60,8 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
       { type: 'SUBMISSION' as const, re: /=== SUBMISSION ===\s*([\s\S]*?)\s*=== END SUBMISSION ===/g },
       { type: 'ESCALATION' as const, re: /=== ESCALATION ===\s*([\s\S]*?)\s*=== END ESCALATION ===/g },
       { type: 'STANDUP' as const, re: /=== STANDUP ===\s*([\s\S]*?)\s*=== END STANDUP ===/g },
+      { type: 'RETRIEVE' as const, re: /=== RETRIEVE:\s*([\s\S]*?)\s*===/g },
+      { type: 'CONTINUITY CONFLICT' as const, re: /=== CONTINUITY CONFLICT ===\s*([\s\S]*?)\s*===/g },
     ];
     for (const bp of blockPatterns) {
       let m;
@@ -86,6 +88,8 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
         .replace(/=== SUBMISSION ===[\s\S]*?=== END SUBMISSION ===/g, '')
         .replace(/=== ESCALATION ===[\s\S]*?=== END ESCALATION ===/g, '')
         .replace(/=== STANDUP ===[\s\S]*?=== END STANDUP ===/g, '')
+        .replace(/=== RETRIEVE:\s*[\s\S]*?===/g, '')
+        .replace(/=== CONTINUITY CONFLICT ===[\s\S]*?===/g, '')
         .trim()
     : message.content;
 
@@ -215,6 +219,8 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
             block.type === 'PROGRESS UPDATE' ? 'bg-blue-500/10 border-blue-500/30' :
             block.type === 'SUBMISSION' ? 'bg-amber-500/10 border-amber-500/30' :
             block.type === 'ESCALATION' ? 'bg-red-500/10 border-red-500/30' :
+            block.type === 'RETRIEVE' ? 'bg-cyan-500/10 border-cyan-500/30' :
+            block.type === 'CONTINUITY CONFLICT' ? 'bg-orange-500/10 border-orange-500/30' :
             'bg-indigo-500/10 border-indigo-500/30'
           }`}>
             <div className="flex items-center gap-2 mb-2">
@@ -222,9 +228,12 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
                 block.type === 'PROGRESS UPDATE' ? 'text-blue-400' :
                 block.type === 'SUBMISSION' ? 'text-amber-400' :
                 block.type === 'ESCALATION' ? 'text-red-400' :
+                block.type === 'RETRIEVE' ? 'text-cyan-400' :
+                block.type === 'CONTINUITY CONFLICT' ? 'text-orange-400' :
                 'text-indigo-400'
               }`}>
-                {block.type}
+                {block.type === 'CONTINUITY CONFLICT' ? '⚠️ CONTINUITY CONFLICT' :
+                 block.type === 'RETRIEVE' ? '🔍 RETRIEVE' : block.type}
               </span>
             </div>
             <div className="space-y-1">

@@ -52,6 +52,7 @@ import blueprint from './api/blueprint';
 import workspace from './api/workspace';
 import brainstorm from './api/brainstorm';
 import assignments from './api/assignments';
+import continuity, { getProjectContinuityCompact } from './api/continuity';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -300,18 +301,18 @@ app.post('/v1/router/execute', async (c) => {
 
       // Tier 1C: Data classification visibility (re-use classification query result)
       const dcRow = await c.env.DB.prepare(
-        'SELECT pii, phi, minor_data, financial_data, legal_data, ai_exposure FROM data_classification WHERE project_id = ?'
+        'SELECT pii, phi, minor_data, financial, legal, ai_exposure FROM data_classification WHERE project_id = ?'
       ).bind(projectId).first<{
         pii: string; phi: string; minor_data: string;
-        financial_data: string; legal_data: string; ai_exposure: string;
+        financial: string; legal: string; ai_exposure: string;
       }>();
       if (dcRow) {
         ctx.data_sensitivity = {
           pii: dcRow.pii === 'YES',
           phi: dcRow.phi === 'YES',
           minor_data: dcRow.minor_data === 'YES',
-          financial: dcRow.financial_data === 'YES',
-          legal: dcRow.legal_data === 'YES',
+          financial: dcRow.financial === 'YES',
+          legal: dcRow.legal === 'YES',
           exposure: dcRow.ai_exposure || 'INTERNAL',
         };
       }
@@ -415,6 +416,20 @@ app.post('/v1/router/execute', async (c) => {
             last_standup_at: standupRow?.last_at || null,
           };
         }
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // Tier 4: Project Continuity Capsule (HANDOFF-PCC-01)
+      // Injects compact project-level awareness: session timeline,
+      // key decisions, active work, constraints (≤500 tokens).
+      // ═══════════════════════════════════════════════════════════════
+      try {
+        const compactContinuity = await getProjectContinuityCompact(c.env.DB, projectId);
+        if (compactContinuity) {
+          ctx.continuity = compactContinuity;
+        }
+      } catch (err) {
+        console.error('Tier 4 PCC error (non-fatal):', err);
       }
 
       request._context_awareness = ctx;
@@ -889,5 +904,8 @@ app.route('/api/v1/projects', brainstorm);
 
 // Task Delegation Layer routes (HANDOFF-TDL-01)
 app.route('/api/v1/projects', assignments);
+
+// Project Continuity Capsule routes (HANDOFF-PCC-01)
+app.route('/api/v1/projects', continuity);
 
 export default app;

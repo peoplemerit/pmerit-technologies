@@ -442,6 +442,14 @@ RULES: Reference the objective. Stay in phase scope. Be specific to THIS project
     if (ctxLines.length > 0) {
       systemPrompt += `\n\n=== CONTEXT AWARENESS ===\n${ctxLines.join('\n')}`;
     }
+
+    // Tier 4: Project Continuity Capsule (HANDOFF-PCC-01)
+    if (ctx.continuity) {
+      systemPrompt += `\n\n=== PROJECT CONTINUITY ===\n${ctx.continuity}`;
+
+      // Continuity conflict detection rule
+      systemPrompt += `\n\nCONTINUITY RULE: If the current conversation contradicts a prior decision listed above, you MUST raise a Continuity Conflict using this format:\n=== CONTINUITY CONFLICT ===\nConflicting decision: [decision ID or summary]\nCurrent request: [what was asked]\nResolution needed: [what Director should decide]\n===`;
+    }
   }
 
   // AI-Governance Integration — Phase 3: Phase advance via Review Packet

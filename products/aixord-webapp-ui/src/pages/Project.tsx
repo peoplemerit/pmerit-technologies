@@ -48,6 +48,8 @@ import { useAssignments } from '../hooks/useAssignments';
 import { TaskBoard } from '../components/TaskBoard';
 import { EscalationBanner } from '../components/EscalationBanner';
 import { NewSessionModal } from '../components/session/NewSessionModal';
+import { ProjectMemoryPanel } from '../components/ProjectMemoryPanel';
+import { useContinuity } from '../hooks/useContinuity';
 import { WorkspaceSetupWizard, type WorkspaceBindingData } from '../components/WorkspaceSetupWizard';
 import type { Message, Conversation } from '../components/chat/types';
 
@@ -127,6 +129,11 @@ export function Project() {
   const [phaseError, setPhaseError] = useState<string | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
 
+  // Quality warning override modal (VD-CI-01 A4)
+  const [pendingWarnings, setPendingWarnings] = useState<Array<{ check: string; passed: boolean; detail: string }> | null>(null);
+  const [warningPhase, setWarningPhase] = useState<string | null>(null);
+  const [overrideReason, setOverrideReason] = useState('');
+
   // Governance state from hook
   const {
     state,
@@ -186,6 +193,13 @@ export function Project() {
     token: token || null,
     sessionId: activeSession?.id || null,
     autoFetch: true,
+  });
+
+  // Project Continuity Capsule (HANDOFF-PCC-01)
+  const continuityHook = useContinuity({
+    projectId: id || null,
+    token: token || null,
+    enabled: true,
   });
 
   const [showWorkspaceWizard, setShowWorkspaceWizard] = useState(false);
@@ -528,20 +542,34 @@ export function Project() {
   }, [id, token, fetchState]);
 
   // Phase 4: Finalize Phase — formal governance transaction
-  const handleFinalizePhase = useCallback(async (phase: string) => {
+  const handleFinalizePhase = useCallback(async (phase: string, overrideOptions?: {
+    override_warnings: boolean;
+    override_reason: string;
+  }) => {
     if (!id || !token) return;
     setIsFinalizing(true);
     setPhaseError(null);
     try {
-      const result = await api.state.finalizePhase(id, phase, token);
+      const result = await api.state.finalizePhase(id, phase, token, overrideOptions);
+
+      // WARNINGS response — show override modal for Director decision
+      if (result.result === 'WARNINGS' && result.warnings) {
+        setPendingWarnings(result.warnings);
+        setWarningPhase(phase);
+        setOverrideReason('');
+        setIsFinalizing(false);
+        return;
+      }
+
       if (result.success) {
         // Phase finalized — refresh state to get new phase
         fetchState();
         // Add a system message to the chat
+        const overrideNote = overrideOptions ? `\n\n⚠️ Quality warnings overridden: "${overrideOptions.override_reason}"` : '';
         const successMessage: Message = {
           id: generateId(),
           role: 'system',
-          content: `✅ **Phase Finalized**\n\n${result.message}\n\nArtifact checks: ${result.artifact_checks.map(a => `${a.passed ? '✓' : '✗'} ${a.check}: ${a.detail}`).join('\n')}`,
+          content: `✅ **Phase Finalized**\n\n${result.message}\n\nArtifact checks: ${result.artifact_checks.map(a => `${a.passed ? '✓' : '✗'} ${a.check}: ${a.detail}`).join('\n')}${overrideNote}`,
           timestamp: new Date(),
         };
         setConversation((prev) => prev ? {
@@ -549,6 +577,10 @@ export function Project() {
           messages: [...prev.messages, successMessage],
           updatedAt: new Date()
         } : prev);
+        // Clear any pending warnings
+        setPendingWarnings(null);
+        setWarningPhase(null);
+        setOverrideReason('');
       }
     } catch (err) {
       if (err instanceof APIError) {
@@ -561,6 +593,22 @@ export function Project() {
       setIsFinalizing(false);
     }
   }, [id, token, fetchState]);
+
+  // Warning override — Director confirms override with reason
+  const handleWarningOverride = useCallback(() => {
+    if (!warningPhase || !overrideReason.trim()) return;
+    handleFinalizePhase(warningPhase, {
+      override_warnings: true,
+      override_reason: overrideReason.trim(),
+    });
+  }, [warningPhase, overrideReason, handleFinalizePhase]);
+
+  // Warning dismiss — cancel the override
+  const handleWarningDismiss = useCallback(() => {
+    setPendingWarnings(null);
+    setWarningPhase(null);
+    setOverrideReason('');
+  }, []);
 
   const handleWorkspaceComplete = useCallback(async (binding: WorkspaceBindingData) => {
     if (!id || !token) return;
@@ -1242,6 +1290,16 @@ export function Project() {
             />
           </div>
         )}
+        {activeTab === 'memory' && (
+          <ProjectMemoryPanel
+            capsule={continuityHook.capsule}
+            loading={continuityHook.loading}
+            error={continuityHook.error}
+            onRefresh={continuityHook.refresh}
+            onPin={continuityHook.pinItem}
+            onUnpin={continuityHook.unpinItem}
+          />
+        )}
         {activeTab === 'info' && project && id && token && (
           <InfoRibbon
             projectId={id}
@@ -1562,6 +1620,77 @@ export function Project() {
           onConfirm={handleCreateSession}
           onCancel={() => setShowNewSessionModal(false)}
         />
+      )}
+
+      {/* Quality Warning Override Modal (VD-CI-01 A4) */}
+      {pendingWarnings && warningPhase && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.6)',
+        }}>
+          <div style={{
+            background: '#1a1a2e', border: '1px solid #e2b714',
+            borderRadius: '12px', padding: '24px', maxWidth: '520px', width: '90%',
+            color: '#e0e0e0', boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          }}>
+            <h3 style={{ color: '#e2b714', margin: '0 0 16px', fontSize: '16px' }}>
+              ⚠️ Quality Warnings — Director Override Required
+            </h3>
+            <p style={{ fontSize: '13px', color: '#aaa', margin: '0 0 12px' }}>
+              Phase <strong>{warningPhase}</strong> passed all blocking checks but has quality warnings.
+              You may override these warnings with a reason (logged to decision ledger).
+            </p>
+            <div style={{
+              background: '#12121f', borderRadius: '8px', padding: '12px',
+              marginBottom: '16px', maxHeight: '200px', overflowY: 'auto',
+            }}>
+              {pendingWarnings.map((w, i) => (
+                <div key={i} style={{
+                  padding: '6px 0', borderBottom: i < pendingWarnings.length - 1 ? '1px solid #2a2a3e' : 'none',
+                  fontSize: '13px',
+                }}>
+                  <span style={{ color: '#e2b714' }}>⚠ {w.check}</span>
+                  <div style={{ color: '#888', fontSize: '12px', marginTop: '2px' }}>{w.detail}</div>
+                </div>
+              ))}
+            </div>
+            <textarea
+              value={overrideReason}
+              onChange={(e) => setOverrideReason(e.target.value)}
+              placeholder="Override reason (required) — explain why these warnings are acceptable..."
+              style={{
+                width: '100%', height: '70px', background: '#12121f', border: '1px solid #333',
+                borderRadius: '6px', color: '#e0e0e0', padding: '8px', fontSize: '13px',
+                resize: 'vertical', boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={handleWarningDismiss}
+                style={{
+                  padding: '8px 16px', background: 'transparent', border: '1px solid #444',
+                  borderRadius: '6px', color: '#aaa', cursor: 'pointer', fontSize: '13px',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleWarningOverride}
+                disabled={!overrideReason.trim() || isFinalizing}
+                style={{
+                  padding: '8px 16px', background: overrideReason.trim() ? '#e2b714' : '#444',
+                  border: 'none', borderRadius: '6px',
+                  color: overrideReason.trim() ? '#000' : '#666',
+                  cursor: overrideReason.trim() ? 'pointer' : 'not-allowed',
+                  fontWeight: 600, fontSize: '13px',
+                }}
+              >
+                {isFinalizing ? 'Overriding...' : 'Override & Finalize'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

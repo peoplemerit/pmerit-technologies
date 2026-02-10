@@ -304,6 +304,9 @@ export interface ContextAwareness {
     message_count: number;
     last_standup_at: string | null;
   };
+  // Tier 4: Project Continuity Capsule (HANDOFF-PCC-01)
+  // Compact string representation of project-level awareness (≤500 tokens)
+  continuity?: string;
 }
 
 export interface RouterRequest {

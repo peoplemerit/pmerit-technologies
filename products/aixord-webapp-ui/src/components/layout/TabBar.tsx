@@ -11,7 +11,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 interface Tab {
-  id: 'governance' | 'blueprint' | 'security' | 'evidence' | 'engineering' | 'tasks' | 'info';
+  id: 'governance' | 'blueprint' | 'security' | 'evidence' | 'engineering' | 'tasks' | 'memory' | 'info';
   label: string;
 }
 
@@ -35,6 +35,7 @@ const tabs: Tab[] = [
   { id: 'security', label: 'Security' },
   { id: 'evidence', label: 'Evidence' },
   { id: 'engineering', label: 'Engineering' },
+  { id: 'memory', label: 'Memory' },
   { id: 'info', label: 'Info' },
 ];
 
