@@ -268,6 +268,96 @@ app.post('/v1/router/execute', async (c) => {
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // CONTEXT AWARENESS BRIDGE (HANDOFF-PR-01)
+    // Enrich RouterRequest with read-only context for the AI system prompt.
+    // AI sees summaries and flags — never raw secrets or authority.
+    // ═══════════════════════════════════════════════════════════════════
+    if (projectId) {
+      const ctx: import('./types').ContextAwareness = {};
+
+      // Tier 1A: Security gates visibility (already fetched above as secGates)
+      if (request.capsule.gates?.security) {
+        const s = request.capsule.gates.security;
+        ctx.security = {
+          data_classified: !!s.GS_DC,
+          access_control_configured: !!s.GS_AC,
+          dependency_protected: !!s.GS_DP,
+          ai_compliant: !!s.GS_AI,
+          jurisdiction_reviewed: !!s.GS_JR,
+          retention_defined: !!s.GS_RT,
+        };
+      }
+
+      // Tier 1B: Redaction awareness
+      if (request._redaction_config?.enabled) {
+        ctx.redaction = {
+          active: true,
+          reason: 'PII_PHI_PROTECTION',
+        };
+      }
+
+      // Tier 1C: Data classification visibility (re-use classification query result)
+      const dcRow = await c.env.DB.prepare(
+        'SELECT pii, phi, minor_data, financial_data, legal_data, ai_exposure FROM data_classification WHERE project_id = ?'
+      ).bind(projectId).first<{
+        pii: string; phi: string; minor_data: string;
+        financial_data: string; legal_data: string; ai_exposure: string;
+      }>();
+      if (dcRow) {
+        ctx.data_sensitivity = {
+          pii: dcRow.pii === 'YES',
+          phi: dcRow.phi === 'YES',
+          minor_data: dcRow.minor_data === 'YES',
+          financial: dcRow.financial_data === 'YES',
+          legal: dcRow.legal_data === 'YES',
+          exposure: dcRow.ai_exposure || 'INTERNAL',
+        };
+      }
+
+      // Tier 2D: Evidence context (EXECUTE/REVIEW phases only — keeps prompt lean)
+      const phase = (request.capsule?.phase || '').toUpperCase();
+      if (phase === 'E' || phase === 'R' || phase === 'EXECUTE' || phase === 'REVIEW') {
+        const evRow = await c.env.DB.prepare(
+          `SELECT COUNT(*) as total, SUM(CASE WHEN evidence_type = 'COMMIT' AND status = 'VERIFIED' THEN 1 ELSE 0 END) as commits_verified, SUM(CASE WHEN evidence_type = 'PR' AND status = 'VERIFIED' THEN 1 ELSE 0 END) as prs_merged, MAX(updated_at) as last_sync FROM external_evidence_log WHERE project_id = ?`
+        ).bind(projectId).first<{
+          total: number; commits_verified: number; prs_merged: number; last_sync: string | null;
+        }>();
+
+        // CI status: check latest CI_STATUS evidence
+        const ciRow = await c.env.DB.prepare(
+          `SELECT title FROM external_evidence_log WHERE project_id = ? AND evidence_type = 'CI_STATUS' ORDER BY updated_at DESC LIMIT 1`
+        ).bind(projectId).first<{ title: string }>();
+
+        if (evRow && evRow.total > 0) {
+          ctx.evidence_summary = {
+            commits_verified: evRow.commits_verified || 0,
+            prs_merged: evRow.prs_merged || 0,
+            ci_passing: ciRow ? ciRow.title.toLowerCase().includes('pass') || ciRow.title.toLowerCase().includes('success') : null,
+            total_evidence: evRow.total || 0,
+            last_sync: evRow.last_sync,
+          };
+        }
+      }
+
+      // Tier 2F: CCS incident awareness (safety-critical)
+      const ccsRow = await c.env.DB.prepare(
+        `SELECT id, phase, credential_name, credential_type FROM ccs_incidents WHERE project_id = ? AND status = 'ACTIVE' ORDER BY created_at DESC LIMIT 1`
+      ).bind(projectId).first<{
+        id: string; phase: string; credential_name: string; credential_type: string;
+      }>();
+      if (ccsRow) {
+        ctx.incident = {
+          active: true,
+          type: 'CREDENTIAL_COMPROMISE',
+          phase: ccsRow.phase,
+          restricted_items: [ccsRow.credential_name],
+        };
+      }
+
+      request._context_awareness = ctx;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // HARD GATE ENFORCEMENT (Phase 4)
     // AI model is NOT called when required gates for the current phase fail.
     // Governance lives outside the model — in the Router, not in prompts.

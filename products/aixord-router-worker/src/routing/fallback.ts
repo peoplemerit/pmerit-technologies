@@ -260,6 +260,70 @@ RULES: Reference the objective. Stay in phase scope. Be specific to THIS project
     systemPrompt += `\nBLUEPRINT: ${bp.scopes} scopes, ${bp.deliverables} deliverables (${bp.deliverables_with_dod} with DoD)${bp.integrity_passed !== null ? `. Integrity: ${bp.integrity_passed ? 'PASSED' : 'FAILED'}` : ''}`;
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // Context Awareness Bridge (HANDOFF-PR-01)
+  // Read-only context: AI sees summaries and flags, not raw data.
+  // Authority remains external. Enforcement stays outside the model.
+  // ═══════════════════════════════════════════════════════════════════
+  const ctx = request._context_awareness;
+  if (ctx) {
+    const ctxLines: string[] = [];
+
+    // Tier 1A: Security gates visibility
+    if (ctx.security) {
+      const s = ctx.security;
+      const secItems: string[] = [];
+      if (!s.data_classified) secItems.push('Data not yet classified (GS:DC)');
+      if (!s.access_control_configured) secItems.push('Access control not configured (GS:AC)');
+      if (!s.ai_compliant) secItems.push('AI compliance not confirmed (GS:AI)');
+      if (!s.dependency_protected) secItems.push('Dependencies not reviewed (GS:DP)');
+      if (!s.jurisdiction_reviewed) secItems.push('Jurisdiction not reviewed (GS:JR)');
+      if (!s.retention_defined) secItems.push('Retention policy not defined (GS:RT)');
+      if (secItems.length > 0) {
+        ctxLines.push(`Security: ${secItems.join(' · ')}`);
+      } else {
+        ctxLines.push('Security: All security gates satisfied.');
+      }
+    }
+
+    // Tier 1B: Redaction awareness
+    if (ctx.redaction?.active) {
+      ctxLines.push('Redaction: ACTIVE — some user content was redacted for privacy protection. If the user references information you cannot see, explain that data protection is active.');
+    }
+
+    // Tier 1C: Data classification visibility
+    if (ctx.data_sensitivity) {
+      const ds = ctx.data_sensitivity;
+      const flags: string[] = [];
+      if (ds.pii) flags.push('PII');
+      if (ds.phi) flags.push('PHI');
+      if (ds.minor_data) flags.push('Minor');
+      if (ds.financial) flags.push('Financial');
+      if (ds.legal) flags.push('Legal');
+      ctxLines.push(`Data sensitivity: ${flags.length > 0 ? flags.join(', ') : 'None declared'}. AI exposure: ${ds.exposure}.`);
+    }
+
+    // Tier 2D: Evidence context (EXECUTE/REVIEW only)
+    if (ctx.evidence_summary) {
+      const ev = ctx.evidence_summary;
+      const evParts: string[] = [];
+      if (ev.commits_verified > 0) evParts.push(`${ev.commits_verified} commits verified`);
+      if (ev.prs_merged > 0) evParts.push(`${ev.prs_merged} PRs merged`);
+      if (ev.ci_passing !== null) evParts.push(`CI: ${ev.ci_passing ? 'PASSING' : 'FAILING'}`);
+      ctxLines.push(`Evidence: ${evParts.length > 0 ? evParts.join(', ') : 'No verified evidence'}. ${ev.total_evidence} total records.`);
+    }
+
+    // Tier 2F: CCS incident awareness (safety-critical)
+    if (ctx.incident?.active) {
+      const inc = ctx.incident;
+      ctxLines.push(`⚠ INCIDENT: ${inc.type} — lifecycle phase: ${inc.phase}. Restricted: ${inc.restricted_items.join(', ')}. Do NOT reference, suggest using, or output these credentials.`);
+    }
+
+    if (ctxLines.length > 0) {
+      systemPrompt += `\n\n=== CONTEXT AWARENESS ===\n${ctxLines.join('\n')}`;
+    }
+  }
+
   // AI-Governance Integration — Phase 3: Phase advance via Review Packet
   // The AI must ALWAYS prepare a Director Review Packet before suggesting
   // phase transition. This is the behavioral layer that makes governance

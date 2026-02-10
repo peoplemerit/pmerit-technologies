@@ -243,6 +243,52 @@ export interface RedactionConfig {
   mask_minor_data: boolean; // Mask child/minor identifiers
 }
 
+/**
+ * Context Awareness Bridge (HANDOFF-PR-01)
+ * Read-only context injected by router into system prompt.
+ * AI sees summaries and flags — never raw secrets or authority.
+ */
+export interface ContextAwareness {
+  // Tier 1A: Security gates visibility
+  security?: {
+    data_classified: boolean;
+    access_control_configured: boolean;
+    dependency_protected: boolean;
+    ai_compliant: boolean;
+    jurisdiction_reviewed: boolean;
+    retention_defined: boolean;
+  };
+  // Tier 1B: Redaction awareness
+  redaction?: {
+    active: boolean;
+    reason: string; // e.g., 'PII_PHI_PROTECTION'
+  };
+  // Tier 1C: Data classification visibility
+  data_sensitivity?: {
+    pii: boolean;
+    phi: boolean;
+    minor_data: boolean;
+    financial: boolean;
+    legal: boolean;
+    exposure: string; // 'PUBLIC' | 'INTERNAL' | 'CONFIDENTIAL' | 'RESTRICTED' | 'PROHIBITED'
+  };
+  // Tier 2D: Evidence context (EXECUTE/REVIEW only)
+  evidence_summary?: {
+    commits_verified: number;
+    prs_merged: number;
+    ci_passing: boolean | null;
+    total_evidence: number;
+    last_sync: string | null;
+  };
+  // Tier 2F: CCS incident awareness
+  incident?: {
+    active: boolean;
+    type: string; // 'CREDENTIAL_COMPROMISE'
+    phase: string; // CCS lifecycle phase
+    restricted_items: string[]; // credential names to avoid
+  };
+}
+
 export interface RouterRequest {
   product: Product;
   intent: Intent;
@@ -257,6 +303,8 @@ export interface RouterRequest {
   router_intent?: RouterIntent;
   // SPG-01: Internal redaction config (set by router, not by client)
   _redaction_config?: RedactionConfig;
+  // HANDOFF-PR-01: Context Awareness Bridge (set by router, not by client)
+  _context_awareness?: ContextAwareness;
 }
 
 export interface VerificationFlag {
