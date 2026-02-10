@@ -44,6 +44,9 @@ import { BlueprintPanel } from '../components/BlueprintPanel';
 import BlueprintRibbon from '../components/ribbon/BlueprintRibbon';
 import { useEngineering } from '../hooks/useEngineering';
 import { useBlueprint } from '../hooks/useBlueprint';
+import { useAssignments } from '../hooks/useAssignments';
+import { TaskBoard } from '../components/TaskBoard';
+import { EscalationBanner } from '../components/EscalationBanner';
 import { NewSessionModal } from '../components/session/NewSessionModal';
 import { WorkspaceSetupWizard, type WorkspaceBindingData } from '../components/WorkspaceSetupWizard';
 import type { Message, Conversation } from '../components/chat/types';
@@ -54,6 +57,20 @@ import type { Message, Conversation } from '../components/chat/types';
 
 function generateId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/** Parse key: value fields from a structured AI output block */
+function parseBlockFields(content: string): Record<string, string> {
+  const fields: Record<string, string> = {};
+  for (const line of content.split('\n')) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      const key = line.slice(0, colonIdx).trim();
+      const val = line.slice(colonIdx + 1).trim();
+      if (key && val) fields[key] = val;
+    }
+  }
+  return fields;
 }
 
 // ============================================================================
@@ -162,6 +179,15 @@ export function Project() {
     token: token || null,
   });
   const [blueprintPanelOpen, setBlueprintPanelOpen] = useState(false);
+
+  // Task Delegation Layer (HANDOFF-TDL-01)
+  const tdl = useAssignments({
+    projectId: id || null,
+    token: token || null,
+    sessionId: activeSession?.id || null,
+    autoFetch: true,
+  });
+
   const [showWorkspaceWizard, setShowWorkspaceWizard] = useState(false);
   const [workspaceChecked, setWorkspaceChecked] = useState(false);
   const [workspaceStatus, setWorkspaceStatus] = useState<{
@@ -905,6 +931,73 @@ export function Project() {
         }
       }
 
+      // HANDOFF-TDL-01 Task 7: Extract structured AI output blocks and call APIs
+      if (state?.session.phase === 'EXECUTE' || state?.session.phase === 'E') {
+        try {
+          // Progress updates
+          const progressRe = /=== PROGRESS UPDATE ===\s*([\s\S]*?)\s*=== END PROGRESS UPDATE ===/g;
+          let pm;
+          while ((pm = progressRe.exec(assistantContent)) !== null) {
+            const fields = parseBlockFields(pm[1]);
+            if (fields.assignment_id && fields.percent) {
+              await tdl.updateProgress(fields.assignment_id, {
+                progress_percent: parseInt(fields.percent, 10) || 0,
+                progress_notes: fields.completed || '',
+                remaining_items: fields.next ? [fields.next] : [],
+              });
+            }
+          }
+
+          // Submissions
+          const submitRe = /=== SUBMISSION ===\s*([\s\S]*?)\s*=== END SUBMISSION ===/g;
+          let sm;
+          while ((sm = submitRe.exec(assistantContent)) !== null) {
+            const fields = parseBlockFields(sm[1]);
+            if (fields.assignment_id && fields.summary) {
+              await tdl.submitAssignment(fields.assignment_id, {
+                submission_summary: fields.summary,
+                submission_evidence: fields.evidence ? [fields.evidence] : [],
+              });
+            }
+          }
+
+          // Escalations
+          const escRe = /=== ESCALATION ===\s*([\s\S]*?)\s*=== END ESCALATION ===/g;
+          let em;
+          while ((em = escRe.exec(assistantContent)) !== null) {
+            const fields = parseBlockFields(em[1]);
+            if (fields.assignment_id && fields.decision_needed) {
+              await tdl.createEscalation({
+                assignment_id: fields.assignment_id,
+                decision_needed: fields.decision_needed,
+                options: fields.options ? fields.options.split('|').map((s: string) => s.trim()) : [],
+                recommendation: fields.recommendation || undefined,
+                recommendation_rationale: fields.rationale || undefined,
+              });
+            }
+          }
+
+          // Standups
+          const standupRe = /=== STANDUP ===\s*([\s\S]*?)\s*=== END STANDUP ===/g;
+          let stm;
+          while ((stm = standupRe.exec(assistantContent)) !== null) {
+            const fields = parseBlockFields(stm[1]);
+            if (fields.working_on && activeSession?.id) {
+              await tdl.postStandup({
+                session_id: activeSession.id,
+                working_on: fields.working_on,
+                completed: fields.completed ? [fields.completed] : [],
+                blocked: fields.blocked ? [fields.blocked] : [],
+                next_actions: fields.next ? [fields.next] : [],
+                estimate_to_completion: fields.estimate || undefined,
+              });
+            }
+          }
+        } catch {
+          console.warn('Failed to process TDL structured blocks from AI response');
+        }
+      }
+
       // Phase 2: Auto-evaluate gates after message exchange (GA:DIS, GA:LIC, GA:TIR may flip)
       // Immediate eval for any synchronous gate changes
       evaluateGatesAfterAction();
@@ -1125,6 +1218,29 @@ export function Project() {
               setEngineeringPanelOpen(true);
             }}
           />
+        )}
+        {activeTab === 'tasks' && (
+          <div className="p-4">
+            <EscalationBanner
+              escalations={tdl.escalations}
+              onResolve={async (escalationId, resolution) => {
+                await tdl.resolveEscalation(escalationId, { resolution });
+              }}
+            />
+            <TaskBoard
+              taskBoard={tdl.taskBoard}
+              assignments={tdl.assignments}
+              isLoading={tdl.isLoading}
+              onStart={async (assignmentId) => { await tdl.startAssignment(assignmentId); }}
+              onSubmit={async (assignmentId) => {
+                const a = tdl.assignments.find(x => x.id === assignmentId);
+                if (a) await tdl.submitAssignment(assignmentId, { submission_summary: a.progress_notes || 'Submitted for review' });
+              }}
+              onAccept={async (assignmentId) => { await tdl.acceptAssignment(assignmentId); }}
+              onReject={async (assignmentId) => { await tdl.rejectAssignment(assignmentId, { review_notes: 'Needs revision' }); }}
+              onBlock={async (assignmentId) => { await tdl.blockAssignment(assignmentId, { blocked_reason: 'Blocked by Director' }); }}
+            />
+          </div>
         )}
         {activeTab === 'info' && project && id && token && (
           <InfoRibbon

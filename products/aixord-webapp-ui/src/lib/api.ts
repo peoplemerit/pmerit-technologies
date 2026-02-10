@@ -866,6 +866,302 @@ export const brainstormApi = {
 };
 
 // ============================================================================
+// Assignments API (HANDOFF-TDL-01 Task 4)
+// ============================================================================
+
+export interface TaskAssignmentData {
+  id: string;
+  project_id: string;
+  deliverable_id: string;
+  session_id: string | null;
+  priority: 'P0' | 'P1' | 'P2';
+  sort_order: number;
+  status: string;
+  authority_scope: string[];
+  escalation_triggers: string[];
+  progress_notes: string;
+  progress_percent: number;
+  completed_items: string[];
+  remaining_items: string[];
+  blocked_reason: string | null;
+  blocked_since: string | null;
+  submitted_at: string | null;
+  submission_summary: string | null;
+  submission_evidence: string[];
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_verdict: string | null;
+  review_notes: string | null;
+  assigned_at: string;
+  assigned_by: string;
+  started_at: string | null;
+  completed_at: string | null;
+  updated_at: string;
+}
+
+export interface EscalationData {
+  id: string;
+  project_id: string;
+  assignment_id: string;
+  decision_needed: string;
+  options: string[];
+  recommendation: string | null;
+  recommendation_rationale: string | null;
+  status: string;
+  resolution: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+export interface StandupData {
+  id: string;
+  project_id: string;
+  session_id: string;
+  report_number: number;
+  working_on: string;
+  completed_since_last: string[];
+  in_progress: string[];
+  blocked: string[];
+  next_actions: string[];
+  estimate_to_completion: string | null;
+  escalations_needed: string[];
+  message_number: number | null;
+  created_at: string;
+}
+
+export interface TaskBoardData {
+  columns: Record<string, TaskAssignmentData[]>;
+  stats: {
+    total: number;
+    by_status: Record<string, number>;
+    by_priority: Record<string, number>;
+    overall_progress: number;
+  };
+  open_escalations: number;
+}
+
+export const assignmentsApi = {
+  // CRUD
+  async assign(
+    projectId: string,
+    data: { deliverable_id: string; session_id?: string; priority?: string; authority_scope?: string[]; escalation_triggers?: string[] },
+    token: string
+  ): Promise<TaskAssignmentData> {
+    return request<TaskAssignmentData>(
+      `/projects/${projectId}/assignments`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  async list(
+    projectId: string,
+    token: string,
+    params?: { session_id?: string; status?: string; deliverable_id?: string }
+  ): Promise<TaskAssignmentData[]> {
+    const query = new URLSearchParams();
+    if (params?.session_id) query.set('session_id', params.session_id);
+    if (params?.status) query.set('status', params.status);
+    if (params?.deliverable_id) query.set('deliverable_id', params.deliverable_id);
+    const qs = query.toString();
+    return request<TaskAssignmentData[]>(
+      `/projects/${projectId}/assignments${qs ? '?' + qs : ''}`,
+      {},
+      token
+    );
+  },
+
+  async get(projectId: string, assignmentId: string, token: string): Promise<TaskAssignmentData> {
+    return request<TaskAssignmentData>(
+      `/projects/${projectId}/assignments/${assignmentId}`,
+      {},
+      token
+    );
+  },
+
+  async update(
+    projectId: string,
+    assignmentId: string,
+    data: Partial<Pick<TaskAssignmentData, 'priority' | 'sort_order' | 'authority_scope' | 'escalation_triggers'>>,
+    token: string
+  ): Promise<{ updated: boolean }> {
+    return request<{ updated: boolean }>(
+      `/projects/${projectId}/assignments/${assignmentId}`,
+      { method: 'PUT', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  async remove(projectId: string, assignmentId: string, token: string): Promise<{ deleted: boolean }> {
+    return request<{ deleted: boolean }>(
+      `/projects/${projectId}/assignments/${assignmentId}`,
+      { method: 'DELETE' },
+      token
+    );
+  },
+
+  // Lifecycle
+  async start(projectId: string, assignmentId: string, token: string): Promise<{ status: string }> {
+    return request<{ status: string }>(
+      `/projects/${projectId}/assignments/${assignmentId}/start`,
+      { method: 'POST' },
+      token
+    );
+  },
+
+  async progress(
+    projectId: string,
+    assignmentId: string,
+    data: { progress_percent: number; progress_notes?: string; completed_items?: string[]; remaining_items?: string[] },
+    token: string
+  ): Promise<{ updated: boolean }> {
+    return request<{ updated: boolean }>(
+      `/projects/${projectId}/assignments/${assignmentId}/progress`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  async submit(
+    projectId: string,
+    assignmentId: string,
+    data: { submission_summary: string; submission_evidence?: string[] },
+    token: string
+  ): Promise<{ status: string }> {
+    return request<{ status: string }>(
+      `/projects/${projectId}/assignments/${assignmentId}/submit`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  async accept(
+    projectId: string,
+    assignmentId: string,
+    data: { review_notes?: string },
+    token: string
+  ): Promise<{ status: string }> {
+    return request<{ status: string }>(
+      `/projects/${projectId}/assignments/${assignmentId}/accept`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  async reject(
+    projectId: string,
+    assignmentId: string,
+    data: { review_notes: string },
+    token: string
+  ): Promise<{ status: string }> {
+    return request<{ status: string }>(
+      `/projects/${projectId}/assignments/${assignmentId}/reject`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  async block(
+    projectId: string,
+    assignmentId: string,
+    data: { blocked_reason: string },
+    token: string
+  ): Promise<{ status: string }> {
+    return request<{ status: string }>(
+      `/projects/${projectId}/assignments/${assignmentId}/block`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  // Escalations
+  async createEscalation(
+    projectId: string,
+    data: { assignment_id: string; decision_needed: string; options?: string[]; recommendation?: string; recommendation_rationale?: string },
+    token: string
+  ): Promise<EscalationData> {
+    return request<EscalationData>(
+      `/projects/${projectId}/escalations`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  async listEscalations(
+    projectId: string,
+    token: string,
+    params?: { status?: string; assignment_id?: string }
+  ): Promise<EscalationData[]> {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    if (params?.assignment_id) query.set('assignment_id', params.assignment_id);
+    const qs = query.toString();
+    return request<EscalationData[]>(
+      `/projects/${projectId}/escalations${qs ? '?' + qs : ''}`,
+      {},
+      token
+    );
+  },
+
+  async resolveEscalation(
+    projectId: string,
+    escalationId: string,
+    data: { resolution: string },
+    token: string
+  ): Promise<{ status: string }> {
+    return request<{ status: string }>(
+      `/projects/${projectId}/escalations/${escalationId}/resolve`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  // Standups
+  async postStandup(
+    projectId: string,
+    data: {
+      session_id: string;
+      working_on: string;
+      completed_since_last?: string[];
+      in_progress?: string[];
+      blocked?: string[];
+      next_actions?: string[];
+      estimate_to_completion?: string;
+      message_number?: number;
+    },
+    token: string
+  ): Promise<StandupData> {
+    return request<StandupData>(
+      `/projects/${projectId}/standups`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  async listStandups(
+    projectId: string,
+    sessionId: string,
+    token: string
+  ): Promise<StandupData[]> {
+    return request<StandupData[]>(
+      `/projects/${projectId}/standups?session_id=${sessionId}`,
+      {},
+      token
+    );
+  },
+
+  // TaskBoard
+  async getTaskBoard(projectId: string, token: string): Promise<TaskBoardData> {
+    return request<TaskBoardData>(
+      `/projects/${projectId}/taskboard`,
+      {},
+      token
+    );
+  },
+};
+
+// ============================================================================
 // Decisions API
 // ============================================================================
 

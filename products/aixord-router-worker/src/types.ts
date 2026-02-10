@@ -287,6 +287,23 @@ export interface ContextAwareness {
     phase: string; // CCS lifecycle phase
     restricted_items: string[]; // credential names to avoid
   };
+  // Tier 3: Task Delegation Layer (HANDOFF-TDL-01)
+  task_delegation?: {
+    assignments: Array<{
+      id: string;
+      deliverable_id: string;
+      deliverable_title: string;
+      scope_name: string;
+      priority: string;
+      status: string;
+      progress_percent: number;
+      definition_of_done: string;
+    }>;
+    open_escalations: number;
+    standup_due: boolean;
+    message_count: number;
+    last_standup_at: string | null;
+  };
 }
 
 export interface RouterRequest {

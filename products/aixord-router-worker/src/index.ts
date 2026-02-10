@@ -356,6 +356,67 @@ app.post('/v1/router/execute', async (c) => {
         };
       }
 
+      // ═══════════════════════════════════════════════════════════════
+      // Tier 3: Task Delegation Layer (HANDOFF-TDL-01)
+      // EXECUTE/REVIEW phases: Enrich with active assignments, escalations,
+      // and standup cadence so the AI knows its work order.
+      // ═══════════════════════════════════════════════════════════════
+      const sessionId = request.trace?.session_id;
+      if (sessionId && (phase === 'E' || phase === 'EXECUTE')) {
+        // Fetch active assignments for this session with deliverable + scope info
+        const assignmentRows = await c.env.DB.prepare(
+          `SELECT ta.id, ta.deliverable_id, ta.priority, ta.status, ta.progress_percent,
+                  bd.title as deliverable_title, bd.definition_of_done,
+                  bs.name as scope_name
+           FROM task_assignments ta
+           JOIN blueprint_deliverables bd ON bd.id = ta.deliverable_id
+           JOIN blueprint_scopes bs ON bs.id = bd.scope_id
+           WHERE ta.session_id = ? AND ta.status IN ('ASSIGNED', 'IN_PROGRESS', 'BLOCKED')
+           ORDER BY CASE ta.priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 END, ta.sort_order`
+        ).bind(sessionId).all<{
+          id: string; deliverable_id: string; priority: string; status: string;
+          progress_percent: number; deliverable_title: string; definition_of_done: string;
+          scope_name: string;
+        }>();
+
+        // Count open escalations for this session's assignments
+        const escRow = await c.env.DB.prepare(
+          `SELECT COUNT(*) as cnt FROM escalation_log el
+           JOIN task_assignments ta ON ta.id = el.assignment_id
+           WHERE ta.session_id = ? AND el.status = 'OPEN'`
+        ).bind(sessionId).first<{ cnt: number }>();
+
+        // Get last standup and message count for cadence check
+        const standupRow = await c.env.DB.prepare(
+          `SELECT MAX(message_number) as last_msg, MAX(created_at) as last_at
+           FROM standup_reports WHERE session_id = ?`
+        ).bind(sessionId).first<{ last_msg: number | null; last_at: string | null }>();
+
+        // Current message number from session graph
+        const currentMsgCount = request.capsule.session_graph?.current?.messageCount || 0;
+        const lastStandupMsg = standupRow?.last_msg || 0;
+        const messagesSinceStandup = currentMsgCount - lastStandupMsg;
+
+        if (assignmentRows.results && assignmentRows.results.length > 0) {
+          ctx.task_delegation = {
+            assignments: assignmentRows.results.map(r => ({
+              id: r.id,
+              deliverable_id: r.deliverable_id,
+              deliverable_title: r.deliverable_title || 'Untitled',
+              scope_name: r.scope_name || 'Unknown Scope',
+              priority: r.priority,
+              status: r.status,
+              progress_percent: r.progress_percent || 0,
+              definition_of_done: r.definition_of_done || '(not defined)',
+            })),
+            open_escalations: escRow?.cnt || 0,
+            standup_due: messagesSinceStandup >= 5,
+            message_count: messagesSinceStandup,
+            last_standup_at: standupRow?.last_at || null,
+          };
+        }
+      }
+
       request._context_awareness = ctx;
     }
 

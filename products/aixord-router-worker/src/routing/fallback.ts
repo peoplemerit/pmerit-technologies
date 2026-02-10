@@ -116,19 +116,24 @@ const PHASE_PAYLOADS: Record<string, PhasePayload> = {
     review_prompt: 'Is the plan specific enough to execute? Are all deliverables defined with DoD?',
   },
   EXECUTE: {
-    role: 'Implement planned work within the declared scope.',
+    role: 'Implement assigned deliverables within the declared scope. Work from your task assignments — each has a priority, definition of done, and authority scope.',
     allowed: [
-      'Write code, create artifacts, and build deliverables',
+      'Work on ASSIGNED or IN_PROGRESS deliverables only',
       'Follow architecture and decisions from PLAN phase',
-      'Verify work against the project objective',
+      'Post structured progress updates (PROGRESS UPDATE blocks)',
+      'Submit completed work for review (SUBMISSION blocks)',
+      'Escalate decisions that exceed your authority scope (ESCALATION blocks)',
+      'Post periodic standup reports (STANDUP blocks)',
       'Request clarification on ambiguous requirements',
     ],
     forbidden: [
-      'Expand scope beyond the plan without approval (flag as scope creep)',
+      'Work on deliverables not assigned to this session',
+      'Expand scope beyond assigned deliverables without approval (flag as scope creep)',
       'Skip verification or testing steps',
       'Override architectural decisions from PLAN phase',
+      'Accept or reject your own work — submission requires Director review',
     ],
-    exit_artifact: 'Completed deliverables matching the blueprint specifications.',
+    exit_artifact: 'Completed deliverables matching the blueprint specifications with structured submission.',
     review_prompt: 'Does the output match the planned deliverables and their definitions of done?',
   },
   REVIEW: {
@@ -232,6 +237,86 @@ Format:
 === END BRAINSTORM ARTIFACT ===
 
 Rules: 2-5 options required. Each option needs assumptions and kill conditions. Include decision criteria with weights (1-5). You may also include pros/cons per option.`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Task Delegation Layer — Work Order Injection (EXECUTE phase only)
+  // Renders active assignments into the system prompt so the AI knows
+  // exactly what it should work on, with priority and authority scope.
+  // ═══════════════════════════════════════════════════════════════════
+  const tdCtx = request._context_awareness;
+  if (phaseName === 'EXECUTE' && tdCtx?.task_delegation) {
+    const td = tdCtx.task_delegation;
+
+    if (td.assignments.length > 0) {
+      systemPrompt += `\n\n=== WORK ORDER ===
+You have ${td.assignments.length} assigned deliverable(s) for this session. Work in priority order (P0 > P1 > P2).
+
+`;
+      td.assignments.forEach((a, i) => {
+        systemPrompt += `[${i + 1}] ${a.priority} — ${a.deliverable_title} (${a.scope_name})
+    Status: ${a.status} | Progress: ${a.progress_percent}%
+    Definition of Done: ${a.definition_of_done}
+`;
+      });
+
+      systemPrompt += `
+WORK ORDER RULES:
+- Focus on the highest-priority unfinished assignment first
+- When you make progress, emit a PROGRESS UPDATE block
+- When a deliverable meets its Definition of Done, emit a SUBMISSION block
+- If you encounter a decision that exceeds your authority, emit an ESCALATION block
+- Do NOT work on deliverables outside this work order`;
+    }
+
+    // Standup cadence
+    if (td.standup_due) {
+      systemPrompt += `\n\nSTANDUP DUE: You have sent ${td.message_count} messages since your last standup. Post a STANDUP block now before continuing work.`;
+    }
+
+    // Open escalations notice
+    if (td.open_escalations > 0) {
+      systemPrompt += `\n\nOPEN ESCALATIONS: ${td.open_escalations} unresolved escalation(s) pending Director decision. Do not proceed on blocked items until resolved.`;
+    }
+
+    // Structured output format instructions
+    systemPrompt += `
+
+=== STRUCTURED OUTPUT BLOCKS ===
+When you need to communicate status, use these exact block formats. The frontend will parse them automatically.
+
+PROGRESS UPDATE (emit when meaningful progress is made):
+=== PROGRESS UPDATE ===
+assignment_id: [assignment ID]
+percent: [0-100]
+completed: [what was just completed]
+next: [what comes next]
+=== END PROGRESS UPDATE ===
+
+SUBMISSION (emit when a deliverable meets its Definition of Done):
+=== SUBMISSION ===
+assignment_id: [assignment ID]
+summary: [1-3 sentence summary of what was delivered]
+evidence: [how to verify — test results, file paths, etc.]
+=== END SUBMISSION ===
+
+ESCALATION (emit when a decision exceeds your authority scope):
+=== ESCALATION ===
+assignment_id: [assignment ID]
+decision_needed: [clear statement of what needs deciding]
+options: [option 1 | option 2 | ...]
+recommendation: [your recommended option]
+rationale: [why you recommend this]
+=== END ESCALATION ===
+
+STANDUP (emit every ~5 messages):
+=== STANDUP ===
+working_on: [current focus]
+completed: [items done since last standup]
+blocked: [any blockers]
+next: [planned next actions]
+estimate: [rough time/effort to completion]
+=== END STANDUP ===`;
   }
 
   // Response guidelines (compact)

@@ -48,10 +48,44 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
   // HANDOFF-VD-CI-01 A1: Detect brainstorm artifact block
   const hasBrainstormArtifact = !isUser && /=== BRAINSTORM ARTIFACT ===/.test(message.content);
 
+  // HANDOFF-TDL-01 Task 7: Parse structured AI output blocks
+  interface ParsedBlock {
+    type: 'PROGRESS UPDATE' | 'SUBMISSION' | 'ESCALATION' | 'STANDUP';
+    fields: Record<string, string>;
+  }
+  const parsedBlocks: ParsedBlock[] = [];
+  if (!isUser) {
+    const blockPatterns = [
+      { type: 'PROGRESS UPDATE' as const, re: /=== PROGRESS UPDATE ===\s*([\s\S]*?)\s*=== END PROGRESS UPDATE ===/g },
+      { type: 'SUBMISSION' as const, re: /=== SUBMISSION ===\s*([\s\S]*?)\s*=== END SUBMISSION ===/g },
+      { type: 'ESCALATION' as const, re: /=== ESCALATION ===\s*([\s\S]*?)\s*=== END ESCALATION ===/g },
+      { type: 'STANDUP' as const, re: /=== STANDUP ===\s*([\s\S]*?)\s*=== END STANDUP ===/g },
+    ];
+    for (const bp of blockPatterns) {
+      let m;
+      while ((m = bp.re.exec(message.content)) !== null) {
+        const fields: Record<string, string> = {};
+        for (const line of m[1].split('\n')) {
+          const colonIdx = line.indexOf(':');
+          if (colonIdx > 0) {
+            const key = line.slice(0, colonIdx).trim();
+            const val = line.slice(colonIdx + 1).trim();
+            if (key && val) fields[key] = val;
+          }
+        }
+        parsedBlocks.push({ type: bp.type, fields });
+      }
+    }
+  }
+
   const displayContent = !isUser
     ? message.content
         .replace(/\[PHASE_ADVANCE:\w+\]/g, '')
         .replace(/=== BRAINSTORM ARTIFACT ===[\s\S]*?=== END BRAINSTORM ARTIFACT ===/g, '')
+        .replace(/=== PROGRESS UPDATE ===[\s\S]*?=== END PROGRESS UPDATE ===/g, '')
+        .replace(/=== SUBMISSION ===[\s\S]*?=== END SUBMISSION ===/g, '')
+        .replace(/=== ESCALATION ===[\s\S]*?=== END ESCALATION ===/g, '')
+        .replace(/=== STANDUP ===[\s\S]*?=== END STANDUP ===/g, '')
         .trim()
     : message.content;
 
@@ -174,6 +208,35 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
             </p>
           </div>
         )}
+
+        {/* HANDOFF-TDL-01 Task 7: Structured AI output block cards */}
+        {parsedBlocks.map((block, i) => (
+          <div key={i} className={`mt-3 p-3 rounded-lg border ${
+            block.type === 'PROGRESS UPDATE' ? 'bg-blue-500/10 border-blue-500/30' :
+            block.type === 'SUBMISSION' ? 'bg-amber-500/10 border-amber-500/30' :
+            block.type === 'ESCALATION' ? 'bg-red-500/10 border-red-500/30' :
+            'bg-indigo-500/10 border-indigo-500/30'
+          }`}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`text-xs font-semibold ${
+                block.type === 'PROGRESS UPDATE' ? 'text-blue-400' :
+                block.type === 'SUBMISSION' ? 'text-amber-400' :
+                block.type === 'ESCALATION' ? 'text-red-400' :
+                'text-indigo-400'
+              }`}>
+                {block.type}
+              </span>
+            </div>
+            <div className="space-y-1">
+              {Object.entries(block.fields).map(([key, val]) => (
+                <div key={key} className="flex gap-2 text-xs">
+                  <span className="text-gray-500 font-medium min-w-[80px]">{key}:</span>
+                  <span className="text-gray-300">{val}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
 
         {/* Image attachments (ENH-4) */}
         {message.metadata?.images && message.metadata.images.length > 0 && (
