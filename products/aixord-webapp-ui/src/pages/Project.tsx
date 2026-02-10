@@ -20,7 +20,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserSettings } from '../contexts/UserSettingsContext';
 import { useProjectState } from '../hooks/useApi';
-import { api, APIError, phaseToShort, brainstormApi, type Project as ProjectType, type Decision, type CCSGateStatus, type SessionType, type EdgeType } from '../lib/api';
+import { api, APIError, phaseToShort, brainstormApi, type Project as ProjectType, type Decision, type CCSGateStatus, type SessionType, type EdgeType, type BrainstormReadinessData } from '../lib/api';
 import { useAIXORDSDK, GateBlockedError, AIExposureBlockedError, GovernanceBlockError } from '../lib/sdk';
 import { useSessions } from '../hooks/useSessions';
 import { MessageBubble } from '../components/chat/MessageBubble';
@@ -136,6 +136,19 @@ export function Project() {
 
   // Brainstorm artifact save prompt (HANDOFF-PTX-01)
   const [brainstormArtifactJustSaved, setBrainstormArtifactJustSaved] = useState(false);
+  // Brainstorm readiness vector (HANDOFF-BQL-01)
+  const [brainstormReadiness, setBrainstormReadiness] = useState<BrainstormReadinessData | null>(null);
+
+  // REASSESS Protocol modal state (GFB-01 Task 3)
+  const [reassessModal, setReassessModal] = useState<{
+    targetPhase: string;
+    level: number;
+    reassessCount: number;
+    crossKingdom: boolean;
+    phaseFrom: string;
+  } | null>(null);
+  const [reassessReason, setReassessReason] = useState('');
+  const [reassessReview, setReassessReview] = useState('');
 
   // Governance state from hook
   const {
@@ -495,8 +508,36 @@ export function Project() {
     }
   };
 
+  // GFB-01: Phase order for regression detection
+  const PHASE_ORDER: Record<string, number> = { 'BRAINSTORM': 0, 'B': 0, 'PLAN': 1, 'P': 1, 'EXECUTE': 2, 'E': 2, 'REVIEW': 3, 'R': 3 };
+
   const handleSetPhase = async (phase: string) => {
     setPhaseError(null);
+
+    // GFB-01: Detect phase regression → show REASSESS modal
+    const currentIdx = PHASE_ORDER[currentPhase] ?? -1;
+    const targetIdx = PHASE_ORDER[phase] ?? -1;
+    if (targetIdx < currentIdx && targetIdx >= 0) {
+      // Determine if cross-kingdom (B/P = IDEATION/BLUEPRINT, E/R = REALIZATION)
+      const currentKingdom = currentIdx >= 2 ? 'REALIZATION' : 'IDEATION';
+      const targetKingdom = targetIdx >= 2 ? 'REALIZATION' : 'IDEATION';
+      const crossKingdom = currentKingdom !== targetKingdom;
+      // Estimate level (backend is authoritative, this is for UI hint)
+      let estimatedLevel = 1;
+      if (crossKingdom) estimatedLevel = 2;
+      // We don't know exact reassess_count client-side, so default to 0
+      setReassessModal({
+        targetPhase: phase,
+        level: estimatedLevel,
+        reassessCount: 0,
+        crossKingdom,
+        phaseFrom: currentPhase,
+      });
+      setReassessReason('');
+      setReassessReview('');
+      return;
+    }
+
     try {
       await setPhase(phase);
     } catch (err) {
@@ -585,6 +626,7 @@ export function Project() {
         setWarningPhase(null);
         setOverrideReason('');
         setBrainstormArtifactJustSaved(false);
+        setBrainstormReadiness(null);
       }
     } catch (err) {
       if (err instanceof APIError) {
@@ -612,6 +654,73 @@ export function Project() {
     setPendingWarnings(null);
     setWarningPhase(null);
     setOverrideReason('');
+  }, []);
+
+  // GFB-01: REASSESS confirm — send regression with reason to backend
+  const handleReassessConfirm = useCallback(async () => {
+    if (!reassessModal || !reassessReason.trim()) return;
+    setPhaseError(null);
+    try {
+      await setPhase(reassessModal.targetPhase, {
+        reassess_reason: reassessReason.trim(),
+        review_summary: reassessReview.trim() || undefined,
+      });
+      // Success — close modal and refresh state
+      setReassessModal(null);
+      setReassessReason('');
+      setReassessReview('');
+      fetchState();
+      // System message in chat
+      const sysMsg: Message = {
+        id: generateId(),
+        role: 'system',
+        content: `🔄 **Phase Reassessment**\n\nPhase regressed from **${reassessModal.phaseFrom}** → **${reassessModal.targetPhase}**\n\nReason: ${reassessReason.trim()}${reassessReview.trim() ? `\n\nReview Summary: ${reassessReview.trim()}` : ''}`,
+        timestamp: new Date(),
+      };
+      setConversation((prev) => prev ? {
+        ...prev,
+        messages: [...prev.messages, sysMsg],
+        updatedAt: new Date(),
+      } : prev);
+    } catch (err) {
+      if (err instanceof APIError && err.code === 'REASSESS_REASON_REQUIRED') {
+        // Backend wants more detail — update modal with server-provided level
+        const data = (err as any).reassessData;
+        if (data) {
+          setReassessModal(prev => prev ? {
+            ...prev,
+            level: data.level,
+            reassessCount: data.reassess_count,
+            crossKingdom: data.cross_kingdom,
+          } : prev);
+        }
+        setPhaseError(err.message);
+      } else if (err instanceof APIError && err.code === 'REASSESS_REVIEW_REQUIRED') {
+        // Level 3 — need review summary
+        const data = (err as any).reassessData;
+        if (data) {
+          setReassessModal(prev => prev ? {
+            ...prev,
+            level: 3,
+            reassessCount: data.reassess_count,
+          } : prev);
+        }
+        setPhaseError(err.message);
+      } else if (err instanceof APIError) {
+        setPhaseError(err.message);
+      } else {
+        console.error('Reassess failed:', err);
+        setPhaseError('Failed to reassess phase');
+      }
+    }
+  }, [reassessModal, reassessReason, reassessReview, setPhase, fetchState]);
+
+  // REASSESS dismiss
+  const handleReassessDismiss = useCallback(() => {
+    setReassessModal(null);
+    setReassessReason('');
+    setReassessReview('');
+    setPhaseError(null);
   }, []);
 
   const handleWorkspaceComplete = useCallback(async (binding: WorkspaceBindingData) => {
@@ -978,6 +1087,13 @@ export function Project() {
             }, token);
             // HANDOFF-PTX-01: Show inline finalize prompt after artifact save
             setBrainstormArtifactJustSaved(true);
+            // HANDOFF-BQL-01: Fetch readiness after artifact save
+            try {
+              const readiness = await brainstormApi.getReadiness(id, token);
+              setBrainstormReadiness(readiness);
+            } catch {
+              // Non-blocking — readiness indicator is optional
+            }
           } catch {
             // Artifact parsing failed — non-blocking, user can retry
             console.warn('Failed to parse brainstorm artifact from AI response');
@@ -1522,32 +1638,90 @@ export function Project() {
         )}
       </div>
 
-      {/* HANDOFF-PTX-01: Inline Finalize Prompt after brainstorm artifact save */}
+      {/* HANDOFF-PTX-01 + BQL-01: Inline Finalize Prompt + Readiness Indicator */}
       {brainstormArtifactJustSaved && (state?.session.phase === 'BRAINSTORM' || state?.session.phase === 'B') && (
-        <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-3 mx-4 mb-2 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-blue-300">Brainstorm artifact captured</p>
-            <p className="text-xs text-blue-400/70">When you're satisfied with the brainstorm, finalize to advance to Planning.</p>
+        <div className="mx-4 mb-2 space-y-2">
+          {/* Readiness indicator (BQL-01 Layer 2c) */}
+          {brainstormReadiness && brainstormReadiness.artifact_exists && (
+            <div className={`rounded-lg p-3 border ${
+              brainstormReadiness.ready
+                ? 'bg-green-900/20 border-green-500/30'
+                : 'bg-amber-900/20 border-amber-500/30'
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className={`text-xs font-semibold ${brainstormReadiness.ready ? 'text-green-400' : 'text-amber-400'}`}>
+                  {brainstormReadiness.ready ? 'Ready to finalize' : 'Improvements needed'}
+                </span>
+                {!brainstormReadiness.ready && (
+                  <button
+                    onClick={() => {
+                      const weakDims = brainstormReadiness.dimensions
+                        .filter(d => d.status !== 'PASS')
+                        .map(d => `${d.dimension}: ${d.detail}`)
+                        .join('; ');
+                      handleSendMessage(
+                        `Please improve the brainstorm artifact. These dimensions need work: ${weakDims}. Regenerate the full artifact with improvements.`,
+                        'BALANCED'
+                      );
+                    }}
+                    disabled={chatLoading}
+                    className="text-xs bg-amber-600 text-white px-2.5 py-1 rounded hover:bg-amber-500 transition-colors disabled:opacity-50"
+                  >
+                    Ask AI to improve
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {brainstormReadiness.dimensions.map(d => (
+                  <span
+                    key={d.dimension}
+                    title={d.detail}
+                    className={`text-xs px-2 py-0.5 rounded-full ${
+                      d.status === 'PASS'
+                        ? 'bg-green-500/20 text-green-400'
+                        : d.status === 'WARN'
+                        ? 'bg-amber-500/20 text-amber-400'
+                        : 'bg-red-500/20 text-red-400'
+                    }`}
+                  >
+                    {d.status === 'PASS' ? '✓' : d.status === 'WARN' ? '⚠' : '✗'} {d.dimension.replace('_', ' ')}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Finalize prompt */}
+          <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-3 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-blue-300">Brainstorm artifact captured</p>
+              <p className="text-xs text-blue-400/70">
+                {brainstormReadiness?.ready === false
+                  ? 'Improve quality above, or finalize with overrides.'
+                  : 'When you\'re satisfied with the brainstorm, finalize to advance to Planning.'}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                handleFinalizePhase(state?.session.phase === 'B' ? 'BRAINSTORM' : state?.session.phase || 'BRAINSTORM');
+                setBrainstormArtifactJustSaved(false);
+                setBrainstormReadiness(null);
+              }}
+              disabled={isFinalizing}
+              className="shrink-0 bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50"
+            >
+              {isFinalizing ? 'Finalizing...' : 'Finalize Brainstorm →'}
+            </button>
+            <button
+              onClick={() => { setBrainstormArtifactJustSaved(false); setBrainstormReadiness(null); }}
+              className="shrink-0 text-blue-400/50 hover:text-blue-300 transition-colors"
+              title="Dismiss"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-          <button
-            onClick={() => {
-              handleFinalizePhase(state?.session.phase === 'B' ? 'BRAINSTORM' : state?.session.phase || 'BRAINSTORM');
-              setBrainstormArtifactJustSaved(false);
-            }}
-            disabled={isFinalizing}
-            className="shrink-0 bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50"
-          >
-            {isFinalizing ? 'Finalizing...' : 'Finalize Brainstorm →'}
-          </button>
-          <button
-            onClick={() => setBrainstormArtifactJustSaved(false)}
-            className="shrink-0 text-blue-400/50 hover:text-blue-300 transition-colors"
-            title="Dismiss"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
       )}
 
@@ -1706,6 +1880,28 @@ export function Project() {
               }}
             />
             <div style={{ display: 'flex', gap: '8px', marginTop: '12px', justifyContent: 'flex-end' }}>
+              {/* BQL-01 Layer 2d: Ask AI to Fix button */}
+              <button
+                onClick={() => {
+                  const issues = pendingWarnings
+                    .filter(w => !w.passed)
+                    .map(w => `${w.check}: ${w.detail}`)
+                    .join('; ');
+                  handleWarningDismiss();
+                  handleSendMessage(
+                    `The brainstorm artifact has quality warnings that need fixing: ${issues}. Please regenerate the full artifact with these issues resolved.`,
+                    'BALANCED'
+                  );
+                }}
+                disabled={chatLoading}
+                style={{
+                  padding: '8px 16px', background: '#7c3aed', border: 'none',
+                  borderRadius: '6px', color: '#fff', cursor: 'pointer', fontSize: '13px',
+                  fontWeight: 500,
+                }}
+              >
+                Ask AI to Fix
+              </button>
               <button
                 onClick={handleWarningDismiss}
                 style={{
@@ -1727,6 +1923,140 @@ export function Project() {
                 }}
               >
                 {isFinalizing ? 'Overriding...' : 'Override & Finalize'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* GFB-01: REASSESS Protocol Modal */}
+      {reassessModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'rgba(0,0,0,0.6)',
+        }}>
+          <div style={{
+            background: '#1a1a2e',
+            border: `1px solid ${reassessModal.level >= 3 ? '#ef4444' : reassessModal.level >= 2 ? '#f59e0b' : '#3b82f6'}`,
+            borderRadius: '12px', padding: '24px', maxWidth: '560px', width: '90%',
+            color: '#e0e0e0', boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          }}>
+            <h3 style={{
+              color: reassessModal.level >= 3 ? '#ef4444' : reassessModal.level >= 2 ? '#f59e0b' : '#3b82f6',
+              margin: '0 0 16px', fontSize: '16px',
+            }}>
+              {reassessModal.level >= 3 ? '🔴' : reassessModal.level >= 2 ? '🟠' : '🔵'}{' '}
+              Phase Reassessment — Level {reassessModal.level}
+              {reassessModal.level === 1 && ' (Surgical Fix)'}
+              {reassessModal.level === 2 && ' (Major Pivot)'}
+              {reassessModal.level === 3 && ' (Fresh Start)'}
+            </h3>
+
+            <p style={{ fontSize: '13px', color: '#aaa', margin: '0 0 12px' }}>
+              You are moving <strong>backward</strong> from{' '}
+              <span style={{ color: '#fff' }}>{reassessModal.phaseFrom}</span> →{' '}
+              <span style={{ color: '#fff' }}>{reassessModal.targetPhase}</span>.
+              {reassessModal.crossKingdom && (
+                <span style={{ color: '#f59e0b' }}>
+                  {' '}This crosses kingdom boundaries (Realization → Ideation/Blueprint).
+                </span>
+              )}
+            </p>
+
+            {/* Level indicator pills */}
+            <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+              {[1, 2, 3].map(l => (
+                <span key={l} style={{
+                  padding: '3px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600,
+                  background: l === reassessModal.level
+                    ? (l >= 3 ? '#ef4444' : l >= 2 ? '#f59e0b' : '#3b82f6')
+                    : '#2a2a3e',
+                  color: l === reassessModal.level ? '#fff' : '#666',
+                }}>
+                  L{l}: {l === 1 ? 'Surgical' : l === 2 ? 'Pivot' : 'Fresh Start'}
+                </span>
+              ))}
+            </div>
+
+            {reassessModal.level >= 2 && (
+              <div style={{
+                background: '#1c1c0f', border: '1px solid #f59e0b33', borderRadius: '8px',
+                padding: '10px', marginBottom: '12px', fontSize: '12px', color: '#f59e0b',
+              }}>
+                ⚠️ <strong>Artifact Impact:</strong> Active artifacts will be marked as SUPERSEDED.
+                {reassessModal.level >= 3 && (
+                  <span> This is reassessment #{reassessModal.reassessCount || '3+'}. A review summary is required.</span>
+                )}
+              </div>
+            )}
+
+            {phaseError && (
+              <div style={{
+                background: '#2a1015', border: '1px solid #ef444466', borderRadius: '6px',
+                padding: '8px 12px', marginBottom: '12px', fontSize: '12px', color: '#f87171',
+              }}>
+                {phaseError}
+              </div>
+            )}
+
+            <textarea
+              value={reassessReason}
+              onChange={(e) => setReassessReason(e.target.value)}
+              placeholder="Reassessment reason (required, min 20 characters) — why must the project go back?"
+              style={{
+                width: '100%', height: '70px', background: '#12121f', border: '1px solid #333',
+                borderRadius: '6px', color: '#e0e0e0', padding: '8px', fontSize: '13px',
+                resize: 'vertical', boxSizing: 'border-box',
+              }}
+            />
+            <div style={{ fontSize: '11px', color: reassessReason.length >= 20 ? '#4ade80' : '#666', textAlign: 'right', marginTop: '2px' }}>
+              {reassessReason.length}/20 characters
+            </div>
+
+            {reassessModal.level >= 3 && (
+              <>
+                <textarea
+                  value={reassessReview}
+                  onChange={(e) => setReassessReview(e.target.value)}
+                  placeholder="Review summary (required for Level 3, min 50 characters) — explain the reassessment pattern..."
+                  style={{
+                    width: '100%', height: '80px', background: '#12121f', border: '1px solid #333',
+                    borderRadius: '6px', color: '#e0e0e0', padding: '8px', fontSize: '13px',
+                    resize: 'vertical', boxSizing: 'border-box', marginTop: '8px',
+                  }}
+                />
+                <div style={{ fontSize: '11px', color: reassessReview.length >= 50 ? '#4ade80' : '#666', textAlign: 'right', marginTop: '2px' }}>
+                  {reassessReview.length}/50 characters
+                </div>
+              </>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={handleReassessDismiss}
+                style={{
+                  padding: '8px 16px', background: 'transparent', border: '1px solid #444',
+                  borderRadius: '6px', color: '#aaa', cursor: 'pointer', fontSize: '13px',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReassessConfirm}
+                disabled={reassessReason.length < 20 || (reassessModal.level >= 3 && reassessReview.length < 50)}
+                style={{
+                  padding: '8px 16px',
+                  background: reassessReason.length >= 20 && (reassessModal.level < 3 || reassessReview.length >= 50)
+                    ? (reassessModal.level >= 3 ? '#ef4444' : reassessModal.level >= 2 ? '#f59e0b' : '#3b82f6')
+                    : '#444',
+                  border: 'none', borderRadius: '6px',
+                  color: reassessReason.length >= 20 ? '#fff' : '#666',
+                  cursor: reassessReason.length >= 20 ? 'pointer' : 'not-allowed',
+                  fontWeight: 600, fontSize: '13px',
+                }}
+              >
+                Confirm Reassessment
               </button>
             </div>
           </div>

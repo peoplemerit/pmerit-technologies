@@ -309,8 +309,26 @@ export interface ContextAwareness {
   continuity?: string;
   // Tier 5: Brainstorm artifact status (HANDOFF-PTX-01)
   brainstorm_artifact_saved?: boolean;
+  // Tier 5A: Artifact lifecycle state (GFB-01 Task 2)
+  brainstorm_artifact_state?: string | null; // DRAFT | ACTIVE | FROZEN | HISTORICAL | SUPERSEDED
+  // Tier 5B: Brainstorm readiness vector (HANDOFF-BQL-01)
+  brainstorm_readiness?: BrainstormReadiness | null;
   // Tier 6: Unsatisfied gate labels for current phase (HANDOFF-PTX-01)
   unsatisfied_gates?: string[] | null;
+  // Tier 6B: Fitness function status (GFB-01 Task 1)
+  fitness_status?: {
+    total: number;
+    passing: number;
+    failing: Array<{ dimension: string; metric: string; target: string; current: string | null }>;
+  } | null;
+  // Tier 6C: Reassessment history (GFB-01 Task 3)
+  reassess_count?: number;
+  last_reassessment?: {
+    level: number;
+    phase_from: string;
+    phase_to: string;
+    reason: string;
+  } | null;
 }
 
 export interface RouterRequest {
@@ -1320,6 +1338,24 @@ export interface BrainstormValidationResult {
   block_count: number;
   warn_count: number;
   summary: string;
+}
+
+/** Per-dimension readiness status (HANDOFF-BQL-01 Layer 2a) */
+export type ReadinessDimensionStatus = 'PASS' | 'WARN' | 'FAIL';
+
+/** Single readiness dimension */
+export interface ReadinessDimension {
+  dimension: string;
+  status: ReadinessDimensionStatus;
+  detail: string;
+}
+
+/** Full brainstorm readiness vector */
+export interface BrainstormReadiness {
+  ready: boolean;
+  artifact_exists: boolean;
+  dimensions: ReadinessDimension[];
+  suggestion: string | null;
 }
 
 // ============================================================================

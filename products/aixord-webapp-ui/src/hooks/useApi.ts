@@ -117,9 +117,9 @@ export function useProjectState(projectId: string | null, token: string | null) 
    * Set the current phase
    */
   const setPhase = useCallback(
-    async (phase: string) => {
+    async (phase: string, reassessOptions?: { reassess_reason: string; review_summary?: string }) => {
       if (!projectId || !token) throw new Error('Not authenticated');
-      const newPhase = await api.state.setPhase(projectId, phase, token);
+      const newPhase = await api.state.setPhase(projectId, phase, token, reassessOptions);
       setState((prev) => prev ? { ...prev, session: { ...prev.session, phase: newPhase } } : prev);
       return newPhase;
     },

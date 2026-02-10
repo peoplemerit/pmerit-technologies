@@ -237,6 +237,35 @@ Format:
 === END BRAINSTORM ARTIFACT ===
 
 Rules: 2-5 options required. Each option needs assumptions and kill conditions. Include decision criteria with weights (1-5). You may also include pros/cons per option.`;
+
+    // HANDOFF-BQL-01 Layer 1: Quality-Aware Phase Payload
+    // Tells the AI the exact quality bar the validator will check.
+    systemPrompt += `
+
+=== BRAINSTORM QUALITY REQUIREMENTS ===
+When generating brainstorm artifacts, every element must meet these standards. These are validated when the Director clicks Finalize Brainstorm — generate artifacts that pass these checks so the Director can advance without friction.
+
+OPTIONS (2–5 required):
+- Each option must be meaningfully distinct (different approach, not cosmetic variation)
+- Each must include: title, description (2–4 sentences), assumptions, kill conditions
+
+ASSUMPTIONS (per option + global):
+- Every assumption must be tagged: KNOWN, UNKNOWN, HIGH-RISK, or EXTERNAL
+- Each should include how it could be verified (evidence or test)
+- "We'll figure it out later" is not an acceptable assumption
+
+KILL CONDITIONS (per option + global, at least 1 each):
+- Must be binary (true/false) — not vague ("if it doesn't work")
+- Must include a measurable threshold: date, cost number, dependency availability, metric target
+- Good: "If barcode scan accuracy < 95% in testing → kill this option"
+- Bad: "If the app isn't popular enough → reconsider"
+- Good: "If development cost exceeds $15,000 in Q1 → kill this option"
+- Bad: "If costs are too high → kill this option"
+
+DECISION CRITERIA:
+- Must state what to optimize for (cost, speed, quality, compliance)
+- Must state constraints (budget, timeline, tools, skill level)
+- Each criterion needs a weight (1-5) reflecting its importance`;
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -454,8 +483,9 @@ RULES: Reference the objective. Stay in phase scope. Be specific to THIS project
     // Tier 5: Brainstorm Artifact Status + Approval Detection (HANDOFF-PTX-01)
     if (phaseName === 'BRAINSTORM') {
       if (ctx.brainstorm_artifact_saved) {
+        const artifactState = ctx.brainstorm_artifact_state || 'DRAFT';
         systemPrompt += `\n\n=== BRAINSTORM STATUS ===
-A brainstorm artifact has been captured and saved for this project. The brainstorming work is recorded.
+Artifact: saved | State: ${artifactState}${artifactState === 'DRAFT' ? ' (not yet finalized — Director has not advanced phase)' : artifactState === 'ACTIVE' ? ' (governing artifact — authoritative)' : ''}
 Do NOT restart brainstorming or ask new clarifying questions about scope.
 
 APPROVAL DETECTION: If the Director says "Approved", "APPROVED", "looks good", "yes proceed",
@@ -465,6 +495,17 @@ APPROVAL DETECTION: If the Director says "Approved", "APPROVED", "looks good", "
 3. Present a brief Review Packet summarizing what was brainstormed (2-4 sentences).
 4. Say: "To advance to the PLAN phase, click **Finalize Brainstorm** in the Governance panel."
 5. If gates are not yet satisfied, mention: "Some setup steps may need to be completed first — check the Governance panel for any remaining requirements."`;
+
+        // Tier 5B: Brainstorm Readiness feedback (HANDOFF-BQL-01)
+        if (ctx.brainstorm_readiness && ctx.brainstorm_readiness.artifact_exists) {
+          const r = ctx.brainstorm_readiness;
+          const dimLines = r.dimensions.map(d => `  ${d.dimension}: ${d.status} — ${d.detail}`).join('\n');
+          systemPrompt += `\n\n=== BRAINSTORM READINESS ===
+Overall: ${r.ready ? 'READY to finalize' : 'NOT READY — improvements needed'}
+${dimLines}${r.suggestion ? `\nSuggestion: ${r.suggestion}` : ''}
+
+If any dimension is FAIL or WARN, and the Director asks you to improve the brainstorm or says "make it better", regenerate the artifact focusing on the weak dimensions. Always emit the full === BRAINSTORM ARTIFACT === block when regenerating.`;
+        }
       } else {
         systemPrompt += `\n\n=== BRAINSTORM STATUS ===
 No brainstorm artifact has been saved yet. Continue exploring ideas with the Director.
@@ -477,6 +518,32 @@ When the Director signals readiness (e.g., "I like option 2", "let's go with thi
       systemPrompt += `\n\nNote: Phase advancement requires certain setup steps to be completed.
 Currently unsatisfied: ${ctx.unsatisfied_gates.join(', ')}.
 The Director can satisfy these through the Governance panel in the sidebar.`;
+    }
+
+    // Tier 6B: Fitness Dimensions Advisory (GFB-01 Task 1)
+    if (ctx.fitness_status && ctx.fitness_status.total > 0) {
+      const fs = ctx.fitness_status;
+      if (fs.failing.length > 0) {
+        const failLines = fs.failing.map(f => `  ${f.dimension} (${f.metric}): ${f.current || '?'} / ${f.target} target — FAILING`).join('\n');
+        systemPrompt += `\n\n=== QUALITY DIMENSIONS ===
+Project has ${fs.total} fitness dimension(s) defined.
+Passing: ${fs.passing} | Failing: ${fs.failing.length}
+${failLines}
+Phase transition to REVIEW will require these to be resolved or Director override.`;
+      } else {
+        systemPrompt += `\n\n=== QUALITY DIMENSIONS ===
+Project has ${fs.total} fitness dimension(s) defined. All passing.`;
+      }
+    }
+
+    // Tier 6C: Reassessment History Advisory (GFB-01 Task 3)
+    if (ctx.reassess_count && ctx.reassess_count > 0) {
+      const lr = ctx.last_reassessment;
+      systemPrompt += `\n\n=== REASSESSMENT HISTORY ===
+This project has been reassessed ${ctx.reassess_count} time(s).${lr ? `
+Last regression: ${lr.phase_from} → ${lr.phase_to} (Level ${lr.level}${lr.level === 1 ? ' — Surgical Fix' : lr.level === 2 ? ' — Major Pivot' : ' — Fresh Start'})
+Reason: "${lr.reason}"` : ''}
+Be aware that repeated phase regression may indicate scope or requirements instability.`;
     }
   }
 

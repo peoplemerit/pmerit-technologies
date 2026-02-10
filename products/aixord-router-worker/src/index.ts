@@ -50,7 +50,7 @@ import layers from './api/layers';
 import engineering from './api/engineering';
 import blueprint from './api/blueprint';
 import workspace from './api/workspace';
-import brainstorm from './api/brainstorm';
+import brainstorm, { computeBrainstormReadiness } from './api/brainstorm';
 import assignments from './api/assignments';
 import continuity, { getProjectContinuityCompact } from './api/continuity';
 
@@ -439,11 +439,38 @@ app.post('/v1/router/execute', async (c) => {
       // ═══════════════════════════════════════════════════════════════
       try {
         const artifactRow = await c.env.DB.prepare(
-          'SELECT COUNT(*) as count FROM brainstorm_artifacts WHERE project_id = ?'
-        ).bind(projectId).first<{ count: number }>();
+          `SELECT COUNT(*) as count,
+                  (SELECT status FROM brainstorm_artifacts WHERE project_id = ? ORDER BY version DESC LIMIT 1) as latest_status
+           FROM brainstorm_artifacts WHERE project_id = ?`
+        ).bind(projectId, projectId).first<{ count: number; latest_status: string | null }>();
         ctx.brainstorm_artifact_saved = (artifactRow?.count || 0) > 0;
+        ctx.brainstorm_artifact_state = artifactRow?.latest_status || null;
       } catch {
         ctx.brainstorm_artifact_saved = false;
+        ctx.brainstorm_artifact_state = null;
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // Tier 5B: Brainstorm Readiness Vector (HANDOFF-BQL-01)
+      // Only computed during BRAINSTORM phase when an artifact exists.
+      // Gives AI per-dimension quality feedback to guide improvements.
+      // ═══════════════════════════════════════════════════════════════
+      const capsulePhase = (request.capsule?.phase || '').toUpperCase();
+      if (ctx.brainstorm_artifact_saved && (capsulePhase === 'BRAINSTORM' || capsulePhase === 'B')) {
+        try {
+          const artifactRow = await c.env.DB.prepare(
+            'SELECT options, assumptions, decision_criteria, kill_conditions FROM brainstorm_artifacts WHERE project_id = ? ORDER BY version DESC LIMIT 1'
+          ).bind(projectId).first<Record<string, string>>();
+          if (artifactRow) {
+            const options = JSON.parse(artifactRow.options || '[]');
+            const assumptions = JSON.parse(artifactRow.assumptions || '[]');
+            const decisionCriteria = JSON.parse(artifactRow.decision_criteria || '{}');
+            const killConditions = JSON.parse(artifactRow.kill_conditions || '[]');
+            ctx.brainstorm_readiness = computeBrainstormReadiness(options, assumptions, decisionCriteria, killConditions);
+          }
+        } catch {
+          ctx.brainstorm_readiness = null;
+        }
       }
 
       // ═══════════════════════════════════════════════════════════════
@@ -479,6 +506,55 @@ app.post('/v1/router/execute', async (c) => {
         }
       } catch {
         ctx.unsatisfied_gates = null;
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // Tier 6B: Fitness Function Status (GFB-01 Task 1)
+      // Provides AI visibility into quality dimension scores.
+      // ═══════════════════════════════════════════════════════════════
+      try {
+        const fitnessRows = await c.env.DB.prepare(
+          `SELECT dimension, metric_name, target_value, current_value, status
+           FROM fitness_functions WHERE project_id = ?`
+        ).bind(projectId).all();
+        const ffs = fitnessRows?.results || [];
+        if (ffs.length > 0) {
+          const failing = ffs
+            .filter((f: Record<string, unknown>) => f.status === 'FAILING')
+            .map((f: Record<string, unknown>) => ({
+              dimension: f.dimension as string,
+              metric: f.metric_name as string,
+              target: f.target_value as string,
+              current: (f.current_value as string) || null,
+            }));
+          const passing = ffs.filter((f: Record<string, unknown>) => f.status === 'PASSING').length;
+          ctx.fitness_status = { total: ffs.length, passing, failing };
+        }
+      } catch {
+        ctx.fitness_status = null;
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // Tier 6C: Reassessment History (GFB-01 Task 3)
+      // Provides AI visibility into phase regression history.
+      // ═══════════════════════════════════════════════════════════════
+      try {
+        const reassessRow = await c.env.DB.prepare(
+          'SELECT reassess_count FROM project_state WHERE project_id = ?'
+        ).bind(projectId).first<{ reassess_count: number }>();
+        const count = reassessRow?.reassess_count || 0;
+        if (count > 0) {
+          ctx.reassess_count = count;
+          const lastReassess = await c.env.DB.prepare(
+            `SELECT level, phase_from, phase_to, reason
+             FROM reassessment_log WHERE project_id = ?
+             ORDER BY created_at DESC LIMIT 1`
+          ).bind(projectId).first<{ level: number; phase_from: string; phase_to: string; reason: string }>();
+          ctx.last_reassessment = lastReassess || null;
+        }
+      } catch {
+        ctx.reassess_count = 0;
+        ctx.last_reassessment = null;
       }
 
       request._context_awareness = ctx;

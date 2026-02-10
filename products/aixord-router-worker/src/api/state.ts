@@ -430,8 +430,13 @@ state.put('/:projectId/phase', async (c) => {
     return c.json({ error: 'Project not found' }, 404);
   }
 
-  const body = await c.req.json<{ phase: string; force?: boolean }>();
-  const { phase, force } = body;
+  const body = await c.req.json<{
+    phase: string;
+    force?: boolean;
+    reassess_reason?: string;
+    review_summary?: string;
+  }>();
+  const { phase, force, reassess_reason, review_summary } = body;
 
   if (!isValidPhase(phase)) {
     return c.json({ error: 'Invalid phase. Must be B/P/E/R or BRAINSTORM/PLAN/EXECUTE/REVIEW' }, 400);
@@ -447,8 +452,125 @@ state.put('/:projectId/phase', async (c) => {
   const currentPhase = currentState?.phase || 'BRAINSTORM';
   const gates = JSON.parse(currentState?.gates || '{}');
 
-  // Validate phase transition (unless force=true for admin override)
-  if (!force && normalizedPhaseValue !== currentPhase) {
+  // Detect regression (GFB-01 Task 3 — REASSESS Protocol)
+  const currentOrder = PHASE_ORDER[currentPhase] ?? 0;
+  const targetOrder = PHASE_ORDER[normalizedPhaseValue!] ?? 0;
+  const isRegression = targetOrder < currentOrder;
+
+  if (isRegression && !force) {
+    // Determine REASSESS level
+    // Kingdom boundaries: BRAINSTORM=IDEATION, PLAN=BLUEPRINT, EXECUTE/REVIEW=REALIZATION
+    const KINGDOM: Record<string, string> = {
+      'BRAINSTORM': 'IDEATION', 'PLAN': 'BLUEPRINT', 'EXECUTE': 'REALIZATION', 'REVIEW': 'REALIZATION',
+    };
+    const currentKingdom = KINGDOM[currentPhase] || 'UNKNOWN';
+    const targetKingdom = KINGDOM[normalizedPhaseValue!] || 'UNKNOWN';
+    const crossesKingdom = currentKingdom !== targetKingdom;
+
+    // Get reassess count
+    let reassessCount = 0;
+    try {
+      const countRow = await c.env.DB.prepare(
+        'SELECT reassess_count FROM project_state WHERE project_id = ?'
+      ).bind(projectId).first<{ reassess_count: number }>();
+      reassessCount = countRow?.reassess_count || 0;
+    } catch { /* reassess_count column may not exist yet */ }
+
+    let level = 1; // Surgical Fix (same kingdom)
+    if (crossesKingdom) level = 2; // Major Pivot
+    if (reassessCount >= 2) level = 3; // Fresh Start (3rd+ reassessment)
+
+    // Require reason
+    if (!reassess_reason || reassess_reason.length < 20) {
+      return c.json({
+        error: 'REASSESS_REASON_REQUIRED',
+        message: `Phase regression requires a reason (min 20 characters). Level ${level} reassessment.`,
+        level,
+        reassess_count: reassessCount + 1,
+        cross_kingdom: crossesKingdom,
+        phase_from: currentPhase,
+        phase_to: normalizedPhaseValue,
+      }, 400);
+    }
+
+    // Level 3: require review summary
+    if (level === 3 && (!review_summary || review_summary.length < 50)) {
+      return c.json({
+        error: 'REASSESS_REVIEW_REQUIRED',
+        message: `This is reassessment #${reassessCount + 1}. A review summary (min 50 chars) explaining the pattern is required.`,
+        level: 3,
+        reassess_count: reassessCount + 1,
+        phase_from: currentPhase,
+        phase_to: normalizedPhaseValue,
+      }, 400);
+    }
+
+    // Artifact impact for Level 2+
+    let artifactImpact = 'none';
+    const now = new Date().toISOString();
+
+    if (level >= 2) {
+      try {
+        await c.env.DB.prepare(
+          `UPDATE brainstorm_artifacts SET status = 'SUPERSEDED', updated_at = ?
+           WHERE project_id = ? AND status = 'ACTIVE'`
+        ).bind(now, projectId).run();
+        artifactImpact = 'active_artifacts_superseded';
+      } catch { /* non-blocking */ }
+    }
+    if (level === 3) {
+      try {
+        await c.env.DB.prepare(
+          `UPDATE brainstorm_artifacts SET status = 'SUPERSEDED', updated_at = ?
+           WHERE project_id = ? AND status = 'DRAFT'`
+        ).bind(now, projectId).run();
+        artifactImpact = 'all_non_frozen_superseded';
+      } catch { /* non-blocking */ }
+    }
+
+    // Log to reassessment_log
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO reassessment_log
+         (project_id, level, phase_from, phase_to, reason, review_summary, artifact_impact)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).bind(projectId, level, currentPhase, normalizedPhaseValue,
+             reassess_reason, review_summary || null, artifactImpact).run();
+    } catch { /* table may not exist yet — non-blocking */ }
+
+    // Increment reassess_count
+    try {
+      await c.env.DB.prepare(
+        `UPDATE project_state SET reassess_count = COALESCE(reassess_count, 0) + 1
+         WHERE project_id = ?`
+      ).bind(projectId).run();
+    } catch { /* column may not exist yet — non-blocking */ }
+
+    // Log to decision_ledger
+    try {
+      await c.env.DB.prepare(
+        `INSERT INTO decision_ledger
+         (project_id, action, phase_from, phase_to, actor_id, actor_role,
+          gate_snapshot, artifact_check, result, reason, created_at)
+         VALUES (?, ?, ?, ?, ?, 'DIRECTOR', ?, ?, 'APPROVED', ?, ?)`
+      ).bind(
+        projectId,
+        `REASSESS_L${level}`,
+        currentPhase,
+        normalizedPhaseValue,
+        userId,
+        JSON.stringify({}),
+        JSON.stringify({ artifact_impact: artifactImpact, level }),
+        reassess_reason,
+        now,
+      ).run();
+    } catch { /* non-blocking */ }
+
+    // Fall through to phase update below
+  }
+
+  // Validate forward phase transition (unless force=true for admin override)
+  if (!isRegression && !force && normalizedPhaseValue !== currentPhase) {
     const check = checkPhaseTransition(currentPhase, normalizedPhaseValue!, gates);
     if (!check.allowed) {
       return c.json({
@@ -469,7 +591,12 @@ state.put('/:projectId/phase', async (c) => {
     WHERE project_id = ?
   `).bind(normalizedPhaseValue, now, projectId).run();
 
-  return c.json({ success: true, phase: normalizedPhaseValue, updated_at: now });
+  return c.json({
+    success: true,
+    phase: normalizedPhaseValue,
+    updated_at: now,
+    ...(isRegression ? { reassessment: true, level: body.reassess_reason ? undefined : undefined } : {}),
+  });
 });
 
 /**
@@ -758,6 +885,37 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
     });
   }
 
+  // 4b. Fitness function validation (GFB-01 Task 1 — R2)
+  // EXECUTE phase: failing fitness dimensions become quality warnings (overridable)
+  // PLAN phase: missing fitness dimensions become informational warnings
+  const FITNESS_PHASE_POLICY: Record<string, 'WARN' | 'BLOCK'> = {
+    'EXECUTE': 'WARN',
+  };
+  const fitnessPolicy = FITNESS_PHASE_POLICY[currentPhase];
+  if (fitnessPolicy) {
+    try {
+      const fitnessResult = await c.env.DB.prepare(
+        `SELECT dimension, metric_name, target_value, current_value, status
+         FROM fitness_functions WHERE project_id = ?`
+      ).bind(projectId).all();
+      const fitnessFunctions = fitnessResult?.results || [];
+
+      if (fitnessFunctions.length > 0) {
+        const failing = fitnessFunctions.filter((ff: Record<string, unknown>) => ff.status === 'FAILING');
+        if (failing.length > 0) {
+          for (const ff of failing) {
+            const ffr = ff as Record<string, unknown>;
+            warnChecks.push({
+              check: `fitness_${(ffr.dimension as string || 'unknown').toLowerCase()}`,
+              passed: false,
+              detail: `${ffr.metric_name}: current ${ffr.current_value || '?'} / target ${ffr.target_value} — FAILING`,
+            });
+          }
+        }
+      }
+    } catch { /* fitness_functions table may not exist — non-blocking */ }
+  }
+
   const failedArtifacts = artifactChecks.filter(a => !a.passed);
   const allGatesPassed = missingGates.length === 0;
   const allArtifactsPassed = failedArtifacts.length === 0;
@@ -853,6 +1011,26 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
     await c.env.DB.prepare(
       'UPDATE project_state SET phase_locked = 1, updated_at = ? WHERE project_id = ?'
     ).bind(now, projectId).run();
+  }
+
+  // 7. Artifact state transitions (GFB-01 Task 2)
+  // On BRAINSTORM finalize: DRAFT → ACTIVE (artifact becomes governing)
+  if (currentPhase === 'BRAINSTORM') {
+    try {
+      await c.env.DB.prepare(
+        `UPDATE brainstorm_artifacts SET status = 'ACTIVE', updated_at = ?
+         WHERE project_id = ? AND status = 'DRAFT'`
+      ).bind(now, projectId).run();
+    } catch { /* Non-blocking — artifact state is advisory */ }
+  }
+  // On REVIEW finalize (terminal): ACTIVE → FROZEN (artifact locked)
+  if (currentPhase === 'REVIEW') {
+    try {
+      await c.env.DB.prepare(
+        `UPDATE brainstorm_artifacts SET status = 'FROZEN', updated_at = ?
+         WHERE project_id = ? AND status = 'ACTIVE'`
+      ).bind(now, projectId).run();
+    } catch { /* Non-blocking */ }
   }
 
   return c.json({

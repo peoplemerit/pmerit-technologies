@@ -693,20 +693,30 @@ export const stateApi = {
    * Backend returns: { success: true, phase, updated_at }
    * On 403: throws PhaseTransitionError with missingGates details
    */
-  async setPhase(projectId: string, phase: string, token: string): Promise<string> {
+  async setPhase(
+    projectId: string,
+    phase: string,
+    token: string,
+    reassessOptions?: { reassess_reason: string; review_summary?: string }
+  ): Promise<string> {
     const res = await fetch(`${API_BASE}/state/${projectId}/phase`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({ phase }),
+      body: JSON.stringify({ phase, ...reassessOptions }),
     });
     const data = await res.json();
     if (!res.ok) {
       if (res.status === 403 && data.missingGates) {
         const err = new APIError(403, 'PHASE_BLOCKED', data.message || data.error);
         (err as any).missingGates = data.missingGates;
+        throw err;
+      }
+      if (res.status === 400 && (data.error === 'REASSESS_REASON_REQUIRED' || data.error === 'REASSESS_REVIEW_REQUIRED')) {
+        const err = new APIError(400, data.error, data.message);
+        (err as any).reassessData = data;
         throw err;
       }
       throw new APIError(res.status, data.code || 'UNKNOWN_ERROR', data.error || 'Unknown error');
@@ -820,6 +830,23 @@ export interface BrainstormValidationResult {
   artifact_status?: string;
 }
 
+/** Per-dimension readiness status (HANDOFF-BQL-01) */
+export interface BrainstormReadinessDimension {
+  dimension: string;
+  status: 'PASS' | 'WARN' | 'FAIL';
+  detail: string;
+}
+
+/** Brainstorm readiness vector (HANDOFF-BQL-01) */
+export interface BrainstormReadinessData {
+  ready: boolean;
+  artifact_exists: boolean;
+  dimensions: BrainstormReadinessDimension[];
+  suggestion: string | null;
+  artifact_id?: string;
+  artifact_version?: number;
+}
+
 export const brainstormApi = {
   async createArtifact(
     projectId: string,
@@ -867,6 +894,14 @@ export const brainstormApi = {
   async getValidation(projectId: string, token: string): Promise<BrainstormValidationResult> {
     return request<BrainstormValidationResult>(
       `/projects/${projectId}/brainstorm/validation`,
+      {},
+      token
+    );
+  },
+
+  async getReadiness(projectId: string, token: string): Promise<BrainstormReadinessData> {
+    return request<BrainstormReadinessData>(
+      `/projects/${projectId}/brainstorm/readiness`,
       {},
       token
     );

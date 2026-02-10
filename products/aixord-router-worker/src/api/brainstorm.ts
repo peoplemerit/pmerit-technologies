@@ -13,7 +13,7 @@
  */
 
 import { Hono } from 'hono';
-import type { Env, BrainstormOption, BrainstormDecisionCriteria, BrainstormValidationCheck, BrainstormValidationResult } from '../types';
+import type { Env, BrainstormOption, BrainstormDecisionCriteria, BrainstormValidationCheck, BrainstormValidationResult, BrainstormReadiness, ReadinessDimension, ReadinessDimensionStatus } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
 
 const brainstorm = new Hono<{ Bindings: Env }>();
@@ -182,6 +182,134 @@ function validateBrainstormArtifact(
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// Readiness Scoring (HANDOFF-BQL-01 Layer 2a)
+//
+// Returns a per-dimension quality vector instead of BLOCK/WARN.
+// Consumed by Tier 5B (system prompt) and frontend indicator.
+// ═══════════════════════════════════════════════════════════════════
+
+function computeBrainstormReadiness(
+  options: BrainstormOption[],
+  assumptions: string[],
+  decisionCriteria: BrainstormDecisionCriteria,
+  killConditions: string[]
+): BrainstormReadiness {
+  const dimensions: ReadinessDimension[] = [];
+
+  // ── OPTIONS dimension ──
+  const optionCount = options.length;
+  const emptyOptions = options.filter(o => !o.title?.trim() || !o.description?.trim());
+  const titles = options.map(o => o.title?.trim().toLowerCase());
+  const uniqueTitles = new Set(titles);
+  const hasDuplicates = uniqueTitles.size < titles.length;
+
+  let optionsStatus: ReadinessDimensionStatus;
+  let optionsDetail: string;
+  if (optionCount < 2 || emptyOptions.length > 0) {
+    optionsStatus = 'FAIL';
+    optionsDetail = optionCount < 2
+      ? `Only ${optionCount} option(s) — need at least 2`
+      : `${emptyOptions.length} option(s) missing title or description`;
+  } else if (optionCount > 5 || hasDuplicates) {
+    optionsStatus = 'WARN';
+    optionsDetail = optionCount > 5
+      ? `${optionCount} options — consider narrowing to 5 or fewer`
+      : `${titles.length - uniqueTitles.size} duplicate title(s) detected`;
+  } else {
+    optionsStatus = 'PASS';
+    optionsDetail = `${optionCount} distinct options defined`;
+  }
+  dimensions.push({ dimension: 'options', status: optionsStatus, detail: optionsDetail });
+
+  // ── ASSUMPTIONS dimension ──
+  const allAssumptions = [
+    ...assumptions,
+    ...options.flatMap(o => o.assumptions || []),
+  ];
+  const optionsMissingAssumptions = options.filter(o => !o.assumptions || o.assumptions.length === 0);
+  const trivialAssumptions = allAssumptions.filter(a => a.trim().length < 15);
+
+  let assumptionsStatus: ReadinessDimensionStatus;
+  let assumptionsDetail: string;
+  if (optionsMissingAssumptions.length > 0) {
+    assumptionsStatus = 'FAIL';
+    assumptionsDetail = `${optionsMissingAssumptions.length} option(s) have no assumptions`;
+  } else if (assumptions.length === 0 || trivialAssumptions.length > 0) {
+    assumptionsStatus = 'WARN';
+    assumptionsDetail = assumptions.length === 0
+      ? 'No global assumptions — add cross-cutting assumptions'
+      : `${trivialAssumptions.length} assumption(s) may be too brief to verify`;
+  } else {
+    assumptionsStatus = 'PASS';
+    assumptionsDetail = `${allAssumptions.length} assumption(s) — all substantive`;
+  }
+  dimensions.push({ dimension: 'assumptions', status: assumptionsStatus, detail: assumptionsDetail });
+
+  // ── KILL CONDITIONS dimension ──
+  const allKillConditions = [
+    ...killConditions,
+    ...options.flatMap(o => o.kill_conditions || []),
+  ];
+  const optionsMissingKills = options.filter(o => !o.kill_conditions || o.kill_conditions.length === 0);
+  const measurablePattern = /\d|exceed|below|above|less|more|fail|drop|increase|decrease|threshold/i;
+  const unmeasurable = allKillConditions.filter(kc => !measurablePattern.test(kc));
+
+  let killStatus: ReadinessDimensionStatus;
+  let killDetail: string;
+  if (optionsMissingKills.length > 0) {
+    killStatus = 'FAIL';
+    killDetail = `${optionsMissingKills.length} option(s) have no kill conditions`;
+  } else if (unmeasurable.length > 0) {
+    killStatus = 'WARN';
+    killDetail = `${unmeasurable.length} kill condition(s) lack measurable thresholds`;
+  } else {
+    killStatus = 'PASS';
+    killDetail = `${allKillConditions.length} kill condition(s) — all measurable`;
+  }
+  dimensions.push({ dimension: 'kill_conditions', status: killStatus, detail: killDetail });
+
+  // ── DECISION CRITERIA dimension ──
+  const hasCriteria = decisionCriteria?.criteria && decisionCriteria.criteria.length > 0;
+  const criteriaWithWeights = hasCriteria
+    ? decisionCriteria.criteria.filter(c => c.weight >= 1 && c.weight <= 5)
+    : [];
+
+  let criteriaStatus: ReadinessDimensionStatus;
+  let criteriaDetail: string;
+  if (!hasCriteria) {
+    criteriaStatus = 'FAIL';
+    criteriaDetail = 'No decision criteria defined';
+  } else if (criteriaWithWeights.length < decisionCriteria.criteria.length) {
+    criteriaStatus = 'WARN';
+    criteriaDetail = `${decisionCriteria.criteria.length - criteriaWithWeights.length} criteria missing valid weight (1-5)`;
+  } else {
+    criteriaStatus = 'PASS';
+    criteriaDetail = `${criteriaWithWeights.length} criteria with weights`;
+  }
+  dimensions.push({ dimension: 'decision_criteria', status: criteriaStatus, detail: criteriaDetail });
+
+  // ── Overall readiness ──
+  const hasFail = dimensions.some(d => d.status === 'FAIL');
+  const hasWarn = dimensions.some(d => d.status === 'WARN');
+
+  let suggestion: string | null = null;
+  if (hasFail) {
+    const failDims = dimensions.filter(d => d.status === 'FAIL').map(d => d.dimension);
+    suggestion = `Fix required: ${failDims.join(', ')}. Ask the AI to regenerate with these improvements.`;
+  } else if (hasWarn) {
+    const warnDims = dimensions.filter(d => d.status === 'WARN').map(d => d.dimension);
+    suggestion = `Improvements suggested: ${warnDims.join(', ')}. You can finalize now or ask the AI to refine.`;
+  }
+
+  return {
+    ready: !hasFail,
+    artifact_exists: true,
+    dimensions,
+    suggestion,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // Endpoints
 // ═══════════════════════════════════════════════════════════════════
 
@@ -218,11 +346,13 @@ brainstorm.post('/:projectId/brainstorm/artifacts', async (c) => {
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  // Mark previous DRAFT as SUPERSEDED
+  // GFB-01 Task 2: Mark previous DRAFT/ACTIVE artifacts as HISTORICAL
+  // (SUPERSEDED is reserved for explicit REASSESS-driven replacement)
   if (latest) {
     await c.env.DB.prepare(
-      "UPDATE brainstorm_artifacts SET status = 'SUPERSEDED', updated_at = ? WHERE project_id = ? AND status = 'DRAFT'"
-    ).bind(now, projectId).run();
+      `UPDATE brainstorm_artifacts SET status = 'HISTORICAL', superseded_by = ?, updated_at = ?
+       WHERE project_id = ? AND status IN ('DRAFT', 'ACTIVE')`
+    ).bind(id, now, projectId).run();
   }
 
   await c.env.DB.prepare(
@@ -396,6 +526,49 @@ brainstorm.get('/:projectId/brainstorm/validation', async (c) => {
   });
 });
 
+/**
+ * GET /:projectId/brainstorm/readiness
+ *
+ * HANDOFF-BQL-01 Layer 2a: Readiness scoring endpoint.
+ * Returns a per-dimension quality vector consumed by:
+ *   - Tier 5B system prompt injection (index.ts)
+ *   - Frontend readiness indicator (Project.tsx)
+ */
+brainstorm.get('/:projectId/brainstorm/readiness', async (c) => {
+  const userId = c.get('userId');
+  const projectId = c.req.param('projectId');
+
+  if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const row = await c.env.DB.prepare(
+    'SELECT * FROM brainstorm_artifacts WHERE project_id = ? ORDER BY version DESC LIMIT 1'
+  ).bind(projectId).first<Record<string, unknown>>();
+
+  if (!row) {
+    return c.json({
+      ready: false,
+      artifact_exists: false,
+      dimensions: [],
+      suggestion: 'No brainstorm artifact yet. Continue brainstorming with the AI to generate a structured artifact.',
+    } satisfies BrainstormReadiness);
+  }
+
+  const options: BrainstormOption[] = JSON.parse(row.options as string || '[]');
+  const assumptions: string[] = JSON.parse(row.assumptions as string || '[]');
+  const decisionCriteria: BrainstormDecisionCriteria = JSON.parse(row.decision_criteria as string || '{}');
+  const killConditions: string[] = JSON.parse(row.kill_conditions as string || '[]');
+
+  const readiness = computeBrainstormReadiness(options, assumptions, decisionCriteria, killConditions);
+
+  return c.json({
+    ...readiness,
+    artifact_id: row.id,
+    artifact_version: row.version,
+  });
+});
+
 // Export the validateBrainstormArtifact function for use in state.ts finalize
-export { validateBrainstormArtifact };
+export { validateBrainstormArtifact, computeBrainstormReadiness };
 export default brainstorm;
