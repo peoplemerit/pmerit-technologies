@@ -1297,3 +1297,107 @@ export interface BrainstormValidationResult {
   warn_count: number;
   summary: string;
 }
+
+// ============================================================================
+// Task Delegation Layer Types (HANDOFF-TDL-01)
+// ============================================================================
+
+export type AssignmentPriority = 'P0' | 'P1' | 'P2';
+
+export type AssignmentStatus =
+  | 'BACKLOG'
+  | 'ASSIGNED'
+  | 'IN_PROGRESS'
+  | 'BLOCKED'
+  | 'SUBMITTED'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'PAUSED';
+
+export type ReviewVerdict = 'ACCEPTED' | 'REJECTED';
+
+export type EscalationStatus = 'OPEN' | 'RESOLVED' | 'DEFERRED';
+
+/** Task assignment — binding a deliverable to a session with authority scope */
+export interface TaskAssignment {
+  id: string;
+  project_id: string;
+  deliverable_id: string;
+  session_id: string | null;
+  priority: AssignmentPriority;
+  sort_order: number;
+  status: AssignmentStatus;
+  authority_scope: string[];
+  escalation_triggers: string[];
+  progress_notes: string;
+  progress_percent: number;
+  completed_items: string[];
+  remaining_items: string[];
+  blocked_reason: string | null;
+  blocked_since: string | null;
+  submitted_at: string | null;
+  submission_summary: string | null;
+  submission_evidence: string[];
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_verdict: ReviewVerdict | null;
+  review_notes: string | null;
+  assigned_at: string;
+  assigned_by: string;
+  started_at: string | null;
+  completed_at: string | null;
+  updated_at: string;
+}
+
+/** Escalation record — structured decision request from AI to Director */
+export interface Escalation {
+  id: string;
+  project_id: string;
+  assignment_id: string;
+  decision_needed: string;
+  options: Array<{ label: string; description: string; tradeoffs?: string }>;
+  recommendation: string | null;
+  recommendation_rationale: string | null;
+  status: EscalationStatus;
+  resolution: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+/** Standup report — structured periodic check-in */
+export interface StandupReport {
+  id: string;
+  project_id: string;
+  session_id: string;
+  report_number: number;
+  working_on: string;
+  completed_since_last: string[];
+  in_progress: string[];
+  blocked: string[];
+  next_actions: string[];
+  estimate_to_completion: string | null;
+  escalations_needed: string[];
+  message_number: number | null;
+  created_at: string;
+}
+
+/** Aggregated task board view */
+export interface TaskBoard {
+  backlog: TaskAssignment[];
+  assigned: TaskAssignment[];
+  in_progress: TaskAssignment[];
+  blocked: TaskAssignment[];
+  submitted: TaskAssignment[];
+  accepted: TaskAssignment[];
+  rejected: TaskAssignment[];
+  paused: TaskAssignment[];
+  open_escalations: Escalation[];
+  last_standup: StandupReport | null;
+  stats: {
+    total: number;
+    completed: number;
+    completion_percent: number;
+    blocked_count: number;
+  };
+}

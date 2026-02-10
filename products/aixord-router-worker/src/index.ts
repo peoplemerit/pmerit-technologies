@@ -51,6 +51,7 @@ import engineering from './api/engineering';
 import blueprint from './api/blueprint';
 import workspace from './api/workspace';
 import brainstorm from './api/brainstorm';
+import assignments from './api/assignments';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -824,5 +825,8 @@ app.route('/api/v1/projects', workspace);
 
 // Brainstorm Artifact routes (HANDOFF-VD-CI-01)
 app.route('/api/v1/projects', brainstorm);
+
+// Task Delegation Layer routes (HANDOFF-TDL-01)
+app.route('/api/v1/projects', assignments);
 
 export default app;
