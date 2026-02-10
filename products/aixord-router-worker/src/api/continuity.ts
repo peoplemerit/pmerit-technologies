@@ -523,121 +523,148 @@ export async function getProjectContinuityCompact(
   db: D1Database,
   projectId: string,
 ): Promise<string | null> {
-  // Q1: Project + phase
-  const project = await db.prepare(
-    'SELECT objective FROM projects WHERE id = ?'
-  ).bind(projectId).first<{ objective: string }>();
+  try {
+    // Q1: Project + phase
+    const project = await db.prepare(
+      'SELECT objective FROM projects WHERE id = ?'
+    ).bind(projectId).first<{ objective: string }>();
 
-  if (!project) return null;
+    if (!project) return null;
 
-  const state = await db.prepare(
-    'SELECT phase, updated_at FROM project_state WHERE project_id = ?'
-  ).bind(projectId).first<{ phase: string; updated_at: string }>();
+    let currentPhase = 'BRAINSTORM';
+    try {
+      const state = await db.prepare(
+        'SELECT phase, updated_at FROM project_state WHERE project_id = ?'
+      ).bind(projectId).first<{ phase: string; updated_at: string }>();
+      currentPhase = state?.phase || 'BRAINSTORM';
+    } catch { /* project_state may not exist yet — default to BRAINSTORM */ }
 
-  const currentPhase = state?.phase || 'BRAINSTORM';
+    // Q2: Session timeline (last 3, compressed)
+    let sessionList: Array<{ session_number: number; session_type: string; status: string; summary: string | null; phase: string }> = [];
+    try {
+      const sessionRows = await db.prepare(
+        `SELECT session_number, session_type, status, summary, phase
+         FROM project_sessions WHERE project_id = ?
+         ORDER BY session_number DESC LIMIT 3`
+      ).bind(projectId).all();
+      sessionList = (sessionRows?.results as typeof sessionList) || [];
+    } catch { /* project_sessions may not exist or be empty */ }
 
-  // Q2: Session timeline (last 3, compressed)
-  const sessionRows = await db.prepare(
-    `SELECT session_number, session_type, status, summary, phase
-     FROM project_sessions WHERE project_id = ?
-     ORDER BY session_number DESC LIMIT 3`
-  ).bind(projectId).all<{
-    session_number: number; session_type: string; status: string;
-    summary: string | null; phase: string;
-  }>();
+    // Q3: Key decisions (last 5, non-superseded)
+    let decisionList: Array<{ action: string; summary: string | null; reason: string; result: string; created_at: string }> = [];
+    try {
+      const decisionRows = await db.prepare(
+        `SELECT action, summary, reason, result, created_at
+         FROM decision_ledger WHERE project_id = ?
+           AND (supersedes_decision_id IS NULL OR supersedes_decision_id = '')
+         ORDER BY created_at DESC LIMIT 5`
+      ).bind(projectId).all();
+      decisionList = (decisionRows?.results as typeof decisionList) || [];
+    } catch { /* decision_ledger may not have supersedes_decision_id column or be empty */ }
 
-  // Q3: Key decisions (last 5, non-superseded)
-  const decisionRows = await db.prepare(
-    `SELECT action, summary, reason, result, created_at
-     FROM decision_ledger WHERE project_id = ?
-       AND (supersedes_decision_id IS NULL OR supersedes_decision_id = '')
-     ORDER BY created_at DESC LIMIT 5`
-  ).bind(projectId).all<{
-    action: string; summary: string | null; reason: string; result: string; created_at: string;
-  }>();
+    // Q4: Active work (TDL, top 3)
+    let activeList: Array<{ status: string; priority: string; progress_percent: number; deliverable_name: string }> = [];
+    try {
+      const activeWork = await db.prepare(
+        `SELECT ta.status, ta.priority, ta.progress_percent, bd.name as deliverable_name
+         FROM task_assignments ta
+         JOIN blueprint_deliverables bd ON ta.deliverable_id = bd.id AND bd.project_id = ta.project_id
+         WHERE ta.project_id = ? AND ta.status NOT IN ('ACCEPTED', 'PAUSED', 'REJECTED')
+         ORDER BY CASE ta.priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 ELSE 2 END
+         LIMIT 3`
+      ).bind(projectId).all();
+      activeList = (activeWork?.results as typeof activeList) || [];
+    } catch { /* task_assignments or blueprint_deliverables may not exist */ }
 
-  // Q4: Active work (TDL, top 3)
-  const activeWork = await db.prepare(
-    `SELECT ta.status, ta.priority, ta.progress_percent, bd.name as deliverable_name
-     FROM task_assignments ta
-     JOIN blueprint_deliverables bd ON ta.deliverable_id = bd.id AND bd.project_id = ta.project_id
-     WHERE ta.project_id = ? AND ta.status NOT IN ('ACCEPTED', 'PAUSED', 'REJECTED')
-     ORDER BY CASE ta.priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 ELSE 2 END
-     LIMIT 3`
-  ).bind(projectId).all<{
-    status: string; priority: string; progress_percent: number; deliverable_name: string;
-  }>();
+    // Q5: Open escalations
+    let escalationList: Array<{ decision_needed: string }> = [];
+    try {
+      const escalations = await db.prepare(
+        `SELECT el.decision_needed
+         FROM escalation_log el
+         WHERE el.project_id = ? AND el.status = 'OPEN'
+         LIMIT 3`
+      ).bind(projectId).all();
+      escalationList = (escalations?.results as typeof escalationList) || [];
+    } catch { /* escalation_log may not exist */ }
 
-  // Q5: Open escalations
-  const escalations = await db.prepare(
-    `SELECT el.decision_needed
-     FROM escalation_log el
-     WHERE el.project_id = ? AND el.status = 'OPEN'
-     LIMIT 3`
-  ).bind(projectId).all<{ decision_needed: string }>();
+    // Q6: Pinned items (compressed)
+    let pinList: Array<{ pin_type: string; label: string | null }> = [];
+    try {
+      const pins = await db.prepare(
+        `SELECT pin_type, label FROM continuity_pins WHERE project_id = ? LIMIT 5`
+      ).bind(projectId).all();
+      pinList = (pins?.results as typeof pinList) || [];
+    } catch { /* continuity_pins may not exist if migration 023 wasn't applied */ }
 
-  // Q6: Pinned items (compressed)
-  const pins = await db.prepare(
-    `SELECT pin_type, label FROM continuity_pins WHERE project_id = ? LIMIT 5`
-  ).bind(projectId).all<{ pin_type: string; label: string | null }>();
+    // Q7: Deliverable progress
+    let delivTotal = 0;
+    let delivCompleted = 0;
+    try {
+      const delivStats = await db.prepare(
+        `SELECT COUNT(*) as total,
+                SUM(CASE WHEN status IN ('DONE', 'VERIFIED', 'LOCKED', 'CANCELLED') THEN 1 ELSE 0 END) as completed
+         FROM blueprint_deliverables WHERE project_id = ?`
+      ).bind(projectId).first<{ total: number; completed: number }>();
+      delivTotal = delivStats?.total || 0;
+      delivCompleted = delivStats?.completed || 0;
+    } catch { /* blueprint_deliverables may not exist */ }
 
-  // Q7: Deliverable progress
-  const delivStats = await db.prepare(
-    `SELECT COUNT(*) as total,
-            SUM(CASE WHEN status IN ('DONE', 'VERIFIED', 'LOCKED', 'CANCELLED') THEN 1 ELSE 0 END) as completed
-     FROM blueprint_deliverables WHERE project_id = ?`
-  ).bind(projectId).first<{ total: number; completed: number }>();
+    // Build compact string
+    const lines: string[] = [];
 
-  // Build compact string
-  const lines: string[] = [];
+    // Objective + phase (~30 tokens)
+    const objText = project.objective || 'No objective set';
+    const objTruncated = objText.length > 120 ? objText.slice(0, 120) + '...' : objText;
+    lines.push(`Objective: ${objTruncated}`);
+    lines.push(`Phase: ${currentPhase}`);
 
-  // Objective + phase (~30 tokens)
-  const objTruncated = project.objective.length > 120 ? project.objective.slice(0, 120) + '...' : project.objective;
-  lines.push(`Objective: ${objTruncated}`);
-  lines.push(`Phase: ${currentPhase}`);
-
-  // Session timeline (~50 tokens)
-  if (sessionRows.results && sessionRows.results.length > 0) {
-    lines.push('Sessions:');
-    for (const s of sessionRows.results) {
-      const summary = s.summary ? ` — ${s.summary.slice(0, 60)}` : '';
-      lines.push(`  S${s.session_number} ${s.session_type} [${s.status}]${summary}`);
+    // Session timeline (~50 tokens)
+    if (sessionList.length > 0) {
+      lines.push('Sessions:');
+      for (const s of sessionList) {
+        const summary = s.summary ? ` — ${s.summary.slice(0, 60)}` : '';
+        lines.push(`  S${s.session_number} ${s.session_type} [${s.status}]${summary}`);
+      }
     }
-  }
 
-  // Key decisions (~80 tokens)
-  if (decisionRows.results && decisionRows.results.length > 0) {
-    lines.push('Decisions:');
-    for (const d of decisionRows.results) {
-      const label = d.summary || d.reason.slice(0, 60);
-      lines.push(`  ${d.action} (${d.result}): ${label}`);
+    // Key decisions (~80 tokens)
+    if (decisionList.length > 0) {
+      lines.push('Decisions:');
+      for (const d of decisionList) {
+        const label = d.summary || (d.reason ? d.reason.slice(0, 60) : 'No reason');
+        lines.push(`  ${d.action} (${d.result}): ${label}`);
+      }
     }
-  }
 
-  // Active work (~40 tokens)
-  if (activeWork.results && activeWork.results.length > 0) {
-    lines.push('Active work:');
-    for (const a of activeWork.results) {
-      lines.push(`  ${a.deliverable_name} [${a.status}, ${a.progress_percent}%]`);
+    // Active work (~40 tokens)
+    if (activeList.length > 0) {
+      lines.push('Active work:');
+      for (const a of activeList) {
+        lines.push(`  ${a.deliverable_name} [${a.status}, ${a.progress_percent || 0}%]`);
+      }
     }
-  }
 
-  // Escalations (~20 tokens)
-  if (escalations.results && escalations.results.length > 0) {
-    lines.push(`Escalations: ${escalations.results.map(e => e.decision_needed.slice(0, 40)).join('; ')}`);
-  }
+    // Escalations (~20 tokens)
+    if (escalationList.length > 0) {
+      lines.push(`Escalations: ${escalationList.map(e => (e.decision_needed || '').slice(0, 40)).join('; ')}`);
+    }
 
-  // Pinned items (~20 tokens)
-  if (pins.results && pins.results.length > 0) {
-    lines.push(`Pinned: ${pins.results.map(p => p.label || `[${p.pin_type}]`).join(', ')}`);
-  }
+    // Pinned items (~20 tokens)
+    if (pinList.length > 0) {
+      lines.push(`Pinned: ${pinList.map(p => p.label || `[${p.pin_type}]`).join(', ')}`);
+    }
 
-  // Progress (~10 tokens)
-  if (delivStats && delivStats.total > 0) {
-    lines.push(`Progress: ${delivStats.completed || 0}/${delivStats.total} deliverables complete`);
-  }
+    // Progress (~10 tokens)
+    if (delivTotal > 0) {
+      lines.push(`Progress: ${delivCompleted}/${delivTotal} deliverables complete`);
+    }
 
-  return lines.join('\n');
+    return lines.join('\n');
+  } catch (err) {
+    console.error('[PCC] getProjectContinuityCompact failed:', err);
+    return null;
+  }
 }
 
 export default continuity;

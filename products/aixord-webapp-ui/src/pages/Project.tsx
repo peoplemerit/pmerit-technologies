@@ -134,6 +134,9 @@ export function Project() {
   const [warningPhase, setWarningPhase] = useState<string | null>(null);
   const [overrideReason, setOverrideReason] = useState('');
 
+  // Brainstorm artifact save prompt (HANDOFF-PTX-01)
+  const [brainstormArtifactJustSaved, setBrainstormArtifactJustSaved] = useState(false);
+
   // Governance state from hook
   const {
     state,
@@ -577,10 +580,11 @@ export function Project() {
           messages: [...prev.messages, successMessage],
           updatedAt: new Date()
         } : prev);
-        // Clear any pending warnings
+        // Clear any pending warnings and artifact prompt
         setPendingWarnings(null);
         setWarningPhase(null);
         setOverrideReason('');
+        setBrainstormArtifactJustSaved(false);
       }
     } catch (err) {
       if (err instanceof APIError) {
@@ -972,6 +976,8 @@ export function Project() {
               kill_conditions: artifactData.kill_conditions || [],
               generated_by: 'ai',
             }, token);
+            // HANDOFF-PTX-01: Show inline finalize prompt after artifact save
+            setBrainstormArtifactJustSaved(true);
           } catch {
             // Artifact parsing failed — non-blocking, user can retry
             console.warn('Failed to parse brainstorm artifact from AI response');
@@ -1051,6 +1057,10 @@ export function Project() {
       evaluateGatesAfterAction();
       // Delayed re-eval to catch backend waitUntil() async gate updates
       setTimeout(() => evaluateGatesAfterAction(), 2500);
+      // HANDOFF-PTX-01: Always refresh state after message send to update governance ribbon
+      // This ensures gate satisfaction is reflected even when evaluateGatesAfterAction
+      // doesn't detect changes (e.g., gates already satisfied but ribbon stale)
+      setTimeout(() => fetchState(), 1500);
 
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -1211,6 +1221,7 @@ export function Project() {
             onOpenWorkspaceSetup={() => setShowWorkspaceWizard(true)}
             onFinalizePhase={handleFinalizePhase}
             isFinalizing={isFinalizing}
+            finalizeReady={brainstormArtifactJustSaved}
           />
         )}
         {activeTab === 'security' && id && token && (
@@ -1510,6 +1521,35 @@ export function Project() {
           </div>
         )}
       </div>
+
+      {/* HANDOFF-PTX-01: Inline Finalize Prompt after brainstorm artifact save */}
+      {brainstormArtifactJustSaved && (state?.session.phase === 'BRAINSTORM' || state?.session.phase === 'B') && (
+        <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-3 mx-4 mb-2 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-blue-300">Brainstorm artifact captured</p>
+            <p className="text-xs text-blue-400/70">When you're satisfied with the brainstorm, finalize to advance to Planning.</p>
+          </div>
+          <button
+            onClick={() => {
+              handleFinalizePhase(state?.session.phase === 'B' ? 'BRAINSTORM' : state?.session.phase || 'BRAINSTORM');
+              setBrainstormArtifactJustSaved(false);
+            }}
+            disabled={isFinalizing}
+            className="shrink-0 bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-500 transition-colors disabled:opacity-50"
+          >
+            {isFinalizing ? 'Finalizing...' : 'Finalize Brainstorm →'}
+          </button>
+          <button
+            onClick={() => setBrainstormArtifactJustSaved(false)}
+            className="shrink-0 text-blue-400/50 hover:text-blue-300 transition-colors"
+            title="Dismiss"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Status Bar with Input */}
       <StatusBar

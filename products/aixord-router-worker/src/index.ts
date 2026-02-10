@@ -432,6 +432,55 @@ app.post('/v1/router/execute', async (c) => {
         console.error('Tier 4 PCC error (non-fatal):', err);
       }
 
+      // ═══════════════════════════════════════════════════════════════
+      // Tier 5: Brainstorm Artifact Status (HANDOFF-PTX-01)
+      // Tells the AI whether a brainstorm artifact has been saved,
+      // preventing it from restarting brainstorming after Director approval.
+      // ═══════════════════════════════════════════════════════════════
+      try {
+        const artifactRow = await c.env.DB.prepare(
+          'SELECT COUNT(*) as count FROM brainstorm_artifacts WHERE project_id = ?'
+        ).bind(projectId).first<{ count: number }>();
+        ctx.brainstorm_artifact_saved = (artifactRow?.count || 0) > 0;
+      } catch {
+        ctx.brainstorm_artifact_saved = false;
+      }
+
+      // ═══════════════════════════════════════════════════════════════
+      // Tier 6: Unsatisfied Gate Labels (HANDOFF-PTX-01)
+      // Provides human-readable gate labels to the AI so it can guide
+      // the Director on what's needed for phase advancement.
+      // ═══════════════════════════════════════════════════════════════
+      try {
+        const gateRow = await c.env.DB.prepare(
+          'SELECT phase, gates FROM project_state WHERE project_id = ?'
+        ).bind(projectId).first<{ phase: string; gates: string }>();
+        if (gateRow) {
+          const phase = (gateRow.phase || 'BRAINSTORM').toUpperCase();
+          const gateMap: Record<string, boolean> = JSON.parse(gateRow.gates || '{}');
+          const GATE_LABELS: Record<string, string> = {
+            'GA:LIC': 'License acknowledgment',
+            'GA:DIS': 'Disclaimer acceptance',
+            'GA:TIR': 'Subscription tier active',
+            'GA:ENV': 'Workspace bound',
+            'GA:FLD': 'Project folder selected',
+            'GA:BP':  'Blueprint with scopes + deliverables',
+            'GA:IVL': 'Blueprint integrity validation passed',
+          };
+          const PHASE_GATES: Record<string, string[]> = {
+            BRAINSTORM: ['GA:LIC', 'GA:DIS', 'GA:TIR'],
+            PLAN: ['GA:LIC', 'GA:DIS', 'GA:TIR', 'GA:ENV'],
+            EXECUTE: ['GA:LIC', 'GA:DIS', 'GA:TIR', 'GA:ENV', 'GA:BP', 'GA:IVL'],
+            REVIEW: ['GA:LIC', 'GA:DIS', 'GA:TIR', 'GA:ENV', 'GA:BP', 'GA:IVL'],
+          };
+          const required = PHASE_GATES[phase] || [];
+          const unsatisfied = required.filter(g => !gateMap[g]).map(g => GATE_LABELS[g] || g);
+          ctx.unsatisfied_gates = unsatisfied.length > 0 ? unsatisfied : null;
+        }
+      } catch {
+        ctx.unsatisfied_gates = null;
+      }
+
       request._context_awareness = ctx;
     }
 

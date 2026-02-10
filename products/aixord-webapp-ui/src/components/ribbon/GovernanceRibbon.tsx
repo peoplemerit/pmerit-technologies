@@ -16,6 +16,8 @@ interface GovernanceRibbonProps {
   onOpenWorkspaceSetup?: () => void;
   onFinalizePhase?: (phase: string) => void;
   isFinalizing?: boolean;
+  /** HANDOFF-PTX-01: Pulse the finalize button when artifact is ready */
+  finalizeReady?: boolean;
 }
 
 const phases = [
@@ -80,6 +82,7 @@ export function GovernanceRibbon({
   onOpenWorkspaceSetup,
   onFinalizePhase,
   isFinalizing = false,
+  finalizeReady = false,
 }: GovernanceRibbonProps) {
   const currentPhaseIndex = phases.findIndex(
     (p) => p.id === currentPhase || p.short === currentPhase
@@ -209,7 +212,9 @@ export function GovernanceRibbon({
                   ? `Finalize ${currentPhase} phase and advance to ${nextLabel}`
                   : `Cannot finalize: missing ${missing.join(', ')}`}
                 className={`w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
-                  canFinalize
+                  canFinalize && finalizeReady
+                    ? 'bg-violet-600 hover:bg-violet-500 text-white ring-2 ring-violet-400/50 animate-pulse'
+                    : canFinalize
                     ? 'bg-violet-600 hover:bg-violet-500 text-white'
                     : 'bg-gray-700/30 text-gray-600 cursor-not-allowed'
                 }`}

@@ -450,6 +450,34 @@ RULES: Reference the objective. Stay in phase scope. Be specific to THIS project
       // Continuity conflict detection rule
       systemPrompt += `\n\nCONTINUITY RULE: If the current conversation contradicts a prior decision listed above, you MUST raise a Continuity Conflict using this format:\n=== CONTINUITY CONFLICT ===\nConflicting decision: [decision ID or summary]\nCurrent request: [what was asked]\nResolution needed: [what Director should decide]\n===`;
     }
+
+    // Tier 5: Brainstorm Artifact Status + Approval Detection (HANDOFF-PTX-01)
+    if (phaseName === 'BRAINSTORM') {
+      if (ctx.brainstorm_artifact_saved) {
+        systemPrompt += `\n\n=== BRAINSTORM STATUS ===
+A brainstorm artifact has been captured and saved for this project. The brainstorming work is recorded.
+Do NOT restart brainstorming or ask new clarifying questions about scope.
+
+APPROVAL DETECTION: If the Director says "Approved", "APPROVED", "looks good", "yes proceed",
+"let's move on", "I'm happy with this", "this is good", or similar approval language:
+1. Do NOT restart brainstorming or ask new clarifying questions.
+2. Acknowledge the approval warmly.
+3. Present a brief Review Packet summarizing what was brainstormed (2-4 sentences).
+4. Say: "To advance to the PLAN phase, click **Finalize Brainstorm** in the Governance panel."
+5. If gates are not yet satisfied, mention: "Some setup steps may need to be completed first — check the Governance panel for any remaining requirements."`;
+      } else {
+        systemPrompt += `\n\n=== BRAINSTORM STATUS ===
+No brainstorm artifact has been saved yet. Continue exploring ideas with the Director.
+When the Director signals readiness (e.g., "I like option 2", "let's go with this"), generate a structured brainstorm artifact using the === BRAINSTORM ARTIFACT === markers.`;
+      }
+    }
+
+    // Tier 6: Unsatisfied Gate Guidance (HANDOFF-PTX-01)
+    if (ctx.unsatisfied_gates && ctx.unsatisfied_gates.length > 0) {
+      systemPrompt += `\n\nNote: Phase advancement requires certain setup steps to be completed.
+Currently unsatisfied: ${ctx.unsatisfied_gates.join(', ')}.
+The Director can satisfy these through the Governance panel in the sidebar.`;
+    }
   }
 
   // AI-Governance Integration — Phase 3: Phase advance via Review Packet

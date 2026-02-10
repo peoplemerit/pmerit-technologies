@@ -307,6 +307,10 @@ export interface ContextAwareness {
   // Tier 4: Project Continuity Capsule (HANDOFF-PCC-01)
   // Compact string representation of project-level awareness (≤500 tokens)
   continuity?: string;
+  // Tier 5: Brainstorm artifact status (HANDOFF-PTX-01)
+  brainstorm_artifact_saved?: boolean;
+  // Tier 6: Unsatisfied gate labels for current phase (HANDOFF-PTX-01)
+  unsatisfied_gates?: string[] | null;
 }
 
 export interface RouterRequest {
