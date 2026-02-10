@@ -300,61 +300,73 @@ app.post('/v1/router/execute', async (c) => {
       }
 
       // Tier 1C: Data classification visibility (re-use classification query result)
-      const dcRow = await c.env.DB.prepare(
-        'SELECT pii, phi, minor_data, financial, legal, ai_exposure FROM data_classification WHERE project_id = ?'
-      ).bind(projectId).first<{
-        pii: string; phi: string; minor_data: string;
-        financial: string; legal: string; ai_exposure: string;
-      }>();
-      if (dcRow) {
-        ctx.data_sensitivity = {
-          pii: dcRow.pii === 'YES',
-          phi: dcRow.phi === 'YES',
-          minor_data: dcRow.minor_data === 'YES',
-          financial: dcRow.financial === 'YES',
-          legal: dcRow.legal === 'YES',
-          exposure: dcRow.ai_exposure || 'INTERNAL',
-        };
+      try {
+        const dcRow = await c.env.DB.prepare(
+          'SELECT pii, phi, minor_data, financial, legal, ai_exposure FROM data_classification WHERE project_id = ?'
+        ).bind(projectId).first<{
+          pii: string; phi: string; minor_data: string;
+          financial: string; legal: string; ai_exposure: string;
+        }>();
+        if (dcRow) {
+          ctx.data_sensitivity = {
+            pii: dcRow.pii === 'YES',
+            phi: dcRow.phi === 'YES',
+            minor_data: dcRow.minor_data === 'YES',
+            financial: dcRow.financial === 'YES',
+            legal: dcRow.legal === 'YES',
+            exposure: dcRow.ai_exposure || 'INTERNAL',
+          };
+        }
+      } catch (err) {
+        console.error('Tier 1C data classification query failed (non-fatal):', err);
       }
 
       // Tier 2D: Evidence context (EXECUTE/REVIEW phases only — keeps prompt lean)
       const phase = (request.capsule?.phase || '').toUpperCase();
       if (phase === 'E' || phase === 'R' || phase === 'EXECUTE' || phase === 'REVIEW') {
-        const evRow = await c.env.DB.prepare(
-          `SELECT COUNT(*) as total, SUM(CASE WHEN evidence_type = 'COMMIT' AND status = 'VERIFIED' THEN 1 ELSE 0 END) as commits_verified, SUM(CASE WHEN evidence_type = 'PR' AND status = 'VERIFIED' THEN 1 ELSE 0 END) as prs_merged, MAX(updated_at) as last_sync FROM external_evidence_log WHERE project_id = ?`
-        ).bind(projectId).first<{
-          total: number; commits_verified: number; prs_merged: number; last_sync: string | null;
-        }>();
+        try {
+          const evRow = await c.env.DB.prepare(
+            `SELECT COUNT(*) as total, SUM(CASE WHEN evidence_type = 'COMMIT' AND status = 'VERIFIED' THEN 1 ELSE 0 END) as commits_verified, SUM(CASE WHEN evidence_type = 'PR' AND status = 'VERIFIED' THEN 1 ELSE 0 END) as prs_merged, MAX(updated_at) as last_sync FROM external_evidence_log WHERE project_id = ?`
+          ).bind(projectId).first<{
+            total: number; commits_verified: number; prs_merged: number; last_sync: string | null;
+          }>();
 
-        // CI status: check latest CI_STATUS evidence
-        const ciRow = await c.env.DB.prepare(
-          `SELECT title FROM external_evidence_log WHERE project_id = ? AND evidence_type = 'CI_STATUS' ORDER BY updated_at DESC LIMIT 1`
-        ).bind(projectId).first<{ title: string }>();
+          // CI status: check latest CI_STATUS evidence
+          const ciRow = await c.env.DB.prepare(
+            `SELECT title FROM external_evidence_log WHERE project_id = ? AND evidence_type = 'CI_STATUS' ORDER BY updated_at DESC LIMIT 1`
+          ).bind(projectId).first<{ title: string }>();
 
-        if (evRow && evRow.total > 0) {
-          ctx.evidence_summary = {
-            commits_verified: evRow.commits_verified || 0,
-            prs_merged: evRow.prs_merged || 0,
-            ci_passing: ciRow ? ciRow.title.toLowerCase().includes('pass') || ciRow.title.toLowerCase().includes('success') : null,
-            total_evidence: evRow.total || 0,
-            last_sync: evRow.last_sync,
-          };
+          if (evRow && evRow.total > 0) {
+            ctx.evidence_summary = {
+              commits_verified: evRow.commits_verified || 0,
+              prs_merged: evRow.prs_merged || 0,
+              ci_passing: ciRow ? ciRow.title.toLowerCase().includes('pass') || ciRow.title.toLowerCase().includes('success') : null,
+              total_evidence: evRow.total || 0,
+              last_sync: evRow.last_sync,
+            };
+          }
+        } catch (err) {
+          console.error('Tier 2D evidence query failed (non-fatal):', err);
         }
       }
 
       // Tier 2F: CCS incident awareness (safety-critical)
-      const ccsRow = await c.env.DB.prepare(
-        `SELECT id, phase, credential_name, credential_type FROM ccs_incidents WHERE project_id = ? AND status = 'ACTIVE' ORDER BY created_at DESC LIMIT 1`
-      ).bind(projectId).first<{
-        id: string; phase: string; credential_name: string; credential_type: string;
-      }>();
-      if (ccsRow) {
-        ctx.incident = {
-          active: true,
-          type: 'CREDENTIAL_COMPROMISE',
-          phase: ccsRow.phase,
-          restricted_items: [ccsRow.credential_name],
-        };
+      try {
+        const ccsRow = await c.env.DB.prepare(
+          `SELECT id, phase, credential_name, credential_type FROM ccs_incidents WHERE project_id = ? AND status = 'ACTIVE' ORDER BY created_at DESC LIMIT 1`
+        ).bind(projectId).first<{
+          id: string; phase: string; credential_name: string; credential_type: string;
+        }>();
+        if (ccsRow) {
+          ctx.incident = {
+            active: true,
+            type: 'CREDENTIAL_COMPROMISE',
+            phase: ccsRow.phase,
+            restricted_items: [ccsRow.credential_name],
+          };
+        }
+      } catch (err) {
+        console.error('Tier 2F CCS query failed (non-fatal):', err);
       }
 
       // ═══════════════════════════════════════════════════════════════
@@ -364,57 +376,61 @@ app.post('/v1/router/execute', async (c) => {
       // ═══════════════════════════════════════════════════════════════
       const sessionId = request.trace?.session_id;
       if (sessionId && (phase === 'E' || phase === 'EXECUTE')) {
-        // Fetch active assignments for this session with deliverable + scope info
-        const assignmentRows = await c.env.DB.prepare(
-          `SELECT ta.id, ta.deliverable_id, ta.priority, ta.status, ta.progress_percent,
-                  bd.title as deliverable_title, bd.definition_of_done,
-                  bs.name as scope_name
-           FROM task_assignments ta
-           JOIN blueprint_deliverables bd ON bd.id = ta.deliverable_id
-           JOIN blueprint_scopes bs ON bs.id = bd.scope_id
-           WHERE ta.session_id = ? AND ta.status IN ('ASSIGNED', 'IN_PROGRESS', 'BLOCKED')
-           ORDER BY CASE ta.priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 END, ta.sort_order`
-        ).bind(sessionId).all<{
-          id: string; deliverable_id: string; priority: string; status: string;
-          progress_percent: number; deliverable_title: string; definition_of_done: string;
-          scope_name: string;
-        }>();
+        try {
+          // Fetch active assignments for this session with deliverable + scope info
+          const assignmentRows = await c.env.DB.prepare(
+            `SELECT ta.id, ta.deliverable_id, ta.priority, ta.status, ta.progress_percent,
+                    bd.title as deliverable_title, bd.definition_of_done,
+                    bs.name as scope_name
+             FROM task_assignments ta
+             JOIN blueprint_deliverables bd ON bd.id = ta.deliverable_id
+             JOIN blueprint_scopes bs ON bs.id = bd.scope_id
+             WHERE ta.session_id = ? AND ta.status IN ('ASSIGNED', 'IN_PROGRESS', 'BLOCKED')
+             ORDER BY CASE ta.priority WHEN 'P0' THEN 0 WHEN 'P1' THEN 1 WHEN 'P2' THEN 2 END, ta.sort_order`
+          ).bind(sessionId).all<{
+            id: string; deliverable_id: string; priority: string; status: string;
+            progress_percent: number; deliverable_title: string; definition_of_done: string;
+            scope_name: string;
+          }>();
 
-        // Count open escalations for this session's assignments
-        const escRow = await c.env.DB.prepare(
-          `SELECT COUNT(*) as cnt FROM escalation_log el
-           JOIN task_assignments ta ON ta.id = el.assignment_id
-           WHERE ta.session_id = ? AND el.status = 'OPEN'`
-        ).bind(sessionId).first<{ cnt: number }>();
+          // Count open escalations for this session's assignments
+          const escRow = await c.env.DB.prepare(
+            `SELECT COUNT(*) as cnt FROM escalation_log el
+             JOIN task_assignments ta ON ta.id = el.assignment_id
+             WHERE ta.session_id = ? AND el.status = 'OPEN'`
+          ).bind(sessionId).first<{ cnt: number }>();
 
-        // Get last standup and message count for cadence check
-        const standupRow = await c.env.DB.prepare(
-          `SELECT MAX(message_number) as last_msg, MAX(created_at) as last_at
-           FROM standup_reports WHERE session_id = ?`
-        ).bind(sessionId).first<{ last_msg: number | null; last_at: string | null }>();
+          // Get last standup and message count for cadence check
+          const standupRow = await c.env.DB.prepare(
+            `SELECT MAX(message_number) as last_msg, MAX(created_at) as last_at
+             FROM standup_reports WHERE session_id = ?`
+          ).bind(sessionId).first<{ last_msg: number | null; last_at: string | null }>();
 
-        // Current message number from session graph
-        const currentMsgCount = request.capsule.session_graph?.current?.messageCount || 0;
-        const lastStandupMsg = standupRow?.last_msg || 0;
-        const messagesSinceStandup = currentMsgCount - lastStandupMsg;
+          // Current message number from session graph
+          const currentMsgCount = request.capsule.session_graph?.current?.messageCount || 0;
+          const lastStandupMsg = standupRow?.last_msg || 0;
+          const messagesSinceStandup = currentMsgCount - lastStandupMsg;
 
-        if (assignmentRows.results && assignmentRows.results.length > 0) {
-          ctx.task_delegation = {
-            assignments: assignmentRows.results.map(r => ({
-              id: r.id,
-              deliverable_id: r.deliverable_id,
-              deliverable_title: r.deliverable_title || 'Untitled',
-              scope_name: r.scope_name || 'Unknown Scope',
-              priority: r.priority,
-              status: r.status,
-              progress_percent: r.progress_percent || 0,
-              definition_of_done: r.definition_of_done || '(not defined)',
-            })),
-            open_escalations: escRow?.cnt || 0,
-            standup_due: messagesSinceStandup >= 5,
-            message_count: messagesSinceStandup,
-            last_standup_at: standupRow?.last_at || null,
-          };
+          if (assignmentRows.results && assignmentRows.results.length > 0) {
+            ctx.task_delegation = {
+              assignments: assignmentRows.results.map(r => ({
+                id: r.id,
+                deliverable_id: r.deliverable_id,
+                deliverable_title: r.deliverable_title || 'Untitled',
+                scope_name: r.scope_name || 'Unknown Scope',
+                priority: r.priority,
+                status: r.status,
+                progress_percent: r.progress_percent || 0,
+                definition_of_done: r.definition_of_done || '(not defined)',
+              })),
+              open_escalations: escRow?.cnt || 0,
+              standup_due: messagesSinceStandup >= 5,
+              message_count: messagesSinceStandup,
+              last_standup_at: standupRow?.last_at || null,
+            };
+          }
+        } catch (err) {
+          console.error('Tier 3 TDL query failed (non-fatal):', err);
         }
       }
 
@@ -438,11 +454,24 @@ app.post('/v1/router/execute', async (c) => {
       // preventing it from restarting brainstorming after Director approval.
       // ═══════════════════════════════════════════════════════════════
       try {
-        const artifactRow = await c.env.DB.prepare(
+        let artifactRow = await c.env.DB.prepare(
           `SELECT COUNT(*) as count,
                   (SELECT status FROM brainstorm_artifacts WHERE project_id = ? ORDER BY version DESC LIMIT 1) as latest_status
            FROM brainstorm_artifacts WHERE project_id = ?`
         ).bind(projectId, projectId).first<{ count: number; latest_status: string | null }>();
+
+        // DPF-01 Task 2: Retry once if no artifact found but conversation is substantial
+        // Addresses D1 write propagation timing on immediate post-save messages
+        const messageCount = request.capsule.session_graph?.current?.messageCount || 0;
+        if ((!artifactRow || (artifactRow.count || 0) === 0) && messageCount > 5) {
+          await new Promise(r => setTimeout(r, 200));
+          artifactRow = await c.env.DB.prepare(
+            `SELECT COUNT(*) as count,
+                    (SELECT status FROM brainstorm_artifacts WHERE project_id = ? ORDER BY version DESC LIMIT 1) as latest_status
+             FROM brainstorm_artifacts WHERE project_id = ?`
+          ).bind(projectId, projectId).first<{ count: number; latest_status: string | null }>();
+        }
+
         ctx.brainstorm_artifact_saved = (artifactRow?.count || 0) > 0;
         ctx.brainstorm_artifact_state = artifactRow?.latest_status || null;
       } catch {
