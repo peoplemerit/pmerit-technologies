@@ -20,7 +20,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserSettings } from '../contexts/UserSettingsContext';
 import { useProjectState } from '../hooks/useApi';
-import { api, APIError, phaseToShort, type Project as ProjectType, type Decision, type CCSGateStatus, type SessionType, type EdgeType } from '../lib/api';
+import { api, APIError, phaseToShort, brainstormApi, type Project as ProjectType, type Decision, type CCSGateStatus, type SessionType, type EdgeType } from '../lib/api';
 import { useAIXORDSDK, GateBlockedError, AIExposureBlockedError, GovernanceBlockError } from '../lib/sdk';
 import { useSessions } from '../hooks/useSessions';
 import { MessageBubble } from '../components/chat/MessageBubble';
@@ -882,6 +882,28 @@ export function Project() {
       // Update session metrics
       setSessionCost(prev => prev + sdkResponse.usage.costUsd);
       setSessionTokens(prev => prev + sdkResponse.usage.inputTokens + sdkResponse.usage.outputTokens);
+
+      // HANDOFF-VD-CI-01 A1: Extract brainstorm artifact from AI response
+      if (state?.session.phase === 'BRAINSTORM' || state?.session.phase === 'B') {
+        const artifactMatch = assistantContent.match(
+          /=== BRAINSTORM ARTIFACT ===\s*([\s\S]*?)\s*=== END BRAINSTORM ARTIFACT ===/
+        );
+        if (artifactMatch) {
+          try {
+            const artifactData = JSON.parse(artifactMatch[1]);
+            await brainstormApi.createArtifact(id, {
+              options: artifactData.options || [],
+              assumptions: artifactData.assumptions || [],
+              decision_criteria: artifactData.decision_criteria || { criteria: [] },
+              kill_conditions: artifactData.kill_conditions || [],
+              generated_by: 'ai',
+            }, token);
+          } catch {
+            // Artifact parsing failed — non-blocking, user can retry
+            console.warn('Failed to parse brainstorm artifact from AI response');
+          }
+        }
+      }
 
       // Phase 2: Auto-evaluate gates after message exchange (GA:DIS, GA:LIC, GA:TIR may flip)
       // Immediate eval for any synchronous gate changes

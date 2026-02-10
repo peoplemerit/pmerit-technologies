@@ -762,6 +762,110 @@ export const stateApi = {
 };
 
 // ============================================================================
+// Brainstorm Artifact API (HANDOFF-VD-CI-01)
+// ============================================================================
+
+export interface BrainstormOption {
+  id: string;
+  title: string;
+  description: string;
+  assumptions: string[];
+  kill_conditions: string[];
+  pros?: string[];
+  cons?: string[];
+}
+
+export interface BrainstormDecisionCriteria {
+  criteria: Array<{ name: string; weight: number; description?: string }>;
+}
+
+export interface BrainstormArtifactData {
+  id: string;
+  project_id: string;
+  version: number;
+  options: BrainstormOption[];
+  assumptions: string[];
+  decision_criteria: BrainstormDecisionCriteria;
+  kill_conditions: string[];
+  recommendation: string;
+  generated_by: 'ai' | 'manual';
+  status: 'DRAFT' | 'FINALIZED' | 'SUPERSEDED';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BrainstormValidationCheck {
+  check: string;
+  level: 'BLOCK' | 'WARN';
+  passed: boolean;
+  detail: string;
+}
+
+export interface BrainstormValidationResult {
+  valid: boolean;
+  checks: BrainstormValidationCheck[];
+  block_count: number;
+  warn_count: number;
+  summary: string;
+  artifact_id: string | null;
+  artifact_version?: number;
+  artifact_status?: string;
+}
+
+export const brainstormApi = {
+  async createArtifact(
+    projectId: string,
+    data: {
+      options: BrainstormOption[];
+      assumptions?: string[];
+      decision_criteria?: BrainstormDecisionCriteria;
+      kill_conditions?: string[];
+      recommendation?: string;
+      generated_by?: 'ai' | 'manual';
+    },
+    token: string
+  ): Promise<{ id: string; project_id: string; version: number; status: string; created_at: string }> {
+    return request<{ id: string; project_id: string; version: number; status: string; created_at: string }>(
+      `/projects/${projectId}/brainstorm/artifacts`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
+
+  async getArtifact(
+    projectId: string,
+    token: string,
+    params?: { version?: number; status?: string }
+  ): Promise<BrainstormArtifactData> {
+    const query = new URLSearchParams();
+    if (params?.version) query.set('version', String(params.version));
+    if (params?.status) query.set('status', params.status);
+    const qs = query.toString();
+    return request<BrainstormArtifactData>(
+      `/projects/${projectId}/brainstorm/artifacts${qs ? '?' + qs : ''}`,
+      {},
+      token
+    );
+  },
+
+  async validate(projectId: string, token: string): Promise<BrainstormValidationResult> {
+    return request<BrainstormValidationResult>(
+      `/projects/${projectId}/brainstorm/validate`,
+      { method: 'POST' },
+      token
+    );
+  },
+
+  async getValidation(projectId: string, token: string): Promise<BrainstormValidationResult> {
+    return request<BrainstormValidationResult>(
+      `/projects/${projectId}/brainstorm/validation`,
+      {},
+      token
+    );
+  },
+};
+
+// ============================================================================
 // Decisions API
 // ============================================================================
 

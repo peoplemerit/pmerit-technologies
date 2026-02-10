@@ -89,14 +89,15 @@ const PHASE_PAYLOADS: Record<string, PhasePayload> = {
       'Suggest approaches, trade-offs, and considerations',
       'Help define project scope and constraints',
       'Identify risks and open questions',
+      'Generate a structured brainstorm artifact when the user is ready',
     ],
     forbidden: [
       'Write implementation code or production artifacts',
       'Make architectural decisions without user input',
       'Skip to planning or execution tasks',
     ],
-    exit_artifact: 'A clear objective with defined scope, constraints, and key decisions.',
-    review_prompt: 'Are the objective, scope, and constraints well-defined enough to start planning?',
+    exit_artifact: 'A structured brainstorm artifact with 2-5 options, each with assumptions and kill conditions, plus decision criteria. Output it inside === BRAINSTORM ARTIFACT === markers as JSON.',
+    review_prompt: 'Are the options distinct? Does each have assumptions and kill conditions? Are decision criteria defined?',
   },
   PLAN: {
     role: 'Structure the implementation approach based on brainstorm outcomes.',
@@ -197,6 +198,40 @@ Allowed: ${payload.allowed.join(' · ')}
 Forbidden: ${payload.forbidden.join(' · ')}
 Exit artifact: ${payload.exit_artifact}
 Review question: ${payload.review_prompt}`;
+  }
+
+  // Brainstorm artifact output format (only in BRAINSTORM phase)
+  if (phaseName === 'BRAINSTORM') {
+    systemPrompt += `
+
+=== BRAINSTORM ARTIFACT FORMAT ===
+When the user asks you to generate the brainstorm artifact (or when enough discussion has happened to propose options), output a structured artifact wrapped in markers. The frontend will parse this automatically.
+
+Format:
+=== BRAINSTORM ARTIFACT ===
+{
+  "options": [
+    {
+      "id": "opt-1",
+      "title": "Option Name",
+      "description": "What this option entails",
+      "assumptions": ["assumption 1", "assumption 2"],
+      "kill_conditions": ["condition that would eliminate this option"],
+      "pros": ["advantage 1"],
+      "cons": ["disadvantage 1"]
+    }
+  ],
+  "assumptions": ["global assumption that applies to all options"],
+  "decision_criteria": {
+    "criteria": [
+      { "name": "Criterion Name", "weight": 3, "description": "What this measures" }
+    ]
+  },
+  "kill_conditions": ["global kill condition"]
+}
+=== END BRAINSTORM ARTIFACT ===
+
+Rules: 2-5 options required. Each option needs assumptions and kill conditions. Include decision criteria with weights (1-5). You may also include pros/cons per option.`;
   }
 
   // Response guidelines (compact)

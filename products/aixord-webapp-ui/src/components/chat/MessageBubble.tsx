@@ -44,8 +44,15 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
   // AI-Governance Integration — Phase 3: Detect phase advance tag
   const phaseAdvanceMatch = !isUser ? message.content.match(/\[PHASE_ADVANCE:(\w+)\]/) : null;
   const suggestedPhase = phaseAdvanceMatch ? phaseAdvanceMatch[1] : null;
+
+  // HANDOFF-VD-CI-01 A1: Detect brainstorm artifact block
+  const hasBrainstormArtifact = !isUser && /=== BRAINSTORM ARTIFACT ===/.test(message.content);
+
   const displayContent = !isUser
-    ? message.content.replace(/\[PHASE_ADVANCE:\w+\]/g, '').trim()
+    ? message.content
+        .replace(/\[PHASE_ADVANCE:\w+\]/g, '')
+        .replace(/=== BRAINSTORM ARTIFACT ===[\s\S]*?=== END BRAINSTORM ARTIFACT ===/g, '')
+        .trim()
     : message.content;
 
   // Phase 4: Governance Block Card — distinct from AI messages
@@ -148,6 +155,23 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
                 Advance to {suggestedPhase}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* HANDOFF-VD-CI-01 A1: Brainstorm artifact saved indicator */}
+        {hasBrainstormArtifact && (
+          <div className="mt-3 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="text-emerald-400 text-sm font-medium">
+                Brainstorm artifact saved
+              </span>
+            </div>
+            <p className="text-gray-400 text-xs mt-1">
+              Structured options, assumptions, and decision criteria captured for validation.
+            </p>
           </div>
         )}
 

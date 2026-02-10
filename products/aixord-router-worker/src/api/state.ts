@@ -14,6 +14,8 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
 import { evaluateAllGates } from '../services/gateRules';
+import { validateBrainstormArtifact } from './brainstorm';
+import type { BrainstormOption, BrainstormDecisionCriteria } from '../types';
 
 const state = new Hono<{ Bindings: Env }>();
 
@@ -531,7 +533,7 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
   const artifactChecks: Array<{ check: string; passed: boolean; detail: string }> = [];
 
   if (currentPhase === 'BRAINSTORM') {
-    // Must have a defined objective
+    // B0: Must have a defined objective
     const project = await c.env.DB.prepare(
       'SELECT objective FROM projects WHERE id = ?'
     ).bind(projectId).first<{ objective: string }>();
@@ -541,6 +543,44 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
       passed: hasObjective,
       detail: hasObjective ? 'Project objective is defined' : 'Project objective is missing or too short (min 10 chars)',
     });
+
+    // B1-B5: Structured brainstorm artifact validation (HANDOFF-VD-CI-01 A2)
+    const artifactRow = await c.env.DB.prepare(
+      'SELECT * FROM brainstorm_artifacts WHERE project_id = ? ORDER BY version DESC LIMIT 1'
+    ).bind(projectId).first<Record<string, unknown>>();
+
+    if (!artifactRow) {
+      artifactChecks.push({
+        check: 'brainstorm_artifact_exists',
+        passed: false,
+        detail: 'No brainstorm artifact found — AI must generate a structured artifact with options, assumptions, and kill conditions',
+      });
+    } else {
+      artifactChecks.push({
+        check: 'brainstorm_artifact_exists',
+        passed: true,
+        detail: `Brainstorm artifact v${artifactRow.version} (${artifactRow.status})`,
+      });
+
+      // Run full validation engine
+      const options: BrainstormOption[] = JSON.parse(artifactRow.options as string || '[]');
+      const assumptions: string[] = JSON.parse(artifactRow.assumptions as string || '[]');
+      const decisionCriteria: BrainstormDecisionCriteria = JSON.parse(artifactRow.decision_criteria as string || '{}');
+      const killConditions: string[] = JSON.parse(artifactRow.kill_conditions as string || '[]');
+
+      const validation = validateBrainstormArtifact(options, assumptions, decisionCriteria, killConditions);
+
+      // Add only BLOCK checks to artifact checks (WARN checks don't prevent finalize)
+      for (const check of validation.checks) {
+        if (check.level === 'BLOCK') {
+          artifactChecks.push({
+            check: `brainstorm_${check.check}`,
+            passed: check.passed,
+            detail: check.detail,
+          });
+        }
+      }
+    }
   }
 
   if (currentPhase === 'PLAN') {

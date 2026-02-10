@@ -1240,3 +1240,60 @@ export interface DAGEdge {
   to: string;
   type: string;
 }
+
+// ============================================================================
+// Brainstorm Artifact Types (HANDOFF-VD-CI-01 — Task A1)
+// ============================================================================
+
+/** A single brainstorm option with its own assumptions and kill conditions */
+export interface BrainstormOption {
+  id: string;
+  title: string;
+  description: string;
+  assumptions: string[];
+  kill_conditions: string[];
+  pros?: string[];
+  cons?: string[];
+}
+
+/** Decision criteria for comparing brainstorm options */
+export interface BrainstormDecisionCriteria {
+  criteria: Array<{
+    name: string;
+    weight: number; // 1-5
+    description?: string;
+  }>;
+}
+
+/** Brainstorm artifact — structured output from BRAINSTORM phase */
+export interface BrainstormArtifact {
+  id: string;
+  project_id: string;
+  version: number;
+  options: BrainstormOption[];
+  assumptions: string[]; // Global assumptions (apply to all options)
+  decision_criteria: BrainstormDecisionCriteria;
+  kill_conditions: string[]; // Global kill conditions
+  recommendation: string; // 'NO_SELECTION' | option ID selected by Director
+  generated_by: 'ai' | 'manual';
+  status: 'DRAFT' | 'FINALIZED' | 'SUPERSEDED';
+  created_at: string;
+  updated_at: string;
+}
+
+/** Validation check result for a brainstorm artifact */
+export interface BrainstormValidationCheck {
+  check: string;
+  level: 'BLOCK' | 'WARN';
+  passed: boolean;
+  detail: string;
+}
+
+/** Full validation result for a brainstorm artifact */
+export interface BrainstormValidationResult {
+  valid: boolean; // true if all BLOCK checks pass
+  checks: BrainstormValidationCheck[];
+  block_count: number;
+  warn_count: number;
+  summary: string;
+}
