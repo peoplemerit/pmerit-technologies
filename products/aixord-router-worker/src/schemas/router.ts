@@ -173,7 +173,14 @@ export function validateRequest(body: unknown): RouterRequest {
       user_input: delta.user_input as string,
       selection_ids: Array.isArray(delta.selection_ids) ? delta.selection_ids : undefined,
       changed_constraints: Array.isArray(delta.changed_constraints) ? delta.changed_constraints : undefined,
-      artifact_refs: Array.isArray(delta.artifact_refs) ? delta.artifact_refs : undefined
+      artifact_refs: Array.isArray(delta.artifact_refs) ? delta.artifact_refs : undefined,
+      // FIX-N3: Accept conversation history for multi-turn context
+      conversation_history: Array.isArray(delta.conversation_history)
+        ? (delta.conversation_history as Array<{ role: string; content: string }>)
+            .filter(m => (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+            .slice(-20) // Hard cap: max 20 messages (10 turns) to prevent abuse
+            .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
+        : undefined,
     },
     budget: {
       max_cost_usd: typeof req.budget === 'object' && req.budget

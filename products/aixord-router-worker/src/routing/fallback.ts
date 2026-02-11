@@ -744,6 +744,20 @@ After presenting the Review Packet, include this tag at the END of your response
 
   messages.push({ role: 'system', content: systemPrompt });
 
+  // FIX-N3: Inject conversation history for multi-turn context
+  // Prior messages let the AI see what was discussed and what it previously responded.
+  // Without this, every message is a brand-new conversation with zero context.
+  if (request.delta.conversation_history && request.delta.conversation_history.length > 0) {
+    // Token budget management: truncate very long messages to keep within context window
+    const MAX_MSG_LENGTH = 2000; // ~500 tokens per message max
+    for (const histMsg of request.delta.conversation_history) {
+      const content = histMsg.content.length > MAX_MSG_LENGTH
+        ? histMsg.content.slice(0, MAX_MSG_LENGTH) + '\n... [truncated for context window]'
+        : histMsg.content;
+      messages.push({ role: histMsg.role, content });
+    }
+  }
+
   // User message with delta
   let userContent = request.delta.user_input;
 

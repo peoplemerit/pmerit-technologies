@@ -115,6 +115,15 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     }));
 
     try {
+      // FIX-N3: Build conversation history from prior messages
+      // Send recent messages so the AI has multi-turn context.
+      // Cap at 20 messages (10 turns) to stay within token budget.
+      const MAX_HISTORY_MESSAGES = 20;
+      const conversationHistory = (activeConversation.messages || [])
+        .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+        .slice(-MAX_HISTORY_MESSAGES)
+        .map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content }));
+
       // Build router request
       const routerRequest = {
         product: 'AIXORD_COPILOT',
@@ -133,7 +142,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
           open_questions: activeConversation.capsule?.openQuestions || []
         },
         delta: {
-          user_input: message
+          user_input: message,
+          conversation_history: conversationHistory.length > 0 ? conversationHistory : undefined,
         },
         budget: {
           max_output_tokens: 4096

@@ -204,6 +204,10 @@ export interface Delta {
   images?: ImageContent[];
   /** Execution layer context for layered execution mode (Path B) */
   execution_layer?: ExecutionLayerContext;
+  /** Conversation history — prior messages for multi-turn context (FIX-N3)
+   *  Frontend sends recent conversation history so AI can maintain context.
+   *  Capped at most recent N messages to stay within token budget. */
+  conversation_history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
 export interface Budget {
