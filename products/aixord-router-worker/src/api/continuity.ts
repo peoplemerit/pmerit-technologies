@@ -610,6 +610,21 @@ export async function getProjectContinuityCompact(
       delivCompleted = delivStats?.completed || 0;
     } catch { /* blueprint_deliverables may not exist */ }
 
+    // FIX-5: Brainstorm selected approach (~20 tokens)
+    // Gives downstream phases minimal awareness of the chosen brainstorm option
+    let selectedApproachName: string | null = null;
+    try {
+      const bsArtifact = await db.prepare(
+        `SELECT options, recommendation FROM brainstorm_artifacts
+         WHERE project_id = ? ORDER BY version DESC LIMIT 1`
+      ).bind(projectId).first<{ options: string; recommendation: string | null }>();
+      if (bsArtifact?.recommendation && bsArtifact.recommendation !== 'NO_SELECTION') {
+        const opts = JSON.parse(bsArtifact.options || '[]') as Array<{ id: string; title: string }>;
+        const selected = opts.find(o => o.id === bsArtifact.recommendation);
+        selectedApproachName = selected?.title || bsArtifact.recommendation;
+      }
+    } catch { /* brainstorm_artifacts may not exist */ }
+
     // Build compact string
     const lines: string[] = [];
 
@@ -618,6 +633,11 @@ export async function getProjectContinuityCompact(
     const objTruncated = objText.length > 120 ? objText.slice(0, 120) + '...' : objText;
     lines.push(`Objective: ${objTruncated}`);
     lines.push(`Phase: ${currentPhase}`);
+
+    // Selected brainstorm approach (~10 tokens)
+    if (selectedApproachName) {
+      lines.push(`Approach: ${selectedApproachName}`);
+    }
 
     // Session timeline (~50 tokens)
     if (sessionList.length > 0) {

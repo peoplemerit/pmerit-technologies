@@ -596,6 +596,62 @@ When the Director signals readiness (e.g., "I like option 2", "let's go with thi
       }
     }
 
+    // Tier 5C: Brainstorm Artifact Content for PLAN/EXECUTE/REVIEW (FIX-1)
+    // Injects the actual brainstorm data so AI can produce project-specific output
+    if (phaseName !== 'BRAINSTORM' && ctx.brainstorm_artifact_content) {
+      const ac = ctx.brainstorm_artifact_content;
+      const optionLines = ac.options.map((o, i) => {
+        const desc = o.description ? `: ${o.description}` : '';
+        const outcome = o.expected_outcome ? ` → Expected: ${o.expected_outcome}` : '';
+        return `  ${i + 1}. ${o.title || o.id}${desc}${outcome}`;
+      }).join('\n');
+
+      const assumptionLines = Array.isArray(ac.assumptions) && ac.assumptions.length > 0
+        ? ac.assumptions.map(a => {
+            const text = typeof a === 'string' ? a : (a.text || JSON.stringify(a));
+            const tag = typeof a === 'object' && a.tag ? ` [${a.tag}]` : '';
+            return `  - ${text}${tag}`;
+          }).join('\n')
+        : '  (none recorded)';
+
+      const killLines = Array.isArray(ac.kill_conditions) && ac.kill_conditions.length > 0
+        ? ac.kill_conditions.map(k => {
+            const text = typeof k === 'string' ? k : (k.text || k.threshold || JSON.stringify(k));
+            return `  - ${text}`;
+          }).join('\n')
+        : '  (none recorded)';
+
+      const selectedOption = ac.recommendation && ac.recommendation !== 'NO_SELECTION'
+        ? `Selected approach: ${ac.recommendation}`
+        : 'No approach selected yet';
+
+      systemPrompt += `\n\n=== BRAINSTORM ARTIFACT (Reference) ===
+${selectedOption}
+
+Options explored:
+${optionLines}
+
+Assumptions:
+${assumptionLines}
+
+Kill conditions:
+${killLines}
+
+Use this artifact as your foundation. Do NOT invent new options or ignore the selected approach.`;
+    }
+
+    // FIX-4: Phase transition acknowledgment
+    // When phase is PLAN and brainstorm artifact exists, confirm the phase
+    // has transitioned. This prevents AI from restarting brainstorming if
+    // the prior conversation history was in BRAINSTORM context.
+    if (phaseName === 'PLAN' && ctx.brainstorm_artifact_saved) {
+      const artifactState = ctx.brainstorm_artifact_state || 'ACTIVE';
+      systemPrompt += `\n\n=== PHASE TRANSITION ===
+BRAINSTORM phase is complete. You are now in PLAN phase.
+Brainstorm artifact state: ${artifactState}
+Do NOT revisit brainstorming. Work from the brainstorm artifact above to create the project plan.`;
+    }
+
     // Tier 6: Unsatisfied Gate Guidance (HANDOFF-PTX-01)
     if (ctx.unsatisfied_gates && ctx.unsatisfied_gates.length > 0) {
       systemPrompt += `\n\nNote: Phase advancement requires certain setup steps to be completed.
@@ -674,6 +730,17 @@ After presenting the Review Packet, include this tag at the END of your response
   if (request.capsule.phase === 'E' && request.delta.execution_layer) {
     systemPrompt += buildLayeredExecutionPrompt(request.delta.execution_layer);
   }
+
+  // FIX-3: Critical instruction reinforcement at END of system prompt
+  // Models follow instructions at the start and end more reliably than middle.
+  // This reinforces the Interaction SOP that gpt-4o-mini tends to ignore in long prompts.
+  systemPrompt += `
+
+=== CRITICAL REMINDERS ===
+- You assess quality internally. Never ask the user about governance, completeness, or acceptance criteria.
+- Ask about the user's GOALS and VISION, not about your deliverable structure.
+- When the user approves, acknowledge warmly and guide them to Finalize in the Governance panel.
+- Produce concrete, project-specific output — never generic templates or "[TBD]" placeholders.`;
 
   messages.push({ role: 'system', content: systemPrompt });
 

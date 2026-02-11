@@ -313,6 +313,15 @@ export interface ContextAwareness {
   brainstorm_artifact_state?: string | null; // DRAFT | ACTIVE | FROZEN | HISTORICAL | SUPERSEDED
   // Tier 5B: Brainstorm readiness vector (HANDOFF-BQL-01)
   brainstorm_readiness?: BrainstormReadiness | null;
+  // Tier 5C: Brainstorm artifact content for downstream phases (FIX-1)
+  // Injected when phase is PLAN/EXECUTE/REVIEW so AI can reference actual brainstorm data
+  brainstorm_artifact_content?: {
+    options: Array<{ id: string; title: string; description?: string; expected_outcome?: string }>;
+    assumptions: Array<{ text: string; tag?: string }>;
+    decision_criteria: Record<string, unknown>;
+    kill_conditions: Array<{ text?: string; threshold?: string }>;
+    recommendation: string | null;
+  } | null;
   // Tier 6: Unsatisfied gate labels for current phase (HANDOFF-PTX-01)
   unsatisfied_gates?: string[] | null;
   // Tier 6B: Fitness function status (GFB-01 Task 1)

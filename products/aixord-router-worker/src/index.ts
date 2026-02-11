@@ -243,30 +243,36 @@ app.post('/v1/router/execute', async (c) => {
 
     // Enrich capsule with authoritative security_gates from DB
     // Fixes: capsule security_gates can be stale when sent from client
+    // FIX-2: Wrapped in try/catch to prevent cold-start 500 when table is empty
     if (projectId && request.capsule) {
-      const secGates = await c.env.DB.prepare(
-        'SELECT gs_dc, gs_dp, gs_ac, gs_ai, gs_jr, gs_rt FROM security_gates WHERE project_id = ?'
-      ).bind(projectId).first<{
-        gs_dc: number; gs_dp: number; gs_ac: number;
-        gs_ai: number; gs_jr: number; gs_rt: number;
-      }>();
+      try {
+        const secGates = await c.env.DB.prepare(
+          'SELECT gs_dc, gs_dp, gs_ac, gs_ai, gs_jr, gs_rt FROM security_gates WHERE project_id = ?'
+        ).bind(projectId).first<{
+          gs_dc: number; gs_dp: number; gs_ac: number;
+          gs_ai: number; gs_jr: number; gs_rt: number;
+        }>();
 
-      if (secGates) {
-        const enriched = {
-          GS_DC: !!secGates.gs_dc,
-          GS_DP: !!secGates.gs_dp,
-          GS_AC: !!secGates.gs_ac,
-          GS_AI: !!secGates.gs_ai,
-          GS_JR: !!secGates.gs_jr,
-          GS_RT: !!secGates.gs_rt,
-        };
-        // Update both legacy field and typed gates.security
-        request.capsule.security_gates = enriched;
-        if (!request.capsule.gates) {
-          request.capsule.gates = { setup: {}, work: {}, security: enriched };
-        } else {
-          request.capsule.gates.security = enriched;
+        if (secGates) {
+          const enriched = {
+            GS_DC: !!secGates.gs_dc,
+            GS_DP: !!secGates.gs_dp,
+            GS_AC: !!secGates.gs_ac,
+            GS_AI: !!secGates.gs_ai,
+            GS_JR: !!secGates.gs_jr,
+            GS_RT: !!secGates.gs_rt,
+          };
+          // Update both legacy field and typed gates.security
+          request.capsule.security_gates = enriched;
+          if (!request.capsule.gates) {
+            request.capsule.gates = { setup: {}, work: {}, security: enriched };
+          } else {
+            request.capsule.gates.security = enriched;
+          }
         }
+      } catch (err) {
+        console.error('Security gates enrichment failed (non-fatal):', err);
+        // Continue without enriched gates — capsule will use client-sent values
       }
     }
 
@@ -503,6 +509,38 @@ app.post('/v1/router/execute', async (c) => {
       }
 
       // ═══════════════════════════════════════════════════════════════
+      // Tier 5C: Brainstorm Artifact Content for Downstream Phases (FIX-1)
+      // When phase is PLAN, EXECUTE, or REVIEW and a finalized/active
+      // brainstorm artifact exists, inject the FULL artifact content
+      // so the AI can produce project-specific output.
+      // Without this, the AI has no knowledge of what was brainstormed.
+      // ═══════════════════════════════════════════════════════════════
+      if (ctx.brainstorm_artifact_saved && capsulePhase !== 'BRAINSTORM' && capsulePhase !== 'B') {
+        try {
+          const artifactContentRow = await c.env.DB.prepare(
+            `SELECT options, assumptions, decision_criteria, kill_conditions, recommendation
+             FROM brainstorm_artifacts WHERE project_id = ?
+             ORDER BY version DESC LIMIT 1`
+          ).bind(projectId).first<{
+            options: string; assumptions: string; decision_criteria: string;
+            kill_conditions: string; recommendation: string | null;
+          }>();
+          if (artifactContentRow) {
+            ctx.brainstorm_artifact_content = {
+              options: JSON.parse(artifactContentRow.options || '[]'),
+              assumptions: JSON.parse(artifactContentRow.assumptions || '[]'),
+              decision_criteria: JSON.parse(artifactContentRow.decision_criteria || '{}'),
+              kill_conditions: JSON.parse(artifactContentRow.kill_conditions || '[]'),
+              recommendation: artifactContentRow.recommendation || null,
+            };
+          }
+        } catch (err) {
+          console.error('Tier 5C brainstorm content query failed (non-fatal):', err);
+          ctx.brainstorm_artifact_content = null;
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════
       // Tier 6: Unsatisfied Gate Labels (HANDOFF-PTX-01)
       // Provides human-readable gate labels to the AI so it can guide
       // the Director on what's needed for phase advancement.
@@ -593,8 +631,11 @@ app.post('/v1/router/execute', async (c) => {
     // HARD GATE ENFORCEMENT (Phase 4)
     // AI model is NOT called when required gates for the current phase fail.
     // Governance lives outside the model — in the Router, not in prompts.
+    // FIX-2: Wrapped in try/catch to prevent cold-start 500 when
+    // project_state doesn't exist yet for brand-new projects.
     // ═══════════════════════════════════════════════════════════════════
     if (projectId) {
+      try {
       // Look up project_type alongside gate check (single extra query)
       const projectRow = await c.env.DB.prepare(
         'SELECT project_type FROM projects WHERE id = ?'
@@ -655,6 +696,11 @@ app.post('/v1/router/execute', async (c) => {
             message: `Blocked by AIXORD Governance — ${failedGates.length} required gate(s) unsatisfied for ${currentPhase} phase.`,
           } as Record<string, unknown>, 200);
         }
+      }
+      } catch (err) {
+        // FIX-2: Gate enforcement failure is non-fatal on cold start
+        // If project_state doesn't exist yet, skip gate enforcement and let AI respond
+        console.error('Hard gate enforcement failed (non-fatal — cold start safe):', err);
       }
     }
 
@@ -774,8 +820,15 @@ app.post('/v1/router/execute', async (c) => {
       return c.json(errorResponse, error.statusCode);
     }
 
-    // Unknown error
-    console.error('Unexpected error:', error);
+    // Unknown error — FIX-2: Enhanced diagnostics for cold-start debugging
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errStack = error instanceof Error ? error.stack : undefined;
+    console.error('Unexpected error:', JSON.stringify({
+      message: errMsg,
+      stack: errStack,
+      type: error?.constructor?.name || 'unknown',
+      latency_ms: latencyMs,
+    }));
 
     const errorResponse: RouterResponse = {
       status: 'ERROR',
@@ -787,7 +840,7 @@ app.post('/v1/router/execute', async (c) => {
         cost_usd: 0,
         latency_ms: latencyMs
       },
-      error: 'INTERNAL_ERROR: An unexpected error occurred'
+      error: 'Something went wrong processing your request. Please try sending your message again.'
     };
 
     return c.json(errorResponse, 500);
