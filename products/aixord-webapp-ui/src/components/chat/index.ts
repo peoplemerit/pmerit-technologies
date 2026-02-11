@@ -7,6 +7,8 @@
 export { ChatWindow } from './ChatWindow';
 export { ChatInput } from './ChatInput';
 export { MessageBubble } from './MessageBubble';
+export { MessageActions } from './MessageActions';
+export { QuickActions } from './QuickActions';
 export { ImageUpload } from './ImageUpload';
 export { ImageDisplay } from './ImageDisplay';
 

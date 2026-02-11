@@ -24,6 +24,7 @@ import { api, APIError, phaseToShort, brainstormApi, blueprintApi, type Project 
 import { useAIXORDSDK, GateBlockedError, AIExposureBlockedError, GovernanceBlockError } from '../lib/sdk';
 import { useSessions } from '../hooks/useSessions';
 import { MessageBubble } from '../components/chat/MessageBubble';
+import { QuickActions } from '../components/chat/QuickActions';
 import { ImageUpload, type PendingImage } from '../components/chat/ImageUpload';
 import { formatAttachmentsForContext, type AttachedFile } from '../components/FileAttachment';
 import { detectAndResolveFiles } from '../lib/fileDetection';
@@ -1339,6 +1340,55 @@ export function Project() {
     }
   };
 
+  // ============================================================================
+  // Message Action Handlers (copy, regenerate, edit)
+  // ============================================================================
+
+  const handleCopyMessage = useCallback((content: string) => {
+    navigator.clipboard.writeText(content).catch(() => {});
+  }, []);
+
+  const handleRegenerateMessage = useCallback((messageIndex: number) => {
+    if (!conversation) return;
+    const messages = conversation.messages;
+    // Find the preceding user message
+    let priorUserMsg: Message | null = null;
+    for (let i = messageIndex - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        priorUserMsg = messages[i];
+        break;
+      }
+    }
+    if (!priorUserMsg) return;
+
+    // Remove the assistant message from display state
+    setConversation((prev) => prev ? {
+      ...prev,
+      messages: prev.messages.filter((_, i) => i !== messageIndex),
+      updatedAt: new Date()
+    } : prev);
+
+    // Re-send the prior user message
+    handleSendMessage(priorUserMsg.content, 'BALANCED');
+  }, [conversation, handleSendMessage]);
+
+  const handleEditMessage = useCallback((messageIndex: number, newContent: string) => {
+    if (!conversation) return;
+
+    // Update the message in display state
+    setConversation((prev) => {
+      if (!prev) return prev;
+      const updated = [...prev.messages];
+      updated[messageIndex] = { ...updated[messageIndex], content: newContent };
+      // Remove all messages after this one (they'll be regenerated)
+      const trimmed = updated.slice(0, messageIndex + 1);
+      return { ...prev, messages: trimmed, updatedAt: new Date() };
+    });
+
+    // Re-send with new content to get fresh AI response
+    handleSendMessage(newContent, 'BALANCED');
+  }, [conversation, handleSendMessage]);
+
   // New Session handler — uses Session Graph API
   const [showNewSessionModal, setShowNewSessionModal] = useState(false);
 
@@ -1687,12 +1737,15 @@ export function Project() {
               </div>
             ) : (
               <>
-                {conversation.messages.map((message) => (
+                {conversation.messages.map((message, index) => (
                   <MessageBubble
                     key={message.id}
                     message={message}
                     token={token || undefined}
                     onPhaseAdvance={message.role === 'assistant' ? handlePhaseAdvance : undefined}
+                    onCopy={handleCopyMessage}
+                    onRegenerate={message.role === 'assistant' ? () => handleRegenerateMessage(index) : undefined}
+                    onEdit={message.role === 'user' ? (newContent: string) => handleEditMessage(index, newContent) : undefined}
                   />
                 ))}
 
@@ -1835,6 +1888,14 @@ export function Project() {
           </div>
         </div>
       )}
+
+      {/* Quick Action Suggestion Buttons */}
+      <QuickActions
+        phase={currentPhase}
+        onSend={handleSendMessage}
+        isLoading={chatLoading}
+        lastMessageRole={conversation?.messages.length ? conversation.messages[conversation.messages.length - 1].role : undefined}
+      />
 
       {/* Status Bar with Input */}
       <StatusBar

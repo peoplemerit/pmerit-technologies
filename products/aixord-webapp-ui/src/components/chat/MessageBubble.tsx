@@ -5,9 +5,11 @@
  * Detects error messages and displays user-friendly guidance.
  */
 
+import { useState, useRef, useEffect } from 'react';
 import type { Message } from './types';
 import { ChatErrorMessage } from '../ChatErrorMessage';
 import { ImageDisplay } from './ImageDisplay';
+import { MessageActions } from './MessageActions';
 
 interface MessageBubbleProps {
   message: Message;
@@ -16,6 +18,10 @@ interface MessageBubbleProps {
   token?: string; // Auth token for image loading
   /** AI-Governance Integration — Phase 3: Phase advance callback */
   onPhaseAdvance?: (phase: string) => void;
+  /** Message action callbacks */
+  onCopy?: (content: string) => void;
+  onRegenerate?: () => void;
+  onEdit?: (newContent: string) => void;
 }
 
 // Check if message content looks like an error
@@ -36,10 +42,49 @@ function isErrorMessage(content: string): boolean {
   return errorPatterns.some(pattern => pattern.test(content));
 }
 
-export function MessageBubble({ message, onSelectOption, onRetry, token, onPhaseAdvance }: MessageBubbleProps) {
+export function MessageBubble({ message, onSelectOption, onRetry, token, onPhaseAdvance, onCopy, onRegenerate, onEdit }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const isError = (isSystem || message.role === 'assistant') && isErrorMessage(message.content);
+
+  // Edit state for user messages
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(message.content);
+  const editRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-focus and auto-resize textarea when editing
+  useEffect(() => {
+    if (isEditing && editRef.current) {
+      editRef.current.focus();
+      editRef.current.style.height = 'auto';
+      editRef.current.style.height = `${editRef.current.scrollHeight}px`;
+    }
+  }, [isEditing]);
+
+  const handleCopy = () => {
+    if (onCopy) {
+      onCopy(message.content);
+    } else {
+      navigator.clipboard.writeText(message.content).catch(() => {});
+    }
+  };
+
+  const handleStartEdit = () => {
+    setEditContent(message.content);
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (editContent.trim() && editContent !== message.content && onEdit) {
+      onEdit(editContent.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditContent(message.content);
+    setIsEditing(false);
+  };
 
   // AI-Governance Integration — Phase 3: Detect phase advance tag
   const phaseAdvanceMatch = !isUser ? message.content.match(/\[PHASE_ADVANCE:(\w+)\]/) : null;
@@ -163,9 +208,9 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
   }
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 group`}>
       <div
-        className={`max-w-[80%] ${
+        className={`relative max-w-[80%] ${
           isUser
             ? 'bg-violet-600 text-white rounded-2xl rounded-br-md'
             : isSystem
@@ -173,10 +218,61 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
             : 'bg-gray-800 text-gray-100 rounded-2xl rounded-bl-md'
         } px-4 py-3`}
       >
-        {/* Message content */}
-        <div className="whitespace-pre-wrap text-sm leading-relaxed">
-          {displayContent}
-        </div>
+        {/* Message action buttons (copy, edit, regenerate) — visible on hover */}
+        {!isSystem && !isEditing && (
+          <MessageActions
+            role={message.role as 'user' | 'assistant'}
+            onCopy={handleCopy}
+            onRegenerate={message.role === 'assistant' ? onRegenerate : undefined}
+            onEdit={message.role === 'user' && onEdit ? handleStartEdit : undefined}
+          />
+        )}
+
+        {/* Message content — or edit textarea */}
+        {isEditing ? (
+          <div className="space-y-2">
+            <textarea
+              ref={editRef}
+              value={editContent}
+              onChange={(e) => {
+                setEditContent(e.target.value);
+                // Auto-resize
+                e.target.style.height = 'auto';
+                e.target.style.height = `${e.target.scrollHeight}px`;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSaveEdit();
+                }
+                if (e.key === 'Escape') {
+                  handleCancelEdit();
+                }
+              }}
+              className="w-full bg-violet-700/50 text-white rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-violet-400"
+              rows={1}
+            />
+            <div className="flex items-center gap-2 justify-end">
+              <button
+                onClick={handleCancelEdit}
+                className="px-3 py-1 text-xs text-gray-300 hover:text-white rounded transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={!editContent.trim() || editContent === message.content}
+                className="px-3 py-1 text-xs bg-violet-500 text-white rounded hover:bg-violet-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Save & Resend
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="whitespace-pre-wrap text-sm leading-relaxed">
+            {displayContent}
+          </div>
+        )}
 
         {/* AI-Governance Integration — Phase 3: Phase advance suggestion */}
         {suggestedPhase && onPhaseAdvance && (
