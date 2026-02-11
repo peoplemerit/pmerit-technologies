@@ -1008,11 +1008,12 @@ export const assignmentsApi = {
     if (params?.status) query.set('status', params.status);
     if (params?.deliverable_id) query.set('deliverable_id', params.deliverable_id);
     const qs = query.toString();
-    return request<TaskAssignmentData[]>(
+    const result = await request<{ assignments: TaskAssignmentData[] }>(
       `/projects/${projectId}/assignments${qs ? '?' + qs : ''}`,
       {},
       token
     );
+    return result.assignments || [];
   },
 
   async get(projectId: string, assignmentId: string, token: string): Promise<TaskAssignmentData> {
@@ -1140,11 +1141,12 @@ export const assignmentsApi = {
     if (params?.status) query.set('status', params.status);
     if (params?.assignment_id) query.set('assignment_id', params.assignment_id);
     const qs = query.toString();
-    return request<EscalationData[]>(
+    const result = await request<{ escalations: EscalationData[] }>(
       `/projects/${projectId}/escalations${qs ? '?' + qs : ''}`,
       {},
       token
     );
+    return result.escalations || [];
   },
 
   async resolveEscalation(
@@ -1187,11 +1189,12 @@ export const assignmentsApi = {
     sessionId: string,
     token: string
   ): Promise<StandupData[]> {
-    return request<StandupData[]>(
+    const result = await request<{ standups: StandupData[] }>(
       `/projects/${projectId}/standups?session_id=${sessionId}`,
       {},
       token
     );
+    return result.standups || [];
   },
 
   // TaskBoard

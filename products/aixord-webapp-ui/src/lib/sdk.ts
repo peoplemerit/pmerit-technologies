@@ -372,15 +372,10 @@ export class AIXORDSDKClient {
     // RC-6 FIX: Check gates from state (already loaded during init)
     // No separate API call to /security/gates needed
     if (this.state?.gates) {
-      // GA:GP (Governance Passed) - formula must be bound
-      const gpPassed = this.state.gates['GA:GP'] ?? false;
-      results.push({
-        gate: 'GA:GP',
-        passed: gpPassed,
-        reason: gpPassed ? undefined : 'Please complete the required setup gates in the Governance panel.',
-        blocking: true, // GA:GP is blocking in Execute/Review
-      });
-      if (!gpPassed) blockingGates.push('GA:GP');
+      // GA:GP removed as blocking gate — it was a phantom gate with no auto-evaluation
+      // rule and no mechanism to ever become true. The legitimate phase exit requirements
+      // are enforced by the backend finalization endpoint (PHASE_EXIT_REQUIREMENTS).
+      // GA:GP remains in the gate display (informational) but does NOT block AI execution.
 
       // Check security gates from state.securityGates if available
       if (this.state.securityGates) {
