@@ -996,9 +996,9 @@ blueprint.post('/:projectId/blueprint/import', async (c) => {
       }
     }
 
-    // Trigger gate evaluation after import
+    // Trigger gate evaluation after import (must pass userId for user-dependent gates)
     try {
-      await triggerGateEvaluation(c.env.DB, projectId);
+      await triggerGateEvaluation(c.env.DB, projectId, userId);
     } catch {
       // Non-blocking — gates will be re-evaluated on next check
     }
