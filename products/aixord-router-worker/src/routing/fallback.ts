@@ -112,7 +112,7 @@ const PHASE_PAYLOADS: Record<string, PhasePayload> = {
       'Ignore constraints established in BRAINSTORM',
       'Change scope without explicit user approval',
     ],
-    exit_artifact: 'A blueprint with scopes, deliverables, and a definition of done.',
+    exit_artifact: 'A structured plan artifact (=== PLAN ARTIFACT === JSON block) containing scopes, deliverables with Definitions of Done, milestones, tech stack, and risks. The frontend will parse this and populate the Blueprint panel.',
     review_prompt: 'Is the plan specific enough to execute? Are all deliverables defined with DoD?',
   },
   EXECUTE: {
@@ -255,8 +255,10 @@ Your plan must contain:
 - RESOLVED ASSUMPTIONS: Each UNKNOWN/HIGH-RISK assumption from brainstorm addressed with a resolution strategy
 - DELIVERABLES: Specific to THIS project — named, described, with concrete scope (not "Frontend Module" but the actual component name and what it does)
 - MILESTONES: Relative timing (Week 1, Week 2) — never "[Completion Date]" placeholders
-- TECH STACK: Justified by project requirements, not generic recommendations
+- TECH STACK: Use the project's declared technology stack when available in the workspace context. Do NOT suggest generic stacks (React Native, Node.js+Express, MongoDB) when the project already uses specific technologies (e.g., Cloudflare Workers, D1, Pages). Justify technology choices by project constraints.
 - RISKS: Derived from the kill conditions and unresolved assumptions in the brainstorm
+
+CRITICAL: When the user approves the plan, you MUST output a structured === PLAN ARTIFACT === block (see PLAN ARTIFACT FORMAT below). This is how the blueprint gets populated. Without it, the Director cannot finalize the PLAN phase.
 
 If the brainstorm artifact is not available in context, tell the user:
 "I need the brainstorm artifact to create a project-specific plan. Please ensure brainstorming was finalized."`,
@@ -349,6 +351,88 @@ DECISION CRITERIA:
 - Must state what to optimize for (cost, speed, quality, compliance)
 - Must state constraints (budget, timeline, tools, skill level)
 - Each criterion needs a weight (1-5) reflecting its importance`;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // PLAN ARTIFACT FORMAT — Structured blueprint output (PLAN phase only)
+  // Mirrors the BRAINSTORM ARTIFACT pattern: AI outputs structured JSON
+  // between markers, frontend parses and saves to blueprint tables.
+  // Without this, the AI produces plan text that can't be finalized.
+  // ═══════════════════════════════════════════════════════════════════
+  if (phaseName === 'PLAN') {
+    systemPrompt += `
+
+=== PLAN ARTIFACT FORMAT ===
+When the user approves the plan (or when you have enough detail to propose a complete blueprint), output a structured plan artifact wrapped in markers. The frontend will parse this automatically and populate the Blueprint panel.
+
+Format:
+=== PLAN ARTIFACT ===
+{
+  "selected_option": {
+    "id": "opt-N",
+    "title": "The brainstorm option that was chosen",
+    "rationale": "Why this option was selected over alternatives"
+  },
+  "scopes": [
+    {
+      "name": "Scope Name (specific to this project)",
+      "purpose": "What this scope accomplishes — 1-2 sentences",
+      "boundary": "What is IN scope vs OUT of scope",
+      "assumptions": ["assumption 1", "assumption 2"],
+      "deliverables": [
+        {
+          "name": "Deliverable Name (specific, not generic)",
+          "description": "What this deliverable produces — 2-3 sentences",
+          "dod_evidence_spec": "What evidence proves this is done (e.g., 'API endpoint returns 200 with valid JSON')",
+          "dod_verification_method": "How to verify (e.g., 'Run integration tests', 'Manual review of output')",
+          "upstream_deps": [],
+          "downstream_deps": []
+        }
+      ]
+    }
+  ],
+  "milestones": [
+    { "name": "Milestone 1", "target": "Week 1", "deliverables": ["Deliverable Name 1", "Deliverable Name 2"] }
+  ],
+  "tech_stack": [
+    { "component": "Backend", "technology": "Technology Name", "rationale": "Why this fits the project" }
+  ],
+  "risks": [
+    { "description": "Risk description", "mitigation": "How to mitigate", "source": "kill_condition or assumption it derives from" }
+  ]
+}
+=== END PLAN ARTIFACT ===
+
+PLAN ARTIFACT RULES:
+- Every scope MUST have at least 1 deliverable
+- Every deliverable MUST have dod_evidence_spec AND dod_verification_method (these are required for finalization)
+- Scope names must be specific to THIS project (not "Frontend Module" but the actual component)
+- Deliverable names must describe concrete outputs (not "Implement feature" but what the feature produces)
+- Tech stack MUST match the project's declared technology preferences when available
+- Dependencies (upstream_deps/downstream_deps) reference other deliverable names
+- Output the artifact ONLY when you have a complete, approved plan — not during discussion`;
+
+    // PLAN QUALITY REQUIREMENTS — tells AI what the finalization validator checks
+    systemPrompt += `
+
+=== PLAN QUALITY REQUIREMENTS ===
+When generating plan artifacts, every element must meet these standards. These are validated when the Director clicks Finalize Plan — generate artifacts that pass these checks so the Director can advance without friction.
+
+SCOPES (at least 1 required):
+- Each scope must have: name, purpose, boundary
+- Assumptions should be specific and verifiable (not vague)
+
+DELIVERABLES (at least 1 required, under a scope):
+- Each must have: name, description, dod_evidence_spec, dod_verification_method
+- dod_evidence_spec: Concrete evidence (test results, screenshots, API responses — not "it works")
+- dod_verification_method: How to check (automated test, manual review, metric threshold)
+- No orphan deliverables (every deliverable must belong to a scope)
+
+INTEGRITY CHECKS (auto-validated):
+- All scopes have purpose defined
+- All deliverables have Definition of Done (evidence + verification)
+- No circular dependencies in the DAG
+- No self-referencing dependencies`;
   }
 
   // ═══════════════════════════════════════════════════════════════════

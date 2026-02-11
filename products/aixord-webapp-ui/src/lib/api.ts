@@ -4075,6 +4075,38 @@ export const blueprintApi = {
   async getSummary(projectId: string, token: string): Promise<BlueprintSummary> {
     return request<BlueprintSummary>(`/projects/${projectId}/blueprint/summary`, {}, token);
   },
+
+  // --- Import from Plan Artifact ---
+  async importFromPlanArtifact(
+    projectId: string,
+    data: {
+      scopes: Array<{
+        name: string;
+        purpose?: string;
+        boundary?: string;
+        assumptions?: string[];
+        deliverables?: Array<{
+          name: string;
+          description?: string;
+          dod_evidence_spec?: string;
+          dod_verification_method?: string;
+          upstream_deps?: string[];
+          downstream_deps?: string[];
+        }>;
+      }>;
+      selected_option?: { id: string; title: string; rationale: string };
+      milestones?: Array<{ name: string; target: string; deliverables: string[] }>;
+      tech_stack?: Array<{ component: string; technology: string; rationale: string }>;
+      risks?: Array<{ description: string; mitigation: string; source: string }>;
+    },
+    token: string
+  ): Promise<{ success: boolean; imported: { scopes: number; deliverables: number } }> {
+    return request<{ success: boolean; imported: { scopes: number; deliverables: number } }>(
+      `/projects/${projectId}/blueprint/import`,
+      { method: 'POST', body: JSON.stringify(data) },
+      token
+    );
+  },
 };
 
 // ============================================================================

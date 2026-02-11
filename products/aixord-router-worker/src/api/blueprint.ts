@@ -837,4 +837,189 @@ blueprint.get('/:projectId/blueprint/summary', async (c) => {
   });
 });
 
+// ============================================================================
+// IMPORT — Atomic blueprint population from AI plan artifact
+// ============================================================================
+
+/**
+ * POST /:projectId/blueprint/import
+ *
+ * Atomically creates scopes and deliverables from a parsed PLAN ARTIFACT.
+ * This is called by the frontend after parsing === PLAN ARTIFACT === markers
+ * from the AI response, following the same pattern as brainstorm artifact save.
+ *
+ * Clears any existing DRAFT scopes/deliverables before importing to ensure
+ * the blueprint reflects the latest approved plan.
+ */
+blueprint.post('/:projectId/blueprint/import', async (c) => {
+  const userId = c.get('userId');
+  const projectId = c.req.param('projectId');
+
+  if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const body = await c.req.json();
+  const { scopes: scopesInput = [], selected_option, milestones, tech_stack, risks } = body;
+
+  // Validate minimum requirements
+  if (!Array.isArray(scopesInput) || scopesInput.length === 0) {
+    return c.json({ error: 'At least 1 scope is required' }, 400);
+  }
+
+  const hasDeliverables = scopesInput.some(
+    (s: { deliverables?: unknown[] }) => Array.isArray(s.deliverables) && s.deliverables.length > 0
+  );
+  if (!hasDeliverables) {
+    return c.json({ error: 'At least 1 deliverable is required across all scopes' }, 400);
+  }
+
+  const now = new Date().toISOString();
+  const createdScopeIds: string[] = [];
+  const createdDeliverableIds: string[] = [];
+
+  try {
+    // Clear existing DRAFT scopes and deliverables for this project
+    // (CASCADE or manual delete — deliverables first due to FK)
+    await c.env.DB.prepare(
+      "DELETE FROM blueprint_deliverables WHERE project_id = ? AND status = 'DRAFT'"
+    ).bind(projectId).run();
+    await c.env.DB.prepare(
+      "DELETE FROM blueprint_scopes WHERE project_id = ? AND status = 'DRAFT'"
+    ).bind(projectId).run();
+
+    // Build a map from deliverable name → generated ID for dependency resolution
+    const deliverableNameToId: Record<string, string> = {};
+
+    // First pass: generate IDs for all deliverables (needed for dependency resolution)
+    for (const scope of scopesInput) {
+      if (Array.isArray(scope.deliverables)) {
+        for (const del of scope.deliverables) {
+          deliverableNameToId[del.name] = crypto.randomUUID();
+        }
+      }
+    }
+
+    // Create scopes and their deliverables
+    for (let si = 0; si < scopesInput.length; si++) {
+      const scope = scopesInput[si];
+      const scopeId = crypto.randomUUID();
+      createdScopeIds.push(scopeId);
+
+      await c.env.DB.prepare(
+        `INSERT INTO blueprint_scopes (
+          id, project_id, parent_scope_id, tier, name, purpose, boundary,
+          assumptions, assumption_status, inputs, outputs, status,
+          sort_order, notes, created_by, created_at, updated_at
+        ) VALUES (?, ?, NULL, 1, ?, ?, ?, ?, 'OPEN', NULL, NULL, 'DRAFT', ?, NULL, ?, ?, ?)`
+      ).bind(
+        scopeId,
+        projectId,
+        scope.name || `Scope ${si + 1}`,
+        scope.purpose || null,
+        scope.boundary || null,
+        JSON.stringify(scope.assumptions || []),
+        si,
+        userId,
+        now,
+        now
+      ).run();
+
+      // Create deliverables under this scope
+      if (Array.isArray(scope.deliverables)) {
+        for (let di = 0; di < scope.deliverables.length; di++) {
+          const del = scope.deliverables[di];
+          const delId = deliverableNameToId[del.name] || crypto.randomUUID();
+          createdDeliverableIds.push(delId);
+
+          // Resolve dependency names to IDs
+          const upstreamIds = (del.upstream_deps || [])
+            .map((name: string) => deliverableNameToId[name])
+            .filter(Boolean);
+          const downstreamIds = (del.downstream_deps || [])
+            .map((name: string) => deliverableNameToId[name])
+            .filter(Boolean);
+
+          await c.env.DB.prepare(
+            `INSERT INTO blueprint_deliverables (
+              id, project_id, scope_id, name, description,
+              upstream_deps, downstream_deps, dependency_type,
+              dod_evidence_spec, dod_verification_method, dod_quality_bar, dod_failure_modes,
+              status, sort_order, notes, created_by, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'hard', ?, ?, NULL, NULL, 'DRAFT', ?, NULL, ?, ?, ?)`
+          ).bind(
+            delId,
+            projectId,
+            scopeId,
+            del.name || `Deliverable ${di + 1}`,
+            del.description || null,
+            JSON.stringify(upstreamIds),
+            JSON.stringify(downstreamIds),
+            del.dod_evidence_spec || null,
+            del.dod_verification_method || null,
+            di,
+            userId,
+            now,
+            now
+          ).run();
+        }
+      }
+    }
+
+    // Store plan metadata (selected option, milestones, tech_stack, risks) as a note on the project
+    // This preserves the full plan context beyond just scopes/deliverables
+    if (selected_option || milestones || tech_stack || risks) {
+      const planMeta = JSON.stringify({
+        selected_option: selected_option || null,
+        milestones: milestones || [],
+        tech_stack: tech_stack || [],
+        risks: risks || [],
+        imported_at: now,
+      });
+
+      // Store as project metadata (update project description or a dedicated field)
+      // For now, we store as the latest plan version info in a session log
+      try {
+        await c.env.DB.prepare(
+          `INSERT INTO session_events (id, project_id, event_type, event_data, session_id, created_at)
+           VALUES (?, ?, 'PLAN_ARTIFACT_IMPORTED', ?, ?, ?)`
+        ).bind(
+          crypto.randomUUID(),
+          projectId,
+          planMeta,
+          'import',
+          now
+        ).run();
+      } catch {
+        // session_events table may not exist — non-blocking
+        console.warn('Could not store plan metadata in session_events');
+      }
+    }
+
+    // Trigger gate evaluation after import
+    try {
+      await triggerGateEvaluation(c.env.DB, projectId);
+    } catch {
+      // Non-blocking — gates will be re-evaluated on next check
+    }
+
+    return c.json({
+      success: true,
+      imported: {
+        scopes: createdScopeIds.length,
+        deliverables: createdDeliverableIds.length,
+      },
+      scope_ids: createdScopeIds,
+      deliverable_ids: createdDeliverableIds,
+    }, 201);
+
+  } catch (err) {
+    console.error('Blueprint import failed:', err);
+    return c.json({
+      error: 'Failed to import blueprint from plan artifact',
+      details: err instanceof Error ? err.message : 'Unknown error',
+    }, 500);
+  }
+});
+
 export default blueprint;

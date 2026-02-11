@@ -20,7 +20,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserSettings } from '../contexts/UserSettingsContext';
 import { useProjectState } from '../hooks/useApi';
-import { api, APIError, phaseToShort, brainstormApi, type Project as ProjectType, type Decision, type CCSGateStatus, type SessionType, type EdgeType, type BrainstormReadinessData } from '../lib/api';
+import { api, APIError, phaseToShort, brainstormApi, blueprintApi, type Project as ProjectType, type Decision, type CCSGateStatus, type SessionType, type EdgeType, type BrainstormReadinessData } from '../lib/api';
 import { useAIXORDSDK, GateBlockedError, AIExposureBlockedError, GovernanceBlockError } from '../lib/sdk';
 import { useSessions } from '../hooks/useSessions';
 import { MessageBubble } from '../components/chat/MessageBubble';
@@ -1097,6 +1097,45 @@ export function Project() {
           } catch {
             // Artifact parsing failed — non-blocking, user can retry
             console.warn('Failed to parse brainstorm artifact from AI response');
+          }
+        }
+      }
+
+      // FIX-PLAN: Extract plan artifact from AI response and populate blueprint
+      // Mirrors the brainstorm artifact pattern: AI outputs structured JSON,
+      // frontend parses it, frontend calls import endpoint to save to DB.
+      if (state?.session.phase === 'PLAN' || state?.session.phase === 'P') {
+        const planArtifactMatch = assistantContent.match(
+          /=== PLAN ARTIFACT ===\s*([\s\S]*?)\s*=== END PLAN ARTIFACT ===/
+        );
+        if (planArtifactMatch) {
+          try {
+            const planData = JSON.parse(planArtifactMatch[1]);
+            const importResult = await blueprintApi.importFromPlanArtifact(id, {
+              scopes: planData.scopes || [],
+              selected_option: planData.selected_option || undefined,
+              milestones: planData.milestones || [],
+              tech_stack: planData.tech_stack || [],
+              risks: planData.risks || [],
+            }, token);
+            console.log('Plan artifact imported:', importResult);
+
+            // Auto-run blueprint validation after import so gates update
+            try {
+              await blueprintApi.runValidation(id, token);
+            } catch {
+              // Non-blocking — validation is optional at this point
+            }
+
+            // Refresh gate status after blueprint import
+            try {
+              await fetchState();
+            } catch {
+              // Non-blocking
+            }
+          } catch (parseErr) {
+            // Plan artifact parsing failed — non-blocking, user can retry
+            console.warn('Failed to parse/import plan artifact from AI response:', parseErr);
           }
         }
       }

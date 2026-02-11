@@ -48,6 +48,9 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
   // HANDOFF-VD-CI-01 A1: Detect brainstorm artifact block
   const hasBrainstormArtifact = !isUser && /=== BRAINSTORM ARTIFACT ===/.test(message.content);
 
+  // FIX-PLAN: Detect plan artifact block
+  const hasPlanArtifact = !isUser && /=== PLAN ARTIFACT ===/.test(message.content);
+
   // HANDOFF-TDL-01 Task 7 + HANDOFF-PCC-01: Parse structured AI output blocks
   interface ParsedBlock {
     type: 'PROGRESS UPDATE' | 'SUBMISSION' | 'ESCALATION' | 'STANDUP' | 'RETRIEVE' | 'CONTINUITY CONFLICT';
@@ -84,6 +87,7 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
     ? message.content
         .replace(/\[PHASE_ADVANCE:\w+\]/g, '')
         .replace(/=== BRAINSTORM ARTIFACT ===[\s\S]*?=== END BRAINSTORM ARTIFACT ===/g, '')
+        .replace(/=== PLAN ARTIFACT ===[\s\S]*?=== END PLAN ARTIFACT ===/g, '')
         .replace(/=== PROGRESS UPDATE ===[\s\S]*?=== END PROGRESS UPDATE ===/g, '')
         .replace(/=== SUBMISSION ===[\s\S]*?=== END SUBMISSION ===/g, '')
         .replace(/=== ESCALATION ===[\s\S]*?=== END ESCALATION ===/g, '')
@@ -209,6 +213,23 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
             </div>
             <p className="text-gray-400 text-xs mt-1">
               Structured options, assumptions, and decision criteria captured for validation.
+            </p>
+          </div>
+        )}
+
+        {/* FIX-PLAN: Plan artifact saved indicator */}
+        {hasPlanArtifact && (
+          <div className="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span className="text-blue-400 text-sm font-medium">
+                Blueprint populated from plan
+              </span>
+            </div>
+            <p className="text-gray-400 text-xs mt-1">
+              Scopes, deliverables, and definitions of done have been imported. Review in the Blueprint panel, then click Finalize Plan.
             </p>
           </div>
         )}
