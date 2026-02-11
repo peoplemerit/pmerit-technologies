@@ -130,6 +130,13 @@ export interface SendOptions {
     deliverables_with_dod: number;
     integrity_passed: boolean | null;
   };
+  /** Conversation history — prior messages for multi-turn context (FIX-N3) */
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  /** Workspace file context — file tree + key file contents (FIX-WSC) */
+  workspaceContext?: {
+    file_tree?: string;
+    key_files?: Array<{ path: string; content: string }>;
+  };
 }
 
 /**
@@ -634,6 +641,12 @@ export class AIXORDSDKClient {
         ...(imageData.length > 0 && { images: imageData }),
         // Path B: Include execution layer context for layered execution mode
         ...(options.executionLayer && { execution_layer: options.executionLayer }),
+        // FIX-N3: Include conversation history for multi-turn context
+        ...(options.conversationHistory && options.conversationHistory.length > 0 && {
+          conversation_history: options.conversationHistory,
+        }),
+        // FIX-WSC: Include workspace file context for file-aware AI
+        ...(options.workspaceContext && { workspace_context: options.workspaceContext }),
       },
       budget: {
         max_output_tokens: options.maxOutputTokens || 4096,

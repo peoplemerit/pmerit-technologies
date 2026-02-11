@@ -624,6 +624,107 @@ app.post('/v1/router/execute', async (c) => {
         ctx.last_reassessment = null;
       }
 
+      // ═══════════════════════════════════════════════════════════════
+      // Tier 7: GitHub Repository Context (FIX-WSC)
+      // Fetches the repo file tree and key files (README, package.json)
+      // via the GitHub API using the stored encrypted token.
+      // This gives the AI actual knowledge of the codebase structure.
+      // Only fetches when GitHub is connected and no workspace_context
+      // was provided by the frontend (to avoid duplicate data).
+      // ═══════════════════════════════════════════════════════════════
+      if (!request.delta.workspace_context?.file_tree) {
+        try {
+          const ghConn = await c.env.DB.prepare(
+            `SELECT repo_owner, repo_name, access_token_encrypted
+             FROM github_connections WHERE project_id = ?`
+          ).bind(projectId).first<{
+            repo_owner: string; repo_name: string; access_token_encrypted: string;
+          }>();
+
+          if (ghConn?.repo_owner && ghConn?.repo_name && ghConn?.access_token_encrypted) {
+            const encKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY || 'default-key-change-in-production';
+            // Decrypt token inline (same pattern as evidence-fetch.ts)
+            const decoder = new TextDecoder();
+            const encoder = new TextEncoder();
+            const keyData = encoder.encode(encKey.padEnd(32, '0').slice(0, 32));
+            const combined = Uint8Array.from(atob(ghConn.access_token_encrypted), ch => ch.charCodeAt(0));
+            const iv = combined.slice(0, 12);
+            const encrypted = combined.slice(12);
+            const cryptoKey = await crypto.subtle.importKey('raw', keyData, 'AES-GCM', false, ['decrypt']);
+            const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, encrypted);
+            const ghToken = decoder.decode(decrypted);
+
+            const repoPath = `${ghConn.repo_owner}/${ghConn.repo_name}`;
+
+            // Fetch repo tree (top-level only to save tokens)
+            const treeResp = await fetch(
+              `https://api.github.com/repos/${repoPath}/git/trees/HEAD?recursive=false`,
+              {
+                headers: {
+                  'Accept': 'application/vnd.github.v3+json',
+                  'Authorization': `Bearer ${ghToken}`,
+                  'User-Agent': 'AIXORD-Platform',
+                },
+              }
+            );
+
+            if (treeResp.ok) {
+              const treeData = await treeResp.json() as {
+                tree: Array<{ path: string; type: string; size?: number }>;
+              };
+
+              // Build file tree string
+              const treeLines = treeData.tree
+                .map(t => `${t.type === 'tree' ? '[DIR]' : '[FILE]'} ${t.path}${t.size ? ` (${t.size}b)` : ''}`)
+                .join('\n');
+
+              // Initialize workspace_context if not present
+              if (!request.delta.workspace_context) {
+                request.delta.workspace_context = {};
+              }
+              request.delta.workspace_context.file_tree = `GitHub: ${repoPath}\n${treeLines}`;
+
+              // Fetch key files (README, package.json) — small, high-value context
+              const KEY_FILES = ['README.md', 'package.json', 'wrangler.toml', 'wrangler.json', 'tsconfig.json'];
+              const keyFiles: Array<{ path: string; content: string }> = [];
+
+              for (const fname of KEY_FILES) {
+                const exists = treeData.tree.find(t => t.path === fname);
+                if (exists && exists.type === 'blob' && (exists.size || 0) < 5000) {
+                  try {
+                    const fileResp = await fetch(
+                      `https://api.github.com/repos/${repoPath}/contents/${fname}`,
+                      {
+                        headers: {
+                          'Accept': 'application/vnd.github.v3.raw',
+                          'Authorization': `Bearer ${ghToken}`,
+                          'User-Agent': 'AIXORD-Platform',
+                        },
+                      }
+                    );
+                    if (fileResp.ok) {
+                      const content = await fileResp.text();
+                      keyFiles.push({ path: fname, content: content.slice(0, 3000) });
+                    }
+                  } catch {
+                    // Individual file fetch failed — skip silently
+                  }
+                }
+              }
+
+              if (keyFiles.length > 0) {
+                request.delta.workspace_context.key_files = [
+                  ...(request.delta.workspace_context.key_files || []),
+                  ...keyFiles,
+                ];
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Tier 7 GitHub context fetch failed (non-fatal):', err);
+        }
+      }
+
       request._context_awareness = ctx;
     }
 

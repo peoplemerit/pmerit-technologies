@@ -549,6 +549,26 @@ RULES: Reference the objective. Stay in phase scope. Be specific to THIS project
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // FIX-WSC: Workspace File Context — inject actual file tree + key file
+  // contents so the AI can reference the project's real codebase.
+  // Without this, the AI has zero knowledge of the actual project files.
+  // ═══════════════════════════════════════════════════════════════════
+  const wsc = request.delta.workspace_context;
+  if (wsc) {
+    if (wsc.file_tree) {
+      systemPrompt += `\n\n=== PROJECT FILE STRUCTURE ===
+${wsc.file_tree}`;
+    }
+    if (wsc.key_files && wsc.key_files.length > 0) {
+      systemPrompt += `\n\n=== KEY PROJECT FILES ===`;
+      for (const file of wsc.key_files) {
+        systemPrompt += `\n--- ${file.path} ---\n${file.content}\n`;
+      }
+      systemPrompt += `\nUse these files to understand the project's technology stack, dependencies, and structure. Reference specific files and their content when making recommendations.`;
+    }
+  }
+
   // AI-Governance Integration — Phase 1: Gate & Blueprint awareness
   if (request.capsule.gates) {
     const g = request.capsule.gates;

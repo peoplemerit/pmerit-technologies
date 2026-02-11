@@ -27,6 +27,7 @@ import { MessageBubble } from '../components/chat/MessageBubble';
 import { ImageUpload, type PendingImage } from '../components/chat/ImageUpload';
 import { formatAttachmentsForContext, type AttachedFile } from '../components/FileAttachment';
 import { detectAndResolveFiles } from '../lib/fileDetection';
+import { fileSystemStorage, readDirectory, readFileContent, verifyPermission } from '../lib/fileSystem';
 import { CCSIncidentBanner } from '../components/CCSIncidentBanner';
 import { CCSIncidentPanel } from '../components/CCSIncidentPanel';
 import { CCSCreateIncidentModal } from '../components/CCSCreateIncidentModal';
@@ -85,6 +86,12 @@ export function Project() {
   const { token, user, logout } = useAuth();
   const { settings, getActiveApiKey } = useUserSettings();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // FIX-WSC: Cache workspace file context to avoid re-scanning on every message
+  const workspaceContextRef = useRef<{
+    file_tree?: string;
+    key_files?: Array<{ path: string; content: string }>;
+  } | null>(null);
+  const workspaceContextLoadedRef = useRef(false);
 
   // Ribbon state
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -986,6 +993,69 @@ export function Project() {
         total: sessions.length,
       } : undefined;
 
+      // FIX-N3 (SDK path): Build conversation history from current messages
+      // The SDK was missing conversation_history — every message was contextless.
+      const MAX_HISTORY_MESSAGES = 20;
+      const conversationHistory = (conversation.messages || [])
+        .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+        .slice(-MAX_HISTORY_MESSAGES)
+        .map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content }));
+
+      // FIX-WSC: Scan workspace files for proactive context (cached after first scan)
+      if (!workspaceContextLoadedRef.current && workspaceStatus?.bound) {
+        workspaceContextLoadedRef.current = true;
+        try {
+          const linked = await fileSystemStorage.getHandle(id);
+          if (linked?.handle) {
+            const hasPermission = await verifyPermission(linked.handle, false);
+            if (hasPermission) {
+              // Read directory tree (2 levels deep)
+              const entries = await readDirectory(linked.handle, '', true, 2);
+
+              // Build file tree string
+              const buildTree = (items: typeof entries, indent = ''): string => {
+                return items.map(e => {
+                  if (e.type === 'folder') {
+                    const children = (e as { children?: typeof entries }).children;
+                    return `${indent}[DIR] ${e.name}/` +
+                      (children ? '\n' + buildTree(children, indent + '  ') : '');
+                  }
+                  return `${indent}${e.name} (${(e as { size: number }).size}b)`;
+                }).join('\n');
+              };
+              const fileTree = buildTree(entries);
+
+              // Read key files (README, package.json, config files)
+              const KEY_FILE_NAMES = ['README.md', 'readme.md', 'package.json', 'tsconfig.json',
+                'wrangler.toml', 'wrangler.json', '.env.example', 'Cargo.toml', 'requirements.txt',
+                'pyproject.toml', 'go.mod'];
+              const keyFiles: Array<{ path: string; content: string }> = [];
+
+              for (const entry of entries) {
+                if (entry.type === 'file' && KEY_FILE_NAMES.includes(entry.name)) {
+                  try {
+                    const fileData = await readFileContent((entry as { handle: FileSystemFileHandle }).handle);
+                    if (fileData.content.length < 3000) {
+                      keyFiles.push({ path: entry.name, content: fileData.content });
+                    }
+                  } catch {
+                    // Skip unreadable files
+                  }
+                }
+              }
+
+              workspaceContextRef.current = {
+                file_tree: fileTree.slice(0, 4000),
+                key_files: keyFiles.length > 0 ? keyFiles : undefined,
+              };
+            }
+          }
+        } catch (err) {
+          console.warn('[FIX-WSC] Workspace scan failed (non-blocking):', err);
+          workspaceContextRef.current = null;
+        }
+      }
+
       const sdkResponse = await sdkSend({
         message: fullContent,
         mode,
@@ -995,6 +1065,8 @@ export function Project() {
         decisions: decisions.map(d => d.summary),
         sessionId: activeSession?.id || `session_${state?.session.number || 1}`,
         maxOutputTokens: 4096,
+        conversationHistory: conversationHistory.length > 0 ? conversationHistory : undefined,
+        workspaceContext: workspaceContextRef.current || undefined,
         imageRefs: uploadedImages.length > 0 ? uploadedImages.map(i => ({
           id: i.id,
           filename: i.filename,

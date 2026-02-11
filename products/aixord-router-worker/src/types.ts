@@ -208,6 +208,14 @@ export interface Delta {
    *  Frontend sends recent conversation history so AI can maintain context.
    *  Capped at most recent N messages to stay within token budget. */
   conversation_history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  /** Workspace file context — local file tree + key file contents (FIX-WSC)
+   *  Frontend reads workspace folder via File System Access API and sends
+   *  directory structure + contents of key files (README, package.json, etc.)
+   *  so the AI can reference actual project files. */
+  workspace_context?: {
+    file_tree?: string;  // Directory listing as text
+    key_files?: Array<{ path: string; content: string }>;  // Content of important files
+  };
 }
 
 export interface Budget {
