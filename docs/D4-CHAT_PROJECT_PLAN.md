@@ -1,12 +1,12 @@
 # D4-CHAT PROJECT PLAN
 
 **Document Type:** Comprehensive Project Plan
-**Version:** 9.0 (Session 48 — Diagnostic + Prompt Fixes)
-**Date:** 2026-02-10 (Updated: Sessions 34-48 — Full governance enforcement + TDL + PCC + PTX + BQL + GFB + DPF deployed)
+**Version:** 10.0 (Session 49 — Infrastructure Sync + DB Migrations + SYS-02 E2E Tests)
+**Date:** 2026-02-12 (Updated: Sessions 34-49 — Full governance enforcement + TDL + PCC + PTX + BQL + GFB + DPF deployed + DB reconciled + E2E tested)
 **Entity:** PMERIT Technologies LLC
 **Governance:** AIXORD v4.3 → v4.4.1 → v4.4 → v4.4.3 → **v4.5 (Engineering Governance)**
 **Source Files:** Audit Report v5.0, AIXORD Baseline v4.5, Compact Core v4.5-C, 40+ sandbox files
-**Last Updated By:** Commander — Session 48 (HANDOFF-DPF-01: Cold-start null guards, PTX-01 timing gap fix, Interaction SOP, Phase Output Contracts)
+**Last Updated By:** Commander — Session 49 (Copilot PR merge, DB migrations 026-029, SYS-02 execution layer E2E tests, Zod removal, 11 TS error fixes, Dependabot review)
 
 ---
 
@@ -419,7 +419,7 @@ aggregation at session, project, and account levels.
 | **AIXORD v4.5 Compliance** | ~70% | ~90% | ~95% | ~97% | ~99% | ~97% | ~98% | **~99%** | +1% |
 | **D3 SDK Integration** | N/A | 40% | **100%** | **100%** | **100%** | **100%** | **100%** | **100%** | — |
 | **Path C (Image/Evidence)** | N/A | N/A | 0% | **100%** | **100%** | **100%** | **100%** | **100%** | — |
-| **Path B (Proactive Debug)** | N/A | N/A | 0% | **33%** | **33%** | **33%** | **33%** | **33%** (Phase 1/3) | — |
+| **Path B (Proactive Debug)** | N/A | N/A | 0% | **33%** | **33%** | **33%** | **33%** | **50%** (Phase 1/3 + E2E tested) | +17% |
 | **Vision API (ENH-4)** | N/A | N/A | N/A | ~33% | **100%** | **100%** | **100%** | **100%** (3/3 providers) | — |
 | **SPG-01 Content Redaction** | N/A | N/A | N/A | TODO | **100%** | **100%** | **100%** | **100%** | — |
 | **Session Graph (v4.4)** | N/A | N/A | N/A | N/A | N/A | **100%** | **100%** | **100%** (5/5 phases) | — |
@@ -442,7 +442,7 @@ aggregation at session, project, and account levels.
 | **Structured AI Output Blocks** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (PROGRESS/SUBMISSION/ESCALATION/STANDUP parsing) | NEW |
 | **Phase Validators (VD-CI-01 A3)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (P4-P6, E1-E4, R1-R2 checks) | NEW |
 | **Quality Warning Override (VD-CI-01 A4)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (3-way finalize + override modal) | NEW |
-| **Integration Tests (TDL-01 Task 8)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (77 tests: validators+override+TDL) | NEW |
+| **Integration Tests (TDL-01 Task 8 + SYS-02)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (141 tests: validators+override+TDL+rate-limit+execution-layers) | +64 |
 | **Project Continuity Capsule (PCC-01)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Tier 4 context + Memory panel) | — |
 | **Phase Transition Experience (PTX-01)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Artifact save prompt + finalize UX) | NEW |
 | **Brainstorm Quality Loop (BQL-01)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Readiness scoring + AI fix loop) | NEW |
@@ -452,7 +452,11 @@ aggregation at session, project, and account levels.
 | **Cold-Start Null Guards (DPF-01 T1)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Tiers 1C/2D/2F/3 try/catch) | NEW |
 | **PTX-01 Timing Gap Fix (DPF-01 T2)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (200ms Tier 5 retry) | NEW |
 | **Interaction SOP (DPF-01 T3)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (AI stops delegating governance assessment) | NEW |
-| **Phase Output Contracts (DPF-01 T4)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (4-phase structured output rules) | NEW |
+| **Phase Output Contracts (DPF-01 T4)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (4-phase structured output rules) | — |
+| **DB Schema Reconciliation (Migrations 026-029)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (FK cascades, conversations, rate_limits, users.name) | NEW |
+| **SYS-02 Execution Layer E2E Tests** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (59 tests: state machine, sequential enforcement, verification) | NEW |
+| **Zod Removal + Lightweight Validation** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (validateBody.ts + schemas/common.ts rewritten) | NEW |
+| **Copilot PR Integration** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (PRs #5, #6 merged — Project Plan v9.0 + manuscript fixes) | NEW |
 
 ### 6.2 Deliverable Matrix
 
@@ -485,7 +489,7 @@ aggregation at session, project, and account levels.
 | D25 | Task Delegation Layer — Full-Stack (HANDOFF-TDL-01 Tasks 3-7) | ✅ **DEPLOYED** | **100%** |
 | D26 | Phase Validators — Strengthened (HANDOFF-VD-CI-01 A3) | ✅ **DEPLOYED** | **100%** |
 | D27 | Quality Warning Override (HANDOFF-VD-CI-01 A4) | ✅ **DEPLOYED** | **100%** |
-| D28 | Integration Test Suite (HANDOFF-TDL-01 Task 8) | ✅ **COMPLETE** | **100%** |
+| D28 | Integration Test Suite (TDL-01 Task 8 + SYS-02) | ✅ **COMPLETE** | **100%** |
 | D29 | Project Continuity Capsule — Full-Stack (HANDOFF-PCC-01) | ✅ **DEPLOYED** | **100%** |
 | D30 | Phase Transition Experience (HANDOFF-PTX-01) | ✅ **DEPLOYED** | **100%** |
 | D31 | Brainstorm Quality Loop (HANDOFF-BQL-01) | ✅ **DEPLOYED** | **100%** |
@@ -497,6 +501,10 @@ aggregation at session, project, and account levels.
 | D37 | Interaction SOP (HANDOFF-DPF-01 T3) | ✅ **DEPLOYED** | **100%** |
 | D38 | Phase Output Contracts (HANDOFF-DPF-01 T4) | ✅ **DEPLOYED** | **100%** |
 | D39 | DPF-01 Diagnostic Fixes | ✅ **DEPLOYED** | **100%** |
+| D40 | DB Schema Reconciliation (Migrations 026-029) | ✅ **DEPLOYED** | **100%** |
+| D41 | SYS-02 Execution Layer E2E Test Suite | ✅ **COMPLETE** | **100%** |
+| D42 | Zod Removal + Lightweight Validation | ✅ **DEPLOYED** | **100%** |
+| D43 | Conversation Persistence (SYS-01) | ✅ **DEPLOYED** | **100%** |
 
 ### 6.3 API Endpoint Status (168+ Endpoints across 22 Modules)
 
@@ -515,7 +523,7 @@ CCS ENDPOINTS (11):            ALL ✅ DEPLOYED (incident lifecycle — v4.4)
 SECURITY ENDPOINTS (3):        ALL ✅ DEPLOYED (data classification — SPG-01)
 USAGE ENDPOINTS (3):           ALL ✅ DEPLOYED (current, history, projects[D16] — H1/H2)
 IMAGE ENDPOINTS (5):           ALL ✅ DEPLOYED (Path C — upload, list, get, url, delete)
-LAYER ENDPOINTS (5):           ALL ✅ DEPLOYED (Path B — CRUD + verify)
+LAYER ENDPOINTS (10):          ALL ✅ DEPLOYED (Path B — CRUD + start/complete/verify/fail/retry/evidence)
 SESSION ENDPOINTS (7):         ALL ✅ DEPLOYED (Session Graph — create, list, get, update, graph, edge, metrics[D10])
 ENGINEERING ENDPOINTS (35):    ALL ✅ DEPLOYED (Part XIV — SAR, contracts, fitness, tests, budget, readiness, rollback, alerts, knowledge, compliance)
 BLUEPRINT ENDPOINTS (12):      ALL ✅ DEPLOYED (L-BPX — scopes CRUD, deliverables CRUD, validate, integrity, DAG, summary)
@@ -535,7 +543,7 @@ See §10.1 for complete endpoint matrix with paths and methods.
 
 ```
 pmerit-technologies/products/aixord-router-worker/
-├── migrations/                          # 16 SQL migration files
+├── migrations/                          # 21 SQL migration files
 │   ├── 0001_subscriptions.sql           # Subscriptions, usage, audit_log
 │   ├── 002_backend_schema.sql           # Users, projects, sessions, gates, phase
 │   ├── 003_messages_schema.sql          # Messages table for chat history
@@ -555,7 +563,12 @@ pmerit-technologies/products/aixord-router-worker/
 │   ├── 017_workspace_binding.sql       # Workspace Binding (1 table — workspace_bindings + 1 index)
 │   ├── 021_brainstorm_artifacts.sql    # Brainstorm artifacts (HANDOFF-VD-CI-01 — versioned artifacts + indexes)
 │   ├── 022_task_assignments.sql        # Task Delegation Layer (HANDOFF-TDL-01 — task_assignments, escalation_log, standup_reports + 7 indexes)
-│   └── 023_continuity.sql             # Project Continuity Capsule (HANDOFF-PCC-01 — continuity_pins + decision_ledger alterations)
+│   ├── 023_continuity.sql             # Project Continuity Capsule (HANDOFF-PCC-01 — continuity_pins + decision_ledger alterations)
+│   ├── 026_schema_reconciliation.sql  # Schema reconciliation (decisions CASCADE, ghost tables, missing columns)
+│   ├── 027_fix_user_fk_cascades.sql   # FK cascades SET NULL (images, knowledge_artifacts, github_evidence)
+│   ├── 028_conversations.sql          # Conversations + conversation_messages tables (SYS-01)
+│   ├── 028_user_name_column.sql       # Add name column to users table
+│   └── 029_rate_limits.sql            # Rate limiting table
 ├── src/
 │   ├── api/                             # Backend API handlers (21 modules)
 │   │   ├── auth.ts                      # 9 endpoints: register, login, me, logout,
@@ -580,6 +593,7 @@ pmerit-technologies/products/aixord-router-worker/
 │   │   └── continuity.ts              # 7 endpoints: project continuity capsule, session detail, decisions, artifacts, pins CRUD (HANDOFF-PCC-01)
 │   ├── middleware/
 │   │   ├── requireAuth.ts               # Bearer token auth middleware
+│   │   ├── validateBody.ts              # Lightweight body validation (zod-compatible interface)
 │   │   └── entitlement.ts               # Usage limit checking (H1/H2 metering)
 │   ├── billing/
 │   │   ├── index.ts                     # Billing exports
@@ -604,7 +618,8 @@ pmerit-technologies/products/aixord-router-worker/
 │   ├── services/
 │   │   └── evidence-fetch.ts            # GitHub evidence fetching service
 │   ├── schemas/
-│   │   └── router.ts                    # Request validation schemas
+│   │   ├── router.ts                    # Request validation schemas
+│   │   └── common.ts                    # Lightweight validation schemas (no zod dependency)
 │   ├── utils/
 │   │   └── cost.ts                      # Cost estimation per model
 │   ├── index.ts                         # Main entry point (Hono app, route registration)
@@ -1357,6 +1372,10 @@ D4-CHAT is classified as **COMPLEX** (multi-component, multi-provider, persisten
 | 33 | GitHub OAuth callback 401 | `requireAuth` blocked `/callback` | Exempt callback from auth middleware | ✅ |
 | 33 | DELETE project 500 (still) | Missing tables in batch (artifacts, state) | Added all FK-referencing tables | ✅ |
 | 26b | DELETE project 500 (still) | `scope_id` column doesn't exist in `blueprint_integrity_reports` | Changed to `project_id` | ✅ |
+| 49 | 11 TypeScript errors (backend) | zod not installed but imported; unsafe D1 casts; missing AuthContext export; Hono status code types | Rewrote validateBody.ts + schemas/common.ts without zod; fixed casts in layers.ts, security.ts, index.ts, subscription.ts | ✅ |
+| 49 | Stale ChatWindow export | ChatWindow moved to `_orphaned/` but still in chat/index.ts barrel | Removed stale export | ✅ |
+| 49 | DB migration 027 column mismatch | Live knowledge_artifacts has 19 cols, migration expected 10 | Adapted migration to match live schema | ✅ |
+| 49 | DB migration 027 github_evidence mismatch | Live table has 17 cols, migration expected 9 | Adapted migration to match live schema | ✅ |
 
 ### 13.2 Known Issues
 
@@ -1373,9 +1392,10 @@ D4-CHAT is classified as **COMPLEX** (multi-component, multi-provider, persisten
 
 | Item | Description | Remediation |
 |------|-------------|-------------|
-| SDK not used | Direct API calls | Integrate D3 SDK |
-| Mock tasks | Dashboard mock data | Implement task system |
+| ~~SDK not used~~ | ~~Direct API calls~~ | ~~Integrate D3 SDK~~ ✅ RESOLVED (Session 13) |
+| ~~Mock tasks~~ | ~~Dashboard mock data~~ | ~~Implement task system~~ ✅ RESOLVED (Session 42 — TDL) |
 | Local settings | Not persisted | Backend storage |
+| Dependabot branches stale | 4 branches on old main | Close stale router-worker multi; review 3 minor bumps |
 
 ### 13.4 Backlog Items
 
@@ -1451,6 +1471,7 @@ D4-CHAT is classified as **COMPLEX** (multi-component, multi-provider, persisten
 | **46_*** | **02/10** | **Brainstorm Quality Loop (HANDOFF-BQL-01)** | **Layer 1: Quality requirements block in BRAINSTORM phase payload (fallback.ts). Layer 2a: computeBrainstormReadiness() function + GET /readiness endpoint (brainstorm.ts). Layer 2b: Tier 5B readiness in system prompt (index.ts + fallback.ts). Layer 2c: Frontend readiness indicator + "Ask AI to improve" button (Project.tsx). Layer 2d: Warning modal enhancement with "Ask AI to Fix" purple button (Project.tsx). Deployed backend + frontend.** |
 | **47_*** | **02/10** | **Governance Foundation Bridging (HANDOFF-GFB-01)** | **Task 2 (R3): Artifact State Class — migration 024 (superseded_by column + backfill), BRAINSTORM finalize DRAFT→ACTIVE, REVIEW finalize ACTIVE→FROZEN, new artifact marks previous HISTORICAL, Tier 5 state display. Task 1 (R2): Fitness Blocking — WARN policy on EXECUTE finalize, failing dimensions in warnChecks, Tier 6B quality dimensions advisory. Task 3 (R6): REASSESS Protocol — migration 025 (reassess_count + reassessment_log table), 3-level friction (L1 Surgical, L2 Major Pivot, L3 Fresh Start), frontend modal with level-aware UI (color-coded, character counters, artifact impact warnings), Tier 6C reassessment history. Commit 45bbd8b. Deployed backend + frontend.** |
 | **48_*** | **02/10** | **Diagnostic + Prompt Fixes (HANDOFF-DPF-01)** | **Task 1 (P0): Cold-start null guards — Tiers 1C/2D/2F/3 wrapped in try/catch to prevent INTERNAL_ERROR on new projects. Task 2 (P1): PTX-01 timing gap — 200ms retry on Tier 5 artifact query when messageCount > 5. Task 3: Interaction SOP — INTERACTION RULES block in system prompt preventing AI from delegating governance assessment + Finalize action directive replacing review_prompt. Task 4: Phase Output Contracts — PHASE_OUTPUT_CONTRACTS map with structured output rules for all 4 phases (BRAINSTORM/PLAN/EXECUTE/REVIEW). Task 5: GFB-01 verification — confirmed readiness endpoint null handling + REASSESS artifact lifecycle. Commit d0b14ec. Deployed backend + frontend.** |
+| **49_*** | **02/12** | **Infrastructure Sync + DB Migrations + SYS-02 E2E Tests** | **Merged 2 Copilot agent PRs (#5 D4-CHAT Project Plan v9.0, #6 manuscript fixes) via GitHub GraphQL API (draft→ready→squash merge). Fixed 11 backend TS errors: rewrote validateBody.ts + schemas/common.ts to remove zod dependency, fixed D1 unsafe casts in layers.ts/security.ts/index.ts/subscription.ts. Fixed stale ChatWindow barrel export. Commit 6754a13 (71 files, +8003/-460). Ran all 5 D1 migrations (026-029) on aixord-db — adapted 027 to match live schemas (19-col knowledge_artifacts, 17-col github_evidence). New tables: conversations, conversation_messages, rate_limits. New column: users.name. Created SYS-02 execution layer E2E test suite (59 tests: state machine transitions, sequential enforcement, single-active constraint, deletion/modification rules, verification, retry mechanics, batch creation). Full test suite: 141/141 passing across 5 files. Reviewed 4 Dependabot branches (router-worker multi is stale, 3 minor bumps on secondary products).** |
 
 ### 14.2 Key Learnings (Aligned with L-GCP)
 
