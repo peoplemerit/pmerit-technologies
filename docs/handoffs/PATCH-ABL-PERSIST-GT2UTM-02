@@ -1,0 +1,192 @@
+HANDOFF 2
+PATCH-ABL-PERSIST-GT2UTM-02
+Target: AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_4.md 
+
+AIXORD_OFFICIAL_ACCEPTABLE_BASE…
+
+1. Baseline Gap Identified
+
+Baseline enforces:
+
+Artifact Binding (L-AB)
+
+No action without binding
+
+Lifecycle instructions
+
+But it does NOT explicitly require:
+
+A system-level mandatory persistence enforcement mechanism in AI platforms that claim file writing capability.
+
+This creates a structural blind spot:
+Governance assumes persistence,
+but platform may not enforce commit.
+
+2. Required Baseline Addition
+
+Add New Doctrine:
+
+PART X-A — Artifact Persistence Enforcement Doctrine (APED)
+Definition
+
+AI-generated artifacts that are required by governance MUST be persisted through a mandatory commit layer.
+Chat output alone is not sufficient evidence of execution.
+
+APED-1 — Persistence Is Not Implied
+
+If platform claims workspace/file capability:
+
+Artifact existence MUST be proven by file evidence
+
+Chat claim ≠ persistence
+
+APED-2 — Mandatory Commit Layer
+
+Systems implementing AIXORD MUST:
+
+Provide a non-skippable artifact commit mechanism
+
+Return file path + hash evidence
+
+Block phase advancement if evidence missing
+
+APED-3 — Persistence Visibility
+
+UI MUST expose:
+
+Last artifact write timestamp
+
+Files written
+
+Hashes
+
+Commit status
+
+If not visible → governance opacity violation.
+
+APED-4 — Environment Awareness Requirement
+
+Platforms with file integration MUST provide:
+
+Write proof test
+
+Read proof test
+
+Hash compare
+
+Binding metadata display
+
+Failure → GA:ENV incomplete.
+
+APED-5 — Session Continuity Enforcement
+
+If system supports multi-session project governance:
+
+Session reopening MUST be deterministic
+
+Session ID MUST be URL-resolvable or explicitly selectable
+
+Session artifacts MUST be bindable
+
+Failure → L-SSC violation.
+
+APED-6 — GT2UTM Enforcement
+
+If governance state changes:
+
+UI MUST map:
+
+Governance event → Persistence action → Evidence display
+
+Unmapped governance state = traceability failure.
+
+3. Why This Patch Is Required
+
+From Test-issues evidence 
+
+Test-issues
+
+:
+
+The platform:
+
+Bound workspace
+
+Read files
+
+Generated work
+
+Did not persist artifacts
+
+This reveals:
+
+Baseline enforces artifact binding at reasoning layer
+But does not enforce artifact commit at tool layer.
+
+APED closes that gap.
+
+4. Non-Impact Statement
+
+This patch:
+
+Adds no new GA gates
+
+Does not alter phase ordering
+
+Does not change Formula
+
+Does not change Authority model
+
+Only enforces deterministic persistence
+
+Compliant with:
+
+L-FX
+
+L-SSC
+
+L-AB
+
+L-AVL
+
+L-SPG
+
+L-PS
+
+5. Acceptance Criteria for Baseline Patch
+
+Baseline updated if:
+
+APED doctrine inserted
+
+No gate reordering
+
+No authority change
+
+Persistence enforcement clearly defined
+
+GT2UTM traceability requirement documented
+
+Final Strategic Outcome
+
+After both patches:
+
+D4-CHAT becomes:
+
+Artifact deterministic
+
+Environment provable
+
+Session traceable
+
+Governance-to-UI aligned
+
+Baseline becomes:
+
+Tool-layer aware
+
+Persistence-enforcing
+
+GT2UTM-compatible
+
+Resistant to “illusion of work”
