@@ -1,12 +1,12 @@
 # D4-CHAT PROJECT PLAN
 
 **Document Type:** Comprehensive Project Plan
-**Version:** 10.0 (Session 49 — Infrastructure Sync + DB Migrations + SYS-02 E2E Tests)
-**Date:** 2026-02-12 (Updated: Sessions 34-49 — Full governance enforcement + TDL + PCC + PTX + BQL + GFB + DPF deployed + DB reconciled + E2E tested)
+**Version:** 11.0 (Session 49 + Governance Patch Integration — Infrastructure Sync + DB Migrations + SYS-02 E2E Tests + Execution Architecture & Artifact Persistence Extensions)
+**Date:** 2026-02-13 (Updated: Sessions 34-49 + Governance Patches — Full governance enforcement + TDL + PCC + PTX + BQL + GFB + DPF deployed + DB reconciled + E2E tested + PATCH-GOV-EXEC-01/D4-EXEC-ARCH-01/D4-PERSIST-GT2UTM-01/ABL-PERSIST-GT2UTM-02 integrated)
 **Entity:** PMERIT Technologies LLC
 **Governance:** AIXORD v4.3 → v4.4.1 → v4.4 → v4.4.3 → **v4.5 (Engineering Governance)**
 **Source Files:** Audit Report v5.0, AIXORD Baseline v4.5, Compact Core v4.5-C, 40+ sandbox files
-**Last Updated By:** Commander — Session 49 (Copilot PR merge, DB migrations 026-029, SYS-02 execution layer E2E tests, Zod removal, 11 TS error fixes, Dependabot review)
+**Last Updated By:** Commander — Session 49 + Governance Patch Integration (Copilot PR merge, DB migrations 026-029, SYS-02 execution layer E2E tests, Zod removal, 11 TS error fixes, Dependabot review, PATCH-GOV-EXEC-01/D4-EXEC-ARCH-01/D4-PERSIST-GT2UTM-01/ABL-PERSIST-GT2UTM-02)
 
 ---
 
@@ -45,7 +45,7 @@
 | **Blueprint** | AIXORD_PLATFORM_BLUEPRINT_D4.md |
 | **Started** | 2026-01-24 |
 | **Target Launch** | MVP Ready |
-| **Current Status** | **~100% Functional (All API Methods Wired)** |
+| **Current Status** | **~100% Functional (All API Methods Wired)** — Execution Architecture & Artifact Persistence Extensions Planned |
 
 ### 1.2 Vision Statement
 
@@ -100,7 +100,7 @@ EXECUTION_TOTAL = VERIFIED_REALITY + FORMULA_EXECUTION
 |----------|-------|
 | **Version** | 4.5 |
 | **Status** | RELEASE-READY |
-| **Patch Sources** | PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PATCH-GCP-01, PATCH-GKDL-01, PATCH-SPG-01, PATCH-CCS-01, ENH-4/5/6 (v4.4.1), PATCH-LEM-01 (v4.4.2), HO-BRAINSTORM-VALUE-01, HO-PLAN-BLUEPRINT-01, HO-BLUEPRINT-EXECUTE-01, HO-INTEGRITY-EXECUTE-01, HO-DOCTRINE-VALUE-01, HO-DISCOVER-BRAINSTORM-TOKEN-01, HO-INTEGRITY-AVL-01, HO-SECURITY-ROTATION-01, PATCH-SCOPE-CLARIFY-01 (v4.4.3), PATCH-NUMBERING-01 (v4.4.3), **PATCH-ENG-01 (v4.5 — Engineering Governance)** |
+| **Patch Sources** | PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PATCH-GCP-01, PATCH-GKDL-01, PATCH-SPG-01, PATCH-CCS-01, ENH-4/5/6 (v4.4.1), PATCH-LEM-01 (v4.4.2), HO-BRAINSTORM-VALUE-01, HO-PLAN-BLUEPRINT-01, HO-BLUEPRINT-EXECUTE-01, HO-INTEGRITY-EXECUTE-01, HO-DOCTRINE-VALUE-01, HO-DISCOVER-BRAINSTORM-TOKEN-01, HO-INTEGRITY-AVL-01, HO-SECURITY-ROTATION-01, PATCH-SCOPE-CLARIFY-01 (v4.4.3), PATCH-NUMBERING-01 (v4.4.3), PATCH-ENG-01 (v4.5 — Engineering Governance), **PATCH-GOV-EXEC-01 (Baseline Extensions — Planned)**, **PATCH-ABL-PERSIST-GT2UTM-02 (APED Doctrine — Planned)**, **PATCH-D4-EXEC-ARCH-01 (D4-CHAT Architecture — Planned)**, **PATCH-D4-PERSIST-GT2UTM-01 (Artifact Persistence — Planned)** |
 | **Parts** | I–XIV (14 parts) |
 | **Gates** | 17 GA:\* gates + 6 GS:\* security gates + GA:CCS (conditional) |
 | **Phases** | SETUP → DISCOVER → BRAINSTORM → PLAN → BLUEPRINT (incl. SCOPE) → EXECUTE → AUDIT → VERIFY → LOCK |
