@@ -139,7 +139,7 @@ layers.get('/projects/:projectId/layers', async (c) => {
   const { results } = await c.env.DB.prepare(query).bind(...params).all();
 
   // Parse JSON fields
-  const layers = (results as ExecutionLayer[]).map((layer) => ({
+  const layers = (results as unknown as ExecutionLayer[]).map((layer) => ({
     ...layer,
     expected_inputs: layer.expected_inputs ? JSON.parse(layer.expected_inputs) : null,
     expected_outputs: layer.expected_outputs ? JSON.parse(layer.expected_outputs) : null,
@@ -436,7 +436,7 @@ layers.post('/projects/:projectId/layers/:layerId/start', async (c) => {
      ORDER BY layer_number ASC`
   ).bind(projectId, layer.session_number, layer.layer_number).all();
 
-  for (const prev of previousLayers.results as ExecutionLayer[]) {
+  for (const prev of previousLayers.results as unknown as ExecutionLayer[]) {
     if (prev.status !== 'LOCKED') {
       return c.json({
         error: `Layer ${prev.layer_number} (${prev.title}) must be verified and locked before starting layer ${layer.layer_number}`,

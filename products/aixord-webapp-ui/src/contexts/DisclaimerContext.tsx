@@ -94,7 +94,6 @@ export function DisclaimerProvider({ children }: { children: ReactNode }) {
       setHasAccepted(true);
       setAcceptedAt(now);
 
-      console.log('[DisclaimerContext] Disclaimer accepted for user:', user.id);
     } catch (error) {
       console.error('[DisclaimerContext] Failed to save acceptance:', error);
     }
@@ -102,7 +101,6 @@ export function DisclaimerProvider({ children }: { children: ReactNode }) {
 
   const declineDisclaimer = useCallback(() => {
     // If user declines, log them out
-    console.log('[DisclaimerContext] Disclaimer declined, logging out');
     logout();
   }, [logout]);
 
@@ -118,7 +116,6 @@ export function DisclaimerProvider({ children }: { children: ReactNode }) {
       }
       setHasAccepted(false);
       setAcceptedAt(null);
-      console.log('[DisclaimerContext] Disclaimer reset for user:', user.id);
     } catch (error) {
       console.error('[DisclaimerContext] Failed to reset acceptance:', error);
     }

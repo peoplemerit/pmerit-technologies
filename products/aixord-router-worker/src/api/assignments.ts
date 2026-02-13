@@ -215,89 +215,90 @@ assignments.post('/:projectId/assignments', async (c) => {
   return c.json(formatAssignment(created!), 201);
 });
 
+// DEAD ENDPOINT: No frontend consumer — commented 2026-02-12
 /**
  * POST /:projectId/assignments/batch — Batch assign deliverables
  */
-assignments.post('/:projectId/assignments/batch', async (c) => {
-  const userId = c.get('userId');
-  const projectId = c.req.param('projectId');
+// assignments.post('/:projectId/assignments/batch', async (c) => {
+//   const userId = c.get('userId');
+//   const projectId = c.req.param('projectId');
 
-  if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
+//   if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
+//     return c.json({ error: 'Project not found' }, 404);
+//   }
 
-  const body = await c.req.json();
-  const { assignments: items = [], session_id } = body;
+//   const body = await c.req.json();
+//   const { assignments: items = [], session_id } = body;
 
-  if (!Array.isArray(items) || items.length === 0) {
-    return c.json({ error: 'assignments array required' }, 400);
-  }
+//   if (!Array.isArray(items) || items.length === 0) {
+//     return c.json({ error: 'assignments array required' }, 400);
+//   }
 
-  const created: unknown[] = [];
-  const rejected: Array<{ deliverable_id: string; reason: string }> = [];
-  const now = new Date().toISOString();
+//   const created: unknown[] = [];
+//   const rejected: Array<{ deliverable_id: string; reason: string }> = [];
+//   const now = new Date().toISOString();
 
-  for (const item of items) {
-    const { deliverable_id, priority = 'P1', authority_scope = [] } = item;
+//   for (const item of items) {
+//     const { deliverable_id, priority = 'P1', authority_scope = [] } = item;
 
-    // Verify deliverable
-    const deliverable = await c.env.DB.prepare(
-      'SELECT id, name, status, upstream_deps FROM blueprint_deliverables WHERE id = ? AND project_id = ?'
-    ).bind(deliverable_id, projectId).first<{ id: string; name: string; status: string; upstream_deps: string }>();
+//     // Verify deliverable
+//     const deliverable = await c.env.DB.prepare(
+//       'SELECT id, name, status, upstream_deps FROM blueprint_deliverables WHERE id = ? AND project_id = ?'
+//     ).bind(deliverable_id, projectId).first<{ id: string; name: string; status: string; upstream_deps: string }>();
 
-    if (!deliverable) {
-      rejected.push({ deliverable_id, reason: 'Deliverable not found' });
-      continue;
-    }
+//     if (!deliverable) {
+//       rejected.push({ deliverable_id, reason: 'Deliverable not found' });
+//       continue;
+//     }
 
-    // DAG check
-    const upstreamIds: string[] = JSON.parse(deliverable.upstream_deps || '[]');
-    if (upstreamIds.length > 0) {
-      const placeholders = upstreamIds.map(() => '?').join(',');
-      const unsatisfied = await c.env.DB.prepare(
-        `SELECT id FROM blueprint_deliverables WHERE id IN (${placeholders}) AND status NOT IN ('DONE', 'VERIFIED', 'LOCKED', 'CANCELLED')`
-      ).bind(...upstreamIds).all();
-      if (unsatisfied.results.length > 0) {
-        rejected.push({ deliverable_id, reason: 'Upstream dependencies not satisfied' });
-        continue;
-      }
-    }
+//     // DAG check
+//     const upstreamIds: string[] = JSON.parse(deliverable.upstream_deps || '[]');
+//     if (upstreamIds.length > 0) {
+//       const placeholders = upstreamIds.map(() => '?').join(',');
+//       const unsatisfied = await c.env.DB.prepare(
+//         `SELECT id FROM blueprint_deliverables WHERE id IN (${placeholders}) AND status NOT IN ('DONE', 'VERIFIED', 'LOCKED', 'CANCELLED')`
+//       ).bind(...upstreamIds).all();
+//       if (unsatisfied.results.length > 0) {
+//         rejected.push({ deliverable_id, reason: 'Upstream dependencies not satisfied' });
+//         continue;
+//       }
+//     }
 
-    // Check existing active assignment
-    const existing = await c.env.DB.prepare(
-      `SELECT id FROM task_assignments WHERE deliverable_id = ? AND project_id = ? AND status NOT IN ('ACCEPTED', 'PAUSED')`
-    ).bind(deliverable_id, projectId).first();
-    if (existing) {
-      rejected.push({ deliverable_id, reason: 'Already has active assignment' });
-      continue;
-    }
+//     // Check existing active assignment
+//     const existing = await c.env.DB.prepare(
+//       `SELECT id FROM task_assignments WHERE deliverable_id = ? AND project_id = ? AND status NOT IN ('ACCEPTED', 'PAUSED')`
+//     ).bind(deliverable_id, projectId).first();
+//     if (existing) {
+//       rejected.push({ deliverable_id, reason: 'Already has active assignment' });
+//       continue;
+//     }
 
-    const id = crypto.randomUUID();
-    await c.env.DB.prepare(
-      `INSERT INTO task_assignments
-       (id, project_id, deliverable_id, session_id, priority, status, authority_scope, escalation_triggers, assigned_by, assigned_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, '[]', ?, ?, ?)`
-    ).bind(id, projectId, deliverable_id, session_id || null, priority, JSON.stringify(authority_scope), userId, now, now).run();
+//     const id = crypto.randomUUID();
+//     await c.env.DB.prepare(
+//       `INSERT INTO task_assignments
+//        (id, project_id, deliverable_id, session_id, priority, status, authority_scope, escalation_triggers, assigned_by, assigned_at, updated_at)
+//        VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, '[]', ?, ?, ?)`
+//     ).bind(id, projectId, deliverable_id, session_id || null, priority, JSON.stringify(authority_scope), userId, now, now).run();
 
-    if (['DRAFT', 'READY'].includes(deliverable.status)) {
-      await c.env.DB.prepare(
-        "UPDATE blueprint_deliverables SET status = 'IN_PROGRESS', updated_at = ? WHERE id = ?"
-      ).bind(now, deliverable_id).run();
-    }
+//     if (['DRAFT', 'READY'].includes(deliverable.status)) {
+//       await c.env.DB.prepare(
+//         "UPDATE blueprint_deliverables SET status = 'IN_PROGRESS', updated_at = ? WHERE id = ?"
+//       ).bind(now, deliverable_id).run();
+//     }
 
-    const row = await getAssignment(c.env.DB, projectId, id);
-    created.push(formatAssignment(row!));
-  }
+//     const row = await getAssignment(c.env.DB, projectId, id);
+//     created.push(formatAssignment(row!));
+//   }
 
-  if (created.length > 0) {
-    await logDecision(c.env.DB, projectId, 'TASK_BATCH_ASSIGN', userId, {
-      count: created.length, session_id,
-      reason: `Batch assigned ${created.length} deliverable(s)`,
-    });
-  }
+//   if (created.length > 0) {
+//     await logDecision(c.env.DB, projectId, 'TASK_BATCH_ASSIGN', userId, {
+//       count: created.length, session_id,
+//       reason: `Batch assigned ${created.length} deliverable(s)`,
+//     });
+//   }
 
-  return c.json({ created, rejected }, 201);
-});
+//   return c.json({ created, rejected }, 201);
+// });
 
 /**
  * GET /:projectId/assignments — List assignments
@@ -648,72 +649,74 @@ assignments.post('/:projectId/assignments/:id/reject', async (c) => {
   return c.json(formatAssignment(updated!));
 });
 
+// DEAD ENDPOINT: No frontend consumer — commented 2026-02-12
 /**
  * POST /:projectId/assignments/:id/pause — Director pauses
  */
-assignments.post('/:projectId/assignments/:id/pause', async (c) => {
-  const userId = c.get('userId');
-  const projectId = c.req.param('projectId');
-  const assignmentId = c.req.param('id');
+// assignments.post('/:projectId/assignments/:id/pause', async (c) => {
+//   const userId = c.get('userId');
+//   const projectId = c.req.param('projectId');
+//   const assignmentId = c.req.param('id');
 
-  if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
+//   if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
+//     return c.json({ error: 'Project not found' }, 404);
+//   }
 
-  const existing = await getAssignment(c.env.DB, projectId, assignmentId);
-  if (!existing) return c.json({ error: 'Assignment not found' }, 404);
+//   const existing = await getAssignment(c.env.DB, projectId, assignmentId);
+//   if (!existing) return c.json({ error: 'Assignment not found' }, 404);
 
-  if (!['ASSIGNED', 'IN_PROGRESS', 'BLOCKED'].includes(existing.status as string)) {
-    return c.json({ error: `Cannot pause from status: ${existing.status}` }, 409);
-  }
+//   if (!['ASSIGNED', 'IN_PROGRESS', 'BLOCKED'].includes(existing.status as string)) {
+//     return c.json({ error: `Cannot pause from status: ${existing.status}` }, 409);
+//   }
 
-  const now = new Date().toISOString();
-  await c.env.DB.prepare(
-    "UPDATE task_assignments SET status = 'PAUSED', updated_at = ? WHERE id = ?"
-  ).bind(now, assignmentId).run();
+//   const now = new Date().toISOString();
+//   await c.env.DB.prepare(
+//     "UPDATE task_assignments SET status = 'PAUSED', updated_at = ? WHERE id = ?"
+//   ).bind(now, assignmentId).run();
 
-  await logDecision(c.env.DB, projectId, 'TASK_PAUSE', userId, {
-    assignment_id: assignmentId, reason: 'Director paused assignment',
-  });
+//   await logDecision(c.env.DB, projectId, 'TASK_PAUSE', userId, {
+//     assignment_id: assignmentId, reason: 'Director paused assignment',
+//   });
 
-  const updated = await getAssignment(c.env.DB, projectId, assignmentId);
-  return c.json(formatAssignment(updated!));
-});
+//   const updated = await getAssignment(c.env.DB, projectId, assignmentId);
+//   return c.json(formatAssignment(updated!));
+// });
 
+// DEAD ENDPOINT: No frontend consumer — commented 2026-02-12
 /**
  * POST /:projectId/assignments/:id/resume — Director resumes
  */
-assignments.post('/:projectId/assignments/:id/resume', async (c) => {
-  const userId = c.get('userId');
-  const projectId = c.req.param('projectId');
-  const assignmentId = c.req.param('id');
+// assignments.post('/:projectId/assignments/:id/resume', async (c) => {
+//   const userId = c.get('userId');
+//   const projectId = c.req.param('projectId');
+//   const assignmentId = c.req.param('id');
 
-  if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
+//   if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
+//     return c.json({ error: 'Project not found' }, 404);
+//   }
 
-  const existing = await getAssignment(c.env.DB, projectId, assignmentId);
-  if (!existing) return c.json({ error: 'Assignment not found' }, 404);
+//   const existing = await getAssignment(c.env.DB, projectId, assignmentId);
+//   if (!existing) return c.json({ error: 'Assignment not found' }, 404);
 
-  if (existing.status !== 'PAUSED') {
-    return c.json({ error: `Cannot resume from status: ${existing.status}` }, 409);
-  }
+//   if (existing.status !== 'PAUSED') {
+//     return c.json({ error: `Cannot resume from status: ${existing.status}` }, 409);
+//   }
 
-  const now = new Date().toISOString();
-  // Resume to IN_PROGRESS if work was started, otherwise ASSIGNED
-  const resumeStatus = existing.started_at ? 'IN_PROGRESS' : 'ASSIGNED';
-  await c.env.DB.prepare(
-    'UPDATE task_assignments SET status = ?, updated_at = ? WHERE id = ?'
-  ).bind(resumeStatus, now, assignmentId).run();
+//   const now = new Date().toISOString();
+//   // Resume to IN_PROGRESS if work was started, otherwise ASSIGNED
+//   const resumeStatus = existing.started_at ? 'IN_PROGRESS' : 'ASSIGNED';
+//   await c.env.DB.prepare(
+//     'UPDATE task_assignments SET status = ?, updated_at = ? WHERE id = ?'
+//   ).bind(resumeStatus, now, assignmentId).run();
 
-  await logDecision(c.env.DB, projectId, 'TASK_RESUME', userId, {
-    assignment_id: assignmentId, resume_status: resumeStatus,
-    reason: `Director resumed assignment → ${resumeStatus}`,
-  });
+//   await logDecision(c.env.DB, projectId, 'TASK_RESUME', userId, {
+//     assignment_id: assignmentId, resume_status: resumeStatus,
+//     reason: `Director resumed assignment → ${resumeStatus}`,
+//   });
 
-  const updated = await getAssignment(c.env.DB, projectId, assignmentId);
-  return c.json(formatAssignment(updated!));
-});
+//   const updated = await getAssignment(c.env.DB, projectId, assignmentId);
+//   return c.json(formatAssignment(updated!));
+// });
 
 /**
  * POST /:projectId/assignments/:id/block — AI reports blocker

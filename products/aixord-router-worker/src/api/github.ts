@@ -388,8 +388,6 @@ github.delete('/disconnect/:projectId', async (c) => {
       'DELETE FROM github_evidence WHERE project_id = ?'
     ).bind(projectId).run();
 
-    console.log(`[GitHub] Disconnected project ${projectId} for user ${userId}`);
-
     return c.json({
       success: true,
       message: 'GitHub disconnected successfully'
@@ -527,8 +525,6 @@ github.put('/repo/:projectId', async (c) => {
     await c.env.DB.prepare(
       'DELETE FROM github_evidence WHERE project_id = ?'
     ).bind(projectId).run();
-
-    console.log(`[GitHub] Updated repo to ${repo_owner}/${repo_name} for project ${projectId}`);
 
     return c.json({
       success: true,

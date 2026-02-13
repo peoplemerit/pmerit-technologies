@@ -31,6 +31,8 @@ import {
   activateGumroadLicense,
   verifyKdpCode
 } from './billing';
+import { requireAuth } from './middleware/requireAuth';
+import { rateLimit } from './middleware/rateLimit';
 
 // Backend API imports
 import auth from './api/auth';
@@ -53,22 +55,51 @@ import workspace from './api/workspace';
 import brainstorm, { computeBrainstormReadiness } from './api/brainstorm';
 import assignments from './api/assignments';
 import continuity, { getProjectContinuityCompact } from './api/continuity';
+import conversations from './api/conversations';
 
 const app = new Hono<{ Bindings: Env }>();
 
-// CORS middleware (PATCH-CORS-01: Updated for new domains)
-app.use('*', cors({
-  origin: [
-    'http://localhost:5173',
-    'http://localhost:3000',
+// CORS middleware (PATCH-CORS-01: Updated for new domains, LOW-07: localhost conditional)
+app.use('*', async (c, next) => {
+  const prodOrigins = [
     'https://aixord-webapp-ui.pages.dev',
     'https://aixord.pmerit.com',
     'https://aixord.ai',
-  ],
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
-}));
+  ];
+  // Include localhost origins only in non-production environments
+  // In production, use `wrangler dev --local` for CORS passthrough
+  const allowedOrigins = c.env.ENVIRONMENT === 'production'
+    ? prodOrigins
+    : [...prodOrigins, 'http://localhost:5173', 'http://localhost:3000'];
+
+  const corsMiddleware = cors({
+    origin: allowedOrigins,
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  });
+  return corsMiddleware(c, next);
+});
+
+// =============================================================================
+// RATE LIMITING
+// =============================================================================
+
+// Global rate limit: 200 requests per minute for general API access
+app.use('/api/*', rateLimit({ windowMs: 60000, maxRequests: 200 }));
+app.use('/v1/*', rateLimit({ windowMs: 60000, maxRequests: 200 }));
+
+// Stricter rate limits for sensitive endpoints
+// Auth endpoints: 10 requests per minute (prevent brute force)
+app.use('/api/v1/auth/login', rateLimit({ windowMs: 60000, maxRequests: 10 }));
+app.use('/api/v1/auth/register', rateLimit({ windowMs: 60000, maxRequests: 10 }));
+app.use('/api/v1/auth/*', rateLimit({ windowMs: 60000, maxRequests: 20 }));
+
+// Router execute: 30 requests per minute (prevent API abuse)
+app.use('/v1/router/execute', rateLimit({ windowMs: 60000, maxRequests: 30 }));
+
+// Billing endpoints: 20 requests per minute (prevent payment fraud attempts)
+app.use('/api/v1/billing/*', rateLimit({ windowMs: 60000, maxRequests: 20 }));
 
 // Health check
 app.get('/v1/router/health', (c) => {
@@ -166,14 +197,7 @@ app.post('/v1/router/execute', async (c) => {
                                requestPhase === 'DISCOVER';
 
     if (isExploratoryPhase) {
-      // Log phase-based bypass
-      console.log(JSON.stringify({
-        type: 'spg01_phase_bypass',
-        project_id: projectId,
-        request_id: request.trace.request_id,
-        phase: requestPhase,
-        message: 'AI exposure check bypassed - exploratory phase'
-      }));
+      // Phase-based bypass — no logging needed in production
     } else if (projectId) {
       const classification = await c.env.DB.prepare(`
         SELECT ai_exposure, pii, phi, minor_data FROM data_classification WHERE project_id = ?
@@ -230,14 +254,6 @@ app.post('/v1/router/execute', async (c) => {
           mask_phi: classification?.phi === 'YES',
           mask_minor_data: classification?.minor_data === 'YES',
         };
-        console.log(JSON.stringify({
-          type: 'spg01_redaction_active',
-          project_id: projectId,
-          request_id: request.trace.request_id,
-          mask_pii: classification?.pii === 'YES',
-          mask_phi: classification?.phi === 'YES',
-          mask_minor_data: classification?.minor_data === 'YES',
-        }));
       }
     }
 
@@ -782,14 +798,6 @@ app.post('/v1/router/execute', async (c) => {
 
         if (failedGates.length > 0) {
           // DO NOT CALL THE AI MODEL — return governance block
-          console.log(JSON.stringify({
-            type: 'governance_block',
-            project_id: projectId,
-            phase: currentPhase,
-            failed_gates: failedGates.map(g => g.key),
-            request_id: request.trace.request_id,
-          }));
-
           return c.json({
             type: 'governance_block',
             failed_gates: failedGates,
@@ -875,30 +883,13 @@ app.post('/v1/router/execute', async (c) => {
       await incrementMeteringUsage(c.env.DB, meteringUserId, totalTokens, costCents, false);
     }
 
-    // Log for observability
-    console.log(JSON.stringify({
-      type: 'router_execution',
-      trace: request.trace,
-      product: request.product,
-      tier: request.subscription.tier,
-      intent: request.intent,
-      router_intent: effectiveRouterIntent,
-      mode: request.mode,
-      model_class: modelClass,
-      model_used: response.model_used,
-      affinity_used: affinitySelection.affinityUsed,
-      usage: response.usage,
-      fallbacks: response.router_debug?.fallbacks || 0,
-      total_latency_ms: Date.now() - startTime
-    }));
-
     return c.json(response);
 
   } catch (error) {
     const latencyMs = Date.now() - startTime;
 
     if (error instanceof RouterError) {
-      console.log(JSON.stringify({
+      console.error(JSON.stringify({
         type: 'router_error',
         error_code: error.code,
         error_message: error.message,
@@ -918,7 +909,7 @@ app.post('/v1/router/execute', async (c) => {
         error: `${error.code}: ${error.message}`
       };
 
-      return c.json(errorResponse, error.statusCode);
+      return c.json(errorResponse, error.statusCode as 400 | 401 | 403 | 404 | 429 | 500);
     }
 
     // Unknown error — FIX-2: Enhanced diagnostics for cold-start debugging
@@ -996,7 +987,7 @@ app.post('/v1/router/quote', async (c) => {
 
   } catch (error) {
     if (error instanceof RouterError) {
-      return c.json({ error: `${error.code}: ${error.message}` }, error.statusCode);
+      return c.json({ error: `${error.code}: ${error.message}` }, error.statusCode as 400 | 401 | 403 | 404 | 429 | 500);
     }
     return c.json({ error: 'INTERNAL_ERROR' }, 500);
   }
@@ -1033,10 +1024,10 @@ app.post('/v1/billing/webhook/stripe', async (c) => {
 });
 
 // Create checkout session
-app.post('/v1/billing/checkout', async (c) => {
+app.post('/v1/billing/checkout', requireAuth, async (c) => {
   try {
+    const userId = c.get('userId');
     const body = await c.req.json() as {
-      user_id: string;
       price_id: string;
       success_url: string;
       cancel_url: string;
@@ -1048,7 +1039,7 @@ app.post('/v1/billing/checkout', async (c) => {
     }
 
     const session = await createCheckoutSession(
-      body.user_id,
+      userId,
       body.price_id,
       body.success_url,
       body.cancel_url,
@@ -1064,7 +1055,7 @@ app.post('/v1/billing/checkout', async (c) => {
 });
 
 // Create customer portal session
-app.post('/v1/billing/portal', async (c) => {
+app.post('/v1/billing/portal', requireAuth, async (c) => {
   try {
     const body = await c.req.json() as {
       customer_id: string;
@@ -1091,10 +1082,10 @@ app.post('/v1/billing/portal', async (c) => {
 });
 
 // Activate Gumroad license
-app.post('/v1/billing/activate/gumroad', async (c) => {
+app.post('/v1/billing/activate/gumroad', requireAuth, async (c) => {
   try {
+    const userId = c.get('userId');
     const body = await c.req.json() as {
-      user_id: string;
       license_key: string;
     };
 
@@ -1107,7 +1098,7 @@ app.post('/v1/billing/activate/gumroad', async (c) => {
       body.license_key,
       productId,
       c.env.DB,
-      body.user_id
+      userId
     );
 
     if (!result.success) {
@@ -1122,10 +1113,10 @@ app.post('/v1/billing/activate/gumroad', async (c) => {
 });
 
 // Activate KDP code
-app.post('/v1/billing/activate/kdp', async (c) => {
+app.post('/v1/billing/activate/kdp', requireAuth, async (c) => {
   try {
+    const userId = c.get('userId');
     const body = await c.req.json() as {
-      user_id: string;
       code: string;
     };
 
@@ -1138,7 +1129,7 @@ app.post('/v1/billing/activate/kdp', async (c) => {
       body.code,
       kdpSecret,
       c.env.DB,
-      body.user_id
+      userId
     );
 
     if (!result.success) {
@@ -1215,5 +1206,8 @@ app.route('/api/v1/projects', assignments);
 
 // Project Continuity Capsule routes (HANDOFF-PCC-01)
 app.route('/api/v1/projects', continuity);
+
+// Conversation persistence routes (SYS-01)
+app.route('/api/v1/conversations', conversations);
 
 export default app;

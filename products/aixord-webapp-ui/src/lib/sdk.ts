@@ -314,7 +314,6 @@ export class AIXORDSDKClient {
     // Load state (includes gates and classification data)
     try {
       this.state = await api.state.get(this.config.projectId, this.config.token);
-      console.log('[AIXORD SDK] State loaded successfully. Phase:', this.state?.session?.phase);
 
       // Extract classification from state if available (embedded in capsule)
       if (this.state?.dataClassification) {
@@ -344,15 +343,10 @@ export class AIXORDSDKClient {
     // Get current phase from state if not provided
     const currentPhase = (phase || this.state?.session?.phase || 'BRAINSTORM').toUpperCase();
 
-    // D-010 DEBUG: Log phase for troubleshooting
-    console.log('[AIXORD SDK] checkGates called with phase:', phase, '-> currentPhase:', currentPhase);
-
     // D-010 FIX: Brainstorm and Plan phases do NOT enforce gates
     // This allows freeform ideation and planning without governance blocks
     if (currentPhase === 'BRAINSTORM' || currentPhase === 'B' ||
         currentPhase === 'PLAN' || currentPhase === 'P') {
-      console.log('[AIXORD SDK] Phase exempt - allowing freeform interaction');
-
       return {
         allowed: true,
         blockingGates: [],
@@ -367,8 +361,6 @@ export class AIXORDSDKClient {
     }
 
     // Only reaches here for EXECUTE or REVIEW phases
-    console.log('[AIXORD SDK] Gate enforcement required for phase:', currentPhase);
-
     // RC-6 FIX: Check gates from state (already loaded during init)
     // No separate API call to /security/gates needed
     if (this.state?.gates) {
@@ -492,7 +484,6 @@ export class AIXORDSDKClient {
     // Brainstorm and Plan are freeform exploration — no classification lockdown
     if (currentPhase === 'BRAINSTORM' || currentPhase === 'B' ||
         currentPhase === 'PLAN' || currentPhase === 'P') {
-      console.log('[AIXORD SDK] AI exposure check skipped - exploratory phase:', currentPhase);
       return {
         allowed: true,
         exposureLevel: 'PHASE_EXEMPT',
@@ -565,7 +556,6 @@ export class AIXORDSDKClient {
 
     // Get current phase for gate enforcement
     const phase = options.phase || this.state?.session.phase || 'BRAINSTORM';
-    console.log('[AIXORD SDK] send() phase resolution: options.phase=', options.phase, 'this.state?.session.phase=', this.state?.session?.phase, 'resolved=', phase);
 
     // 1. Check gates (phase-aware - D-010 fix)
     const gateResult = await this.checkGates(phase);

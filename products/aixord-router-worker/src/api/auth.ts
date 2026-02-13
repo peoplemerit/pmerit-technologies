@@ -15,6 +15,8 @@
 
 import { Hono } from 'hono';
 import type { Env } from '../types';
+import { validateBody } from '../middleware/validateBody';
+import { loginSchema, registerSchema } from '../schemas/common';
 
 const auth = new Hono<{ Bindings: Env }>();
 
@@ -51,15 +53,8 @@ async function sendEmail(
 ): Promise<boolean> {
   const resendApiKey = env.RESEND_API_KEY;
 
-  // If no API key configured, log and allow flow to continue (dev mode)
+  // If no API key configured, allow flow to continue (dev mode)
   if (!resendApiKey) {
-    console.log(JSON.stringify({
-      type: 'email_send_skipped',
-      reason: 'RESEND_API_KEY not configured',
-      to,
-      subject,
-      timestamp: new Date().toISOString(),
-    }));
     return true; // Allow registration flow to continue in dev
   }
 
@@ -81,13 +76,6 @@ async function sendEmail(
     const result = await response.json() as { id?: string; message?: string; error?: unknown };
 
     if (response.ok && result.id) {
-      console.log(JSON.stringify({
-        type: 'email_sent',
-        to,
-        subject,
-        email_id: result.id,
-        timestamp: new Date().toISOString(),
-      }));
       return true;
     }
 
@@ -117,9 +105,9 @@ async function sendEmail(
  * POST /api/v1/auth/register
  * Creates user account and sends verification email
  */
-auth.post('/register', async (c) => {
-  const body = await c.req.json<{ email?: string; password?: string; username?: string }>();
-  const { email, password, username } = body;
+auth.post('/register', validateBody(registerSchema), async (c) => {
+  const body = await c.req.json<{ email?: string; password?: string; username?: string; name?: string }>();
+  const { email, password, username, name } = body;
 
   if (!email || !password) {
     return c.json({ error: 'Email and password required' }, 400);
@@ -172,10 +160,13 @@ auth.post('/register', async (c) => {
   const trialExpiresAt = new Date();
   trialExpiresAt.setDate(trialExpiresAt.getDate() + 14);
 
+  // Sanitize display name (trim, cap length)
+  const sanitizedName = name ? name.trim().slice(0, 100) : null;
+
   // Insert user with email_verified = 1 (successful registration = valid email ownership)
   await c.env.DB.prepare(
-    'INSERT INTO users (id, email, password_hash, username, email_verified, subscription_tier, trial_expires_at) VALUES (?, ?, ?, ?, 1, ?, ?)'
-  ).bind(userId, email.toLowerCase(), passwordHash, username?.toLowerCase() || null, 'TRIAL', trialExpiresAt.toISOString()).run();
+    'INSERT INTO users (id, email, password_hash, username, name, email_verified, subscription_tier, trial_expires_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)'
+  ).bind(userId, email.toLowerCase(), passwordHash, username?.toLowerCase() || null, sanitizedName, 'TRIAL', trialExpiresAt.toISOString()).run();
 
   // Create email verification token
   const verificationToken = generateToken();
@@ -213,7 +204,7 @@ auth.post('/register', async (c) => {
   ).bind(crypto.randomUUID(), userId, token, expiresAt).run();
 
   return c.json({
-    user: { id: userId, email: email.toLowerCase(), emailVerified: true },
+    user: { id: userId, email: email.toLowerCase(), name: sanitizedName, emailVerified: true },
     token,
     expires_at: expiresAt,
     message: 'Account created successfully.'
@@ -223,7 +214,7 @@ auth.post('/register', async (c) => {
 /**
  * POST /api/v1/auth/login
  */
-auth.post('/login', async (c) => {
+auth.post('/login', validateBody(loginSchema), async (c) => {
   const body = await c.req.json<{ email?: string; password?: string }>();
   const { email, password } = body;
 
@@ -293,17 +284,18 @@ auth.get('/me', async (c) => {
   });
 });
 
+// DEAD ENDPOINT: No frontend consumer — commented 2026-02-12
 /**
  * POST /api/v1/auth/logout
  */
-auth.post('/logout', async (c) => {
-  const authHeader = c.req.header('Authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    await c.env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
-  }
-  return c.json({ success: true });
-});
+// auth.post('/logout', async (c) => {
+//   const authHeader = c.req.header('Authorization');
+//   if (authHeader?.startsWith('Bearer ')) {
+//     const token = authHeader.slice(7);
+//     await c.env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
+//   }
+//   return c.json({ success: true });
+// });
 
 /**
  * GET /api/v1/auth/subscription

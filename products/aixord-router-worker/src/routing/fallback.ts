@@ -885,12 +885,7 @@ After presenting the Review Packet, include this tag at the END of your response
     );
     userContent = redacted;
     if (redactionCount > 0) {
-      console.log(JSON.stringify({
-        type: 'spg01_content_redacted',
-        request_id: request.trace.request_id,
-        redaction_count: redactionCount,
-        redacted_types: redactedTypes,
-      }));
+      // Redaction applied — count tracked in response metadata
     }
   }
 
@@ -1004,7 +999,6 @@ export async function executeWithFallback(
       }
 
       // Continue to next candidate
-      console.log(`[Router] Fallback ${fallbackCount}: ${candidate.provider}/${candidate.model} failed, trying next...`);
     }
   }
 

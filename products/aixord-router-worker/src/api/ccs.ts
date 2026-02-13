@@ -165,17 +165,6 @@ ccs.post('/:projectId/ccs/incidents', async (c) => {
   // L-CCS1: IF credential.exposed=TRUE → GA:CCS activates immediately (blocking)
   await updateGACCS(c.env.DB, projectId, true, 'DETECT', id);
 
-  console.log(JSON.stringify({
-    type: 'ccs_incident_created',
-    project_id: projectId,
-    incident_id: id,
-    incident_number: incidentNumber,
-    credential_type,
-    credential_name,
-    phase: 'DETECT',
-    ga_ccs: 1,
-  }));
-
   return c.json({
     id,
     incident_number: incidentNumber,
@@ -357,14 +346,6 @@ ccs.put('/:projectId/ccs/incidents/:incidentId/phase', async (c) => {
   // Update GA:CCS state (still blocking until UNLOCK)
   await updateGACCS(c.env.DB, projectId, phase !== 'UNLOCK', phase, incidentId);
 
-  console.log(JSON.stringify({
-    type: 'ccs_phase_transition',
-    project_id: projectId,
-    incident_id: incidentId,
-    from_phase: incident.phase,
-    to_phase: phase,
-  }));
-
   return c.json({
     id: incidentId,
     phase,
@@ -423,13 +404,6 @@ ccs.post('/:projectId/ccs/incidents/:incidentId/artifacts', async (c) => {
     INSERT INTO ccs_artifacts (id, incident_id, artifact_type, title, content, created_by, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).bind(id, incidentId, artifact_type, title, content, userId, now).run();
-
-  console.log(JSON.stringify({
-    type: 'ccs_artifact_created',
-    incident_id: incidentId,
-    artifact_id: id,
-    artifact_type,
-  }));
 
   return c.json({
     id,
@@ -528,14 +502,6 @@ ccs.post('/:projectId/ccs/incidents/:incidentId/verify', async (c) => {
     INSERT INTO ccs_verification_tests (id, incident_id, test_type, target_system, expected_result, actual_result, passed, tested_by, tested_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(id, incidentId, test_type, target_system, expected_result, actual_result, passed ? 1 : 0, userId, now).run();
-
-  console.log(JSON.stringify({
-    type: 'ccs_verification_test',
-    incident_id: incidentId,
-    test_id: id,
-    test_type,
-    passed,
-  }));
 
   return c.json({
     id,
@@ -643,12 +609,6 @@ ccs.post('/:projectId/ccs/incidents/:incidentId/attest', async (c) => {
     WHERE id = ?
   `).bind(userId, attestation_statement, now, now, incidentId).run();
 
-  console.log(JSON.stringify({
-    type: 'ccs_attestation',
-    incident_id: incidentId,
-    attested_by: userId,
-  }));
-
   return c.json({
     id: incidentId,
     attested: true,
@@ -720,13 +680,6 @@ ccs.post('/:projectId/ccs/incidents/:incidentId/unlock', async (c) => {
 
   // RELEASE GA:CCS GATE
   await updateGACCS(c.env.DB, projectId, false, 'INACTIVE', null);
-
-  console.log(JSON.stringify({
-    type: 'ccs_unlocked',
-    project_id: projectId,
-    incident_id: incidentId,
-    ga_ccs: 0,
-  }));
 
   return c.json({
     id: incidentId,

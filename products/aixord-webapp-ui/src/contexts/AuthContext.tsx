@@ -21,6 +21,8 @@ const USER_KEY = 'aixord_user';
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
 
 function setCookie(name: string, value: string, maxAge: number): void {
+  // NOTE: document.cookie cannot set HttpOnly flag (requires server-side Set-Cookie header)
+  // Cookie is backup storage only; localStorage is primary (RC-4 FIX)
   // Only use Secure flag on HTTPS (production), allow HTTP for localhost development
   const isSecure = window.location.protocol === 'https:';
   const secureFlag = isSecure ? '; Secure' : '';
@@ -137,12 +139,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // D-003 FIX: Synchronous initialization is critical for surviving rapid refreshes
   const [token, setToken] = useState<string | null>(() => {
     const t = getToken();
-    console.log('[AuthContext] Initial token load:', t ? `${t.slice(0, 8)}...` : 'none');
+    // CRIT-04 FIX: Remove token fragment logging — never log token presence to console
     return t;
   });
   const [user, setUser] = useState<User | null>(() => {
     const u = getCachedUser();
-    console.log('[AuthContext] Initial user load:', u?.email || 'none');
     return u;
   });
   const [isLoading, setIsLoading] = useState(() => {
@@ -173,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // localStorage might be blocked in some contexts
       }
 
-      console.log('[AuthContext] Mount check - cookie:', !!cookieToken, 'localStorage:', !!localToken, 'cachedUser:', !!cachedUser, 'using:', storedToken ? `(${storedToken.slice(0, 8)}...)` : 'none');
+      // CRIT-04 FIX: Removed token presence logging from mount check
 
       if (storedToken) {
         // D-003 FIX: If we have a cached user, show them immediately while validating
@@ -185,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         try {
           const userData = await api.auth.me(storedToken);
-          console.log('[AuthContext] Token validation SUCCESS for:', userData.email);
+          // CRIT-04 FIX: No longer logging user email on validation success
           // Re-store to ensure both storage mechanisms are synced
           storeToken(storedToken);
           storeUser(userData);
@@ -205,7 +206,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } else {
             // Network error or other issue - keep the cached user logged in
             // They'll get re-validated on next successful request
-            console.log('[AuthContext] Keeping cached user due to non-auth error');
             if (cachedUser) {
               setUser(cachedUser);
               setToken(storedToken);
@@ -213,8 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       } else {
-        console.log('[AuthContext] No stored token found');
-        // Clear any stale cached user if no token
+        // No stored token found — clear any stale cached user
         setUser(null);
       }
       setIsLoading(false);
@@ -275,13 +274,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const userData = await api.auth.login(email, password);
       const newToken = userData.apiKey;
-      console.log('[AuthContext] loginWithEmail - storing token:', newToken.slice(0, 8) + '...');
       storeToken(newToken);
       storeUser(userData);
-      // Verify storage
-      const verifyToken = getToken();
-      const verifyCachedUser = getCachedUser();
-      console.log('[AuthContext] loginWithEmail - verified token:', !!verifyToken, verifyToken === newToken ? '(matches)' : '(MISMATCH!)', 'user cached:', !!verifyCachedUser);
       setToken(newToken);
       setUser(userData);
       setIsLoading(false);

@@ -54,6 +54,15 @@ export interface MessageMetadata {
     evidenceType: string;
     caption?: string;
   }>;
+  // Execution result (D4-CHAT)
+  executionResult?: {
+    filesCreated: string[];
+    filesUpdated: string[];
+    progressUpdates: number;
+    submissions: number;
+    escalations: number;
+    errors: string[];
+  };
 }
 
 export interface MessageOption {

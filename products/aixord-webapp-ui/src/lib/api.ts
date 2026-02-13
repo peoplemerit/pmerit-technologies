@@ -1,10 +1,13 @@
 /**
  * AIXORD Web App API Client
  *
- * Connects to D4 Web App at https://aixord-webapp.peoplemerit.workers.dev
+ * Backward compatibility re-export
+ * All API code has been moved to ./api/* modules
+ *
+ * Import from './api' or './api/index' instead for better tree-shaking
  */
 
-const API_BASE = 'https://aixord-router-worker.peoplemerit.workers.dev/api/v1';
+export * from './api/index';
 
 /**
  * API Error class for structured error handling
@@ -1162,7 +1165,7 @@ export const assignmentsApi = {
     );
   },
 
-  // Standups
+  // Standups — CRIT-07 FIX: Match backend route pattern /:projectId/sessions/:sessionId/standup
   async postStandup(
     projectId: string,
     data: {
@@ -1177,9 +1180,10 @@ export const assignmentsApi = {
     },
     token: string
   ): Promise<StandupData> {
+    const { session_id, ...standupBody } = data;
     return request<StandupData>(
-      `/projects/${projectId}/standups`,
-      { method: 'POST', body: JSON.stringify(data) },
+      `/projects/${projectId}/sessions/${session_id}/standup`,
+      { method: 'POST', body: JSON.stringify(standupBody) },
       token
     );
   },
@@ -1190,7 +1194,7 @@ export const assignmentsApi = {
     token: string
   ): Promise<StandupData[]> {
     const result = await request<{ standups: StandupData[] }>(
-      `/projects/${projectId}/standups?session_id=${sessionId}`,
+      `/projects/${projectId}/sessions/${sessionId}/standups`,
       {},
       token
     );
@@ -1582,7 +1586,7 @@ export const routerApi = {
 /**
  * Billing base URL (same worker, different endpoint path)
  */
-const BILLING_BASE = 'https://aixord-router-worker.peoplemerit.workers.dev/v1/billing';
+const BILLING_BASE = `${import.meta.env.VITE_ROUTER_URL || 'https://aixord-router-worker.peoplemerit.workers.dev'}/v1/billing`;
 
 /**
  * Subscription tier type
@@ -1606,6 +1610,20 @@ export interface SubscriptionInfo {
   stripeCustomerId?: string;
 }
 
+// CRIT-05 FIX: Helper to get auth headers for billing requests
+function getBillingAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const token = localStorage.getItem('aixord_token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  } catch {
+    // localStorage may be blocked
+  }
+  return headers;
+}
+
 export const billingApi = {
   /**
    * Create a Stripe checkout session for subscription upgrade
@@ -1619,11 +1637,8 @@ export const billingApi = {
   ): Promise<{ url: string }> {
     const response = await fetch(`${BILLING_BASE}/checkout`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getBillingAuthHeaders(),
       body: JSON.stringify({
-        user_id: userId,
         price_id: priceId,
         success_url: successUrl,
         cancel_url: cancelUrl,
@@ -1636,7 +1651,11 @@ export const billingApi = {
       throw new APIError(response.status, 'BILLING_ERROR', data.error || 'Failed to create checkout session');
     }
 
-    return { url: data.url! };
+    if (!data.url) {
+      throw new APIError(500, 'BILLING_ERROR', 'No checkout URL received from billing service');
+    }
+
+    return { url: data.url };
   },
 
   /**
@@ -1649,9 +1668,7 @@ export const billingApi = {
   ): Promise<{ url: string }> {
     const response = await fetch(`${BILLING_BASE}/portal`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getBillingAuthHeaders(),
       body: JSON.stringify({
         customer_id: customerId,
         return_url: returnUrl,
@@ -1664,7 +1681,11 @@ export const billingApi = {
       throw new APIError(response.status, 'BILLING_ERROR', data.error || 'Failed to create portal session');
     }
 
-    return { url: data.url! };
+    if (!data.url) {
+      throw new APIError(500, 'BILLING_ERROR', 'No portal URL received from billing service');
+    }
+
+    return { url: data.url };
   },
 
   /**
@@ -1676,11 +1697,8 @@ export const billingApi = {
   ): Promise<{ success: boolean; tier: SubscriptionTier }> {
     const response = await fetch(`${BILLING_BASE}/activate/gumroad`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getBillingAuthHeaders(),
       body: JSON.stringify({
-        user_id: userId,
         license_key: licenseKey,
       }),
     });
@@ -1703,11 +1721,8 @@ export const billingApi = {
   ): Promise<{ success: boolean; tier: SubscriptionTier }> {
     const response = await fetch(`${BILLING_BASE}/activate/kdp`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getBillingAuthHeaders(),
       body: JSON.stringify({
-        user_id: userId,
         code: code,
       }),
     });

@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-const API_BASE = 'https://aixord-webapp.peoplemerit.workers.dev/api/v1';
+const API_BASE = 'https://aixord-router-worker.peoplemerit.workers.dev/api/v1';
 
 export function ForgotPassword() {
   const [email, setEmail] = useState('');

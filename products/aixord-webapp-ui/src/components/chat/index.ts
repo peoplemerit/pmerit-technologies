@@ -4,7 +4,6 @@
  * Exports for the governed chat UI.
  */
 
-export { ChatWindow } from './ChatWindow';
 export { ChatInput } from './ChatInput';
 export { MessageBubble } from './MessageBubble';
 export { MessageActions } from './MessageActions';

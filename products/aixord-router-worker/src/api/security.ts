@@ -16,9 +16,9 @@
 
 import { Hono } from 'hono';
 import type { Env } from '../types';
-import { requireAuth, type AuthContext } from '../middleware/requireAuth';
+import { requireAuth } from '../middleware/requireAuth';
 
-const app = new Hono<{ Bindings: Env; Variables: AuthContext }>();
+const app = new Hono<{ Bindings: Env }>();
 
 // =============================================================================
 // DATA CLASSIFICATION (GS:DC Gate - L-SPG1, L-SPG5)

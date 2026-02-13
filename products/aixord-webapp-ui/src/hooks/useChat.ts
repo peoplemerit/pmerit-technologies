@@ -8,6 +8,23 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Message, Conversation, MessageMetadata } from '../components/chat/types';
 import { loadConversationsFromLocal, saveConversationsToLocal } from '../lib/storage';
+import { ExecutionEngine } from '../lib/executionEngine';
+
+interface WorkspaceBinding {
+  folder_name: string;
+  folder_template?: string;
+  permission_level: string;
+  scaffold_generated: boolean;
+  github_connected: boolean;
+}
+
+interface ActiveAssignment {
+  id: string;
+  title: string;
+  priority: string;
+  status: string;
+  progress_percent: number;
+}
 
 interface UseChatOptions {
   routerEndpoint: string;
@@ -16,6 +33,8 @@ interface UseChatOptions {
   userApiKey?: string;
   userId: string;
   projectId: string;
+  workspaceBinding?: WorkspaceBinding;
+  activeAssignments?: ActiveAssignment[];
 }
 
 interface UseChatReturn {
@@ -144,6 +163,27 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         delta: {
           user_input: message,
           conversation_history: conversationHistory.length > 0 ? conversationHistory : undefined,
+          system_context: activeConversation.capsule ? {
+            objective: activeConversation.capsule.objective,
+            phase: activeConversation.capsule.phase,
+            constraints: activeConversation.capsule.constraints,
+            decisions: activeConversation.capsule.decisions,
+            open_questions: activeConversation.capsule.openQuestions,
+          } : undefined,
+          workspace_context: options.workspaceBinding ? {
+            folder_name: options.workspaceBinding.folder_name,
+            folder_template: options.workspaceBinding.folder_template,
+            permission_level: options.workspaceBinding.permission_level,
+            scaffold_generated: options.workspaceBinding.scaffold_generated,
+            github_connected: options.workspaceBinding.github_connected,
+          } : undefined,
+          active_assignments: options.activeAssignments?.map(a => ({
+            id: a.id,
+            title: a.title,
+            priority: a.priority,
+            status: a.status,
+            progress_percent: a.progress_percent,
+          })) || undefined,
         },
         budget: {
           max_output_tokens: 4096
@@ -159,10 +199,14 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
       };
 
+      // Get auth token from options or localStorage fallback
+      const authToken = options.userApiKey || localStorage.getItem('aixord_token') || '';
+
       const response = await fetch(`${options.routerEndpoint}/v1/router/execute`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
         },
         body: JSON.stringify(routerRequest)
       });
@@ -210,6 +254,37 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         timestamp: new Date(),
         metadata
       };
+
+      // EXECUTE PHASE: Process structured blocks and write files
+      if (activeConversation?.capsule?.phase === 'E' && options.projectId) {
+        try {
+          const executionResult = await ExecutionEngine.processResponse(
+            result.content,
+            options.projectId,
+            authToken || ''
+          );
+          if (executionResult.filesCreated.length > 0 || executionResult.submissions > 0 || executionResult.errors.length > 0) {
+            assistantMessage.metadata = {
+              ...assistantMessage.metadata,
+              executionResult
+            };
+          }
+        } catch (err) {
+          console.error('Execution engine error:', err);
+          // Add execution error to message metadata
+          assistantMessage.metadata = {
+            ...assistantMessage.metadata,
+            executionResult: {
+              filesCreated: [],
+              filesUpdated: [],
+              progressUpdates: 0,
+              submissions: 0,
+              escalations: 0,
+              errors: [err instanceof Error ? err.message : 'Unknown execution engine error']
+            }
+          };
+        }
+      }
 
       setConversations(prev => prev.map(conv => {
         if (conv.id === activeConversationId) {

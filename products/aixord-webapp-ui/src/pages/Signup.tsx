@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export function Signup() {
@@ -15,11 +15,12 @@ export function Signup() {
   const [name, setName] = useState('');
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const { register, isLoading, error, user } = useAuth();
+  const navigate = useNavigate();
 
   // If already logged in, redirect immediately (one-time check on mount)
   useEffect(() => {
     if (user) {
-      window.location.href = '/dashboard';
+      navigate('/dashboard');
     }
   }, []); // Empty deps - only check on mount
 

@@ -360,8 +360,6 @@ export async function syncProjectEvidence(
 
     const totalFetched = Object.values(byType).reduce((a, b) => a + b, 0);
 
-    console.log(`[EvidenceSync] Synced ${totalFetched} evidence items for project ${projectId}`);
-
     return {
       project_id: projectId,
       synced_at: now,

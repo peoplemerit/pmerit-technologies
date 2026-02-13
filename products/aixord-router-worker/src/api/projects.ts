@@ -12,6 +12,8 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { validateBody } from '../middleware/validateBody';
+import { createProjectSchema, updateProjectSchema } from '../schemas/common';
 
 const projects = new Hono<{ Bindings: Env }>();
 
@@ -21,7 +23,7 @@ projects.use('/*', requireAuth);
 /**
  * POST /api/v1/projects
  */
-projects.post('/', async (c) => {
+projects.post('/', validateBody(createProjectSchema), async (c) => {
   try {
     const userId = c.get('userId');
     const body = await c.req.json<{ name?: string; objective?: string; reality_classification?: string; project_type?: string }>();
@@ -174,7 +176,7 @@ projects.get('/:id', async (c) => {
 /**
  * PUT /api/v1/projects/:id
  */
-projects.put('/:id', async (c) => {
+projects.put('/:id', validateBody(updateProjectSchema), async (c) => {
   const userId = c.get('userId');
   const projectId = c.req.param('id');
   const body = await c.req.json<{ name?: string; objective?: string }>();
@@ -272,6 +274,9 @@ projects.delete('/:id', async (c) => {
       c.env.DB.prepare('DELETE FROM knowledge_transfers WHERE project_id = ?').bind(projectId),
       c.env.DB.prepare('DELETE FROM artifacts WHERE project_id = ?').bind(projectId),
       c.env.DB.prepare('DELETE FROM state WHERE project_id = ?').bind(projectId),
+      // SYS-01: Clean up conversations and their messages
+      c.env.DB.prepare('DELETE FROM conversation_messages WHERE conversation_id IN (SELECT id FROM conversations WHERE project_id = ?)').bind(projectId),
+      c.env.DB.prepare('DELETE FROM conversations WHERE project_id = ?').bind(projectId),
       c.env.DB.prepare('DELETE FROM project_state WHERE project_id = ?').bind(projectId),
       // Finally delete the project itself
       c.env.DB.prepare('DELETE FROM projects WHERE id = ? AND owner_id = ?').bind(projectId, userId),

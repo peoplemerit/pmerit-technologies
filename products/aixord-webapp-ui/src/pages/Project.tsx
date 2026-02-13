@@ -566,7 +566,6 @@ export function Project() {
     try {
       const result = await api.state.evaluateGates(id, token);
       if (result.changed.length > 0) {
-        console.log('[GateEval] Gates auto-updated:', result.changed);
         fetchState();
       }
     } catch (err) {
@@ -904,7 +903,6 @@ export function Project() {
       const fileDetection = await detectAndResolveFiles(content, id);
       if (fileDetection.injectedCount > 0) {
         fullContent += fileDetection.contextString;
-        console.log(`[FileDetection] Injected ${fileDetection.injectedCount} file(s) from workspace`);
       }
     } catch (err) {
       // File detection is non-blocking — log and continue
@@ -1191,7 +1189,6 @@ export function Project() {
               tech_stack: planData.tech_stack || [],
               risks: planData.risks || [],
             }, token);
-            console.log('Plan artifact imported:', importResult);
 
             // Auto-run blueprint validation after import so gates update
             try {

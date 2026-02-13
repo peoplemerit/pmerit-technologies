@@ -145,68 +145,69 @@ messages.post('/:projectId/messages', async (c) => {
   }, 201);
 });
 
+// DEAD ENDPOINT: No frontend consumer — commented 2026-02-12
 /**
  * POST /api/v1/projects/:projectId/messages/batch
  * Create multiple messages at once (for saving entire conversations)
  */
-messages.post('/:projectId/messages/batch', async (c) => {
-  const userId = c.get('userId');
-  const projectId = c.req.param('projectId');
+// messages.post('/:projectId/messages/batch', async (c) => {
+//   const userId = c.get('userId');
+//   const projectId = c.req.param('projectId');
 
-  if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
+//   if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
+//     return c.json({ error: 'Project not found' }, 404);
+//   }
 
-  const body = await c.req.json<{
-    messages: Array<{
-      role: 'user' | 'assistant' | 'system';
-      content: string;
-      metadata?: Record<string, unknown>;
-      created_at?: string;
-    }>;
-  }>();
+//   const body = await c.req.json<{
+//     messages: Array<{
+//       role: 'user' | 'assistant' | 'system';
+//       content: string;
+//       metadata?: Record<string, unknown>;
+//       created_at?: string;
+//     }>;
+//   }>();
 
-  if (!body.messages || !Array.isArray(body.messages)) {
-    return c.json({ error: 'messages array required' }, 400);
-  }
+//   if (!body.messages || !Array.isArray(body.messages)) {
+//     return c.json({ error: 'messages array required' }, 400);
+//   }
 
-  const results: Array<{
-    id: string;
-    project_id: string;
-    role: string;
-    content: string;
-    metadata: Record<string, unknown>;
-    created_at: string;
-  }> = [];
+//   const results: Array<{
+//     id: string;
+//     project_id: string;
+//     role: string;
+//     content: string;
+//     metadata: Record<string, unknown>;
+//     created_at: string;
+//   }> = [];
 
-  for (const msg of body.messages) {
-    const messageId = crypto.randomUUID();
-    const now = msg.created_at || new Date().toISOString();
+//   for (const msg of body.messages) {
+//     const messageId = crypto.randomUUID();
+//     const now = msg.created_at || new Date().toISOString();
 
-    await c.env.DB.prepare(`
-      INSERT INTO messages (id, project_id, role, content, metadata, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(
-      messageId,
-      projectId,
-      msg.role,
-      msg.content,
-      JSON.stringify(msg.metadata || {}),
-      now
-    ).run();
+//     await c.env.DB.prepare(`
+//       INSERT INTO messages (id, project_id, role, content, metadata, created_at)
+//       VALUES (?, ?, ?, ?, ?, ?)
+//     `).bind(
+//       messageId,
+//       projectId,
+//       msg.role,
+//       msg.content,
+//       JSON.stringify(msg.metadata || {}),
+//       now
+//     ).run();
 
-    results.push({
-      id: messageId,
-      project_id: projectId,
-      role: msg.role,
-      content: msg.content,
-      metadata: msg.metadata || {},
-      created_at: now
-    });
-  }
+//     results.push({
+//       id: messageId,
+//       project_id: projectId,
+//       role: msg.role,
+//       content: msg.content,
+//       metadata: msg.metadata || {},
+//       created_at: now
+//     });
+//   }
 
-  return c.json({ messages: results }, 201);
-});
+//   return c.json({ messages: results }, 201);
+// });
 
 /**
  * DELETE /api/v1/projects/:projectId/messages

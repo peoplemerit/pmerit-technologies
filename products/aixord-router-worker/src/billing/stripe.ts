@@ -217,7 +217,7 @@ async function handlePaymentFailed(
   db: D1Database
 ): Promise<{ success: boolean; message: string }> {
   // Could send notification email, update status, etc.
-  console.log(`Payment failed for event: ${event.id}`);
+  console.error(`Payment failed for event: ${event.id}`);
   return { success: true, message: 'Payment failure logged' };
 }
 
