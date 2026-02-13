@@ -12,6 +12,8 @@ interface UseSessionsOptions {
   projectId: string | null;
   token: string | null;
   userId: string | null;
+  /** Pre-selected session ID from URL parameter (Gap 3: Session URL Navigation) */
+  initialSessionId?: string | null;
 }
 
 interface UseSessionsReturn {
@@ -29,10 +31,10 @@ interface UseSessionsReturn {
   fetchSessions: () => Promise<void>;
 }
 
-export function useSessions({ projectId, token, userId: _userId }: UseSessionsOptions): UseSessionsReturn {
+export function useSessions({ projectId, token, userId: _userId, initialSessionId }: UseSessionsOptions): UseSessionsReturn {
   void _userId; // Will be used in Phase E for session creation attribution
   const [sessions, setSessions] = useState<ProjectSession[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(initialSessionId ?? null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -44,19 +46,25 @@ export function useSessions({ projectId, token, userId: _userId }: UseSessionsOp
       const data = await api.sessions.list(projectId, token);
       setSessions(data);
 
+      // If initialSessionId was provided and exists in data, use it (Gap 3: URL Navigation)
+      if (initialSessionId && data.find(s => s.id === initialSessionId) && !activeSessionId) {
+        setActiveSessionId(initialSessionId);
+      }
       // Auto-select the active session (latest ACTIVE, or latest overall)
-      const active = data.find(s => s.status === 'ACTIVE');
-      if (active && !activeSessionId) {
-        setActiveSessionId(active.id);
-      } else if (data.length > 0 && !activeSessionId) {
-        setActiveSessionId(data[data.length - 1].id);
+      else if (!activeSessionId) {
+        const active = data.find(s => s.status === 'ACTIVE');
+        if (active) {
+          setActiveSessionId(active.id);
+        } else if (data.length > 0) {
+          setActiveSessionId(data[data.length - 1].id);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch sessions');
     } finally {
       setIsLoading(false);
     }
-  }, [projectId, token, activeSessionId]);
+  }, [projectId, token, activeSessionId, initialSessionId]);
 
   // Fetch sessions on mount
   useEffect(() => {

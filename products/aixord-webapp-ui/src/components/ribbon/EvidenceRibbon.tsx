@@ -8,6 +8,18 @@
 
 import { useState } from 'react';
 
+interface ArtifactCommitSummary {
+  has_commits: boolean;
+  total_commits: number;
+  latest?: {
+    file_count: number;
+    total_bytes: number;
+    commit_hash: string;
+    status: string;
+    created_at: string;
+  } | null;
+}
+
 interface EvidenceRibbonProps {
   // GitHub
   isConnected: boolean;
@@ -32,6 +44,10 @@ interface EvidenceRibbonProps {
   onImageClick?: (imageId: string) => void;
   onDeleteImage?: (imageId: string) => void;
 
+  // Persistence Evidence (Gap 4)
+  artifactCommits?: ArtifactCommitSummary | null;
+  onCommitArtifacts?: () => void;
+
   isLoading?: boolean;
 }
 
@@ -50,6 +66,8 @@ export function EvidenceRibbon({
   onViewAllEvidence,
   onImageClick,
   onDeleteImage,
+  artifactCommits,
+  onCommitArtifacts,
   isLoading = false,
 }: EvidenceRibbonProps) {
   const [showRepoSelect, setShowRepoSelect] = useState(false);
@@ -158,6 +176,44 @@ export function EvidenceRibbon({
           </div>
         ) : (
           <span className="text-gray-500 text-xs">No evidence uploaded</span>
+        )}
+      </div>
+
+      {/* Row 3: Persistence Evidence (Gap 4 — L-AB Artifact Binding) */}
+      <div className="flex items-center gap-3">
+        <span className="text-gray-500 text-xs w-16 shrink-0">Artifacts:</span>
+        {artifactCommits?.has_commits ? (
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-green-400 text-xs">●</span>
+            <span className="text-white text-xs font-medium">
+              {artifactCommits.latest?.file_count} file{artifactCommits.latest?.file_count !== 1 ? 's' : ''}
+            </span>
+            <span className="text-gray-500 text-[10px] font-mono" title={artifactCommits.latest?.commit_hash}>
+              {artifactCommits.latest?.commit_hash?.slice(0, 8)}…
+            </span>
+            {artifactCommits.latest?.created_at && (
+              <span className="text-gray-500 text-[10px]">
+                {new Date(artifactCommits.latest.created_at).toLocaleDateString()}
+              </span>
+            )}
+            <span className="text-gray-500 text-[10px]">
+              ({artifactCommits.total_commits} total)
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-amber-400 text-xs">⚠</span>
+            <span className="text-amber-400 text-xs">Not Persisted</span>
+            {onCommitArtifacts && (
+              <button
+                onClick={onCommitArtifacts}
+                disabled={isLoading}
+                className="ml-auto px-2 py-0.5 text-[10px] bg-violet-600 text-white rounded hover:bg-violet-500 disabled:opacity-50 transition-colors"
+              >
+                Commit Artifacts
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

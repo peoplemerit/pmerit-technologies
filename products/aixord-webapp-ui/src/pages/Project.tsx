@@ -16,7 +16,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserSettings } from '../contexts/UserSettingsContext';
 import { useProjectState } from '../hooks/useApi';
@@ -85,6 +85,7 @@ function parseBlockFields(content: string): Record<string, string> {
 export function Project() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { token, user, logout } = useAuth();
   const { settings, getActiveApiKey } = useUserSettings();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -187,12 +188,23 @@ export function Project() {
     sessions,
     activeSession,
     createSession,
-    switchSession,
+    switchSession: rawSwitchSession,
   } = useSessions({
     projectId: id || null,
     token: token || null,
     userId: user?.id || null,
+    initialSessionId: searchParams.get('session'),
   });
+
+  // Gap 3: Session URL Navigation — update URL param on session switch
+  const switchSession = useCallback((sessionId: string) => {
+    rawSwitchSession(sessionId);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('session', sessionId);
+      return next;
+    }, { replace: true });
+  }, [rawSwitchSession, setSearchParams]);
 
   // D10-D11: Session metrics from backend
   const [sessionMetrics, setSessionMetrics] = useState<import('../lib/api').SessionMetrics | null>(null);

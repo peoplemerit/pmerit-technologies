@@ -76,6 +76,11 @@ workspace.put('/:projectId/workspace', async (c) => {
     github_connected?: boolean;
     github_repo?: string;
     binding_confirmed?: boolean;
+    // Scaffold count reporting (Gap 2)
+    scaffold_item_count?: number;
+    scaffold_skipped_count?: number;
+    scaffold_error_count?: number;
+    scaffold_paths_written?: string[];
   }>();
 
   const now = new Date().toISOString();
@@ -96,6 +101,11 @@ workspace.put('/:projectId/workspace', async (c) => {
           github_connected = COALESCE(?, github_connected),
           github_repo = COALESCE(?, github_repo),
           binding_confirmed = COALESCE(?, binding_confirmed),
+          scaffold_item_count = COALESCE(?, scaffold_item_count),
+          scaffold_skipped_count = COALESCE(?, scaffold_skipped_count),
+          scaffold_error_count = COALESCE(?, scaffold_error_count),
+          scaffold_paths_written = COALESCE(?, scaffold_paths_written),
+          scaffold_generated_at = COALESCE(?, scaffold_generated_at),
           bound_at = COALESCE(bound_at, ?),
           updated_at = ?
       WHERE project_id = ?
@@ -107,6 +117,11 @@ workspace.put('/:projectId/workspace', async (c) => {
       body.github_connected !== undefined ? (body.github_connected ? 1 : 0) : null,
       body.github_repo ?? null,
       body.binding_confirmed !== undefined ? (body.binding_confirmed ? 1 : 0) : null,
+      body.scaffold_item_count ?? null,
+      body.scaffold_skipped_count ?? null,
+      body.scaffold_error_count ?? null,
+      body.scaffold_paths_written ? JSON.stringify(body.scaffold_paths_written) : null,
+      body.scaffold_item_count !== undefined ? now : null,
       now,
       now,
       projectId
@@ -117,8 +132,10 @@ workspace.put('/:projectId/workspace', async (c) => {
     await c.env.DB.prepare(`
       INSERT INTO workspace_bindings
         (id, project_id, folder_name, folder_template, permission_level,
-         scaffold_generated, github_connected, github_repo, binding_confirmed, bound_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         scaffold_generated, github_connected, github_repo, binding_confirmed,
+         scaffold_item_count, scaffold_skipped_count, scaffold_error_count,
+         scaffold_paths_written, scaffold_generated_at, bound_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       projectId,
@@ -129,6 +146,11 @@ workspace.put('/:projectId/workspace', async (c) => {
       body.github_connected ? 1 : 0,
       body.github_repo ?? null,
       body.binding_confirmed ? 1 : 0,
+      body.scaffold_item_count ?? 0,
+      body.scaffold_skipped_count ?? 0,
+      body.scaffold_error_count ?? 0,
+      body.scaffold_paths_written ? JSON.stringify(body.scaffold_paths_written) : '[]',
+      body.scaffold_item_count !== undefined ? now : null,
       now,
       now
     ).run();
@@ -171,7 +193,7 @@ workspace.get('/:projectId/workspace/status', async (c) => {
   }
 
   const binding = await c.env.DB.prepare(
-    'SELECT folder_name, folder_template, permission_level, scaffold_generated, github_connected, github_repo, binding_confirmed FROM workspace_bindings WHERE project_id = ?'
+    'SELECT folder_name, folder_template, permission_level, scaffold_generated, github_connected, github_repo, binding_confirmed, scaffold_item_count, scaffold_skipped_count, scaffold_error_count, scaffold_generated_at FROM workspace_bindings WHERE project_id = ?'
   ).bind(projectId).first<{
     folder_name: string | null;
     folder_template: string | null;
@@ -180,6 +202,10 @@ workspace.get('/:projectId/workspace/status', async (c) => {
     github_connected: number;
     github_repo: string | null;
     binding_confirmed: number;
+    scaffold_item_count: number | null;
+    scaffold_skipped_count: number | null;
+    scaffold_error_count: number | null;
+    scaffold_generated_at: string | null;
   }>();
 
   if (!binding) {
@@ -201,6 +227,11 @@ workspace.get('/:projectId/workspace/status', async (c) => {
     github_connected: !!binding.github_connected,
     github_repo: binding.github_repo,
     confirmed: !!binding.binding_confirmed,
+    // Scaffold count reporting (Gap 2)
+    scaffold_item_count: binding.scaffold_item_count ?? 0,
+    scaffold_skipped_count: binding.scaffold_skipped_count ?? 0,
+    scaffold_error_count: binding.scaffold_error_count ?? 0,
+    scaffold_generated_at: binding.scaffold_generated_at,
   });
 });
 

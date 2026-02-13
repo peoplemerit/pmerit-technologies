@@ -57,6 +57,7 @@ import assignments from './api/assignments';
 import continuity, { getProjectContinuityCompact } from './api/continuity';
 import conversations from './api/conversations';
 import governance from './api/governance';
+import artifacts from './api/artifacts';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -1213,5 +1214,8 @@ app.route('/api/v1/conversations', conversations);
 
 // Mathematical Governance routes (WU conservation, readiness, reconciliation)
 app.route('/api/v1/projects', governance);
+
+// Artifact Commit Layer routes (L-AB — persistence tracking)
+app.route('/api/v1/projects', artifacts);
 
 export default app;

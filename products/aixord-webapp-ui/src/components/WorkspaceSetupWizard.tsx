@@ -40,6 +40,11 @@ export interface WorkspaceBindingData {
   github_connected: boolean;
   github_repo: string | null;
   binding_confirmed: boolean;
+  // Scaffold count reporting (Gap 2)
+  scaffold_item_count?: number;
+  scaffold_skipped_count?: number;
+  scaffold_error_count?: number;
+  scaffold_paths_written?: string[];
 }
 
 const STEPS = [
@@ -116,6 +121,10 @@ export function WorkspaceSetupWizard({
         ? `${githubConnection.repo_owner}/${githubConnection.repo_name}`
         : null,
       binding_confirmed: true,
+      // Scaffold count reporting (Gap 2)
+      scaffold_item_count: scaffoldResult?.created ?? 0,
+      scaffold_skipped_count: scaffoldResult?.skipped ?? 0,
+      scaffold_error_count: scaffoldResult?.errors.length ?? 0,
     };
     onComplete(binding);
   }, [linkedFolder, selectedTemplate, scaffoldResult, githubConnection, onComplete]);
