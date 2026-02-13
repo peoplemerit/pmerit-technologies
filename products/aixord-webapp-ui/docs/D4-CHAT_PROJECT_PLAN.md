@@ -1,8 +1,8 @@
 # D4-CHAT PROJECT PLAN
 
 **Document Type:** Comprehensive Project Plan
-**Version:** 10.0 (Session 49 — Infrastructure Sync + DB Migrations + SYS-02 E2E Tests)
-**Date:** 2026-02-12 (Updated: Sessions 34-49 — Full governance enforcement + TDL + PCC + PTX + BQL + GFB + DPF deployed + DB reconciled + E2E tested)
+**Version:** 11.0 (Session 49 + Governance Patch Integration — Infrastructure Sync + DB Migrations + SYS-02 E2E Tests + PATCH-GOV-EXEC-01/D4-EXEC-ARCH-01/D4-PERSIST-GT2UTM-01/ABL-PERSIST-GT2UTM-02)
+**Date:** 2026-02-13 (Updated: Sessions 34-49 + Governance Patch Integration — Full governance enforcement + TDL + PCC + PTX + BQL + GFB + DPF deployed + DB reconciled + E2E tested + Execution Architecture & Artifact Persistence Extensions documented as Planned)
 **Entity:** PMERIT Technologies LLC
 **Governance:** AIXORD v4.3 → v4.4.1 → v4.4 → v4.4.3 → **v4.5 (Engineering Governance)**
 **Source Files:** Audit Report v5.0, AIXORD Baseline v4.5, Compact Core v4.5-C, 40+ sandbox files
@@ -45,7 +45,7 @@
 | **Blueprint** | AIXORD_PLATFORM_BLUEPRINT_D4.md |
 | **Started** | 2026-01-24 |
 | **Target Launch** | MVP Ready |
-| **Current Status** | **~100% Functional (All API Methods Wired)** |
+| **Current Status** | **~100% Functional (All API Methods Wired)** — Execution Architecture & Artifact Persistence Extensions Planned |
 
 ### 1.2 Vision Statement
 
@@ -100,7 +100,7 @@ EXECUTION_TOTAL = VERIFIED_REALITY + FORMULA_EXECUTION
 |----------|-------|
 | **Version** | 4.5 |
 | **Status** | RELEASE-READY |
-| **Patch Sources** | PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PATCH-GCP-01, PATCH-GKDL-01, PATCH-SPG-01, PATCH-CCS-01, ENH-4/5/6 (v4.4.1), PATCH-LEM-01 (v4.4.2), HO-BRAINSTORM-VALUE-01, HO-PLAN-BLUEPRINT-01, HO-BLUEPRINT-EXECUTE-01, HO-INTEGRITY-EXECUTE-01, HO-DOCTRINE-VALUE-01, HO-DISCOVER-BRAINSTORM-TOKEN-01, HO-INTEGRITY-AVL-01, HO-SECURITY-ROTATION-01, PATCH-SCOPE-CLARIFY-01 (v4.4.3), PATCH-NUMBERING-01 (v4.4.3), **PATCH-ENG-01 (v4.5 — Engineering Governance)** |
+| **Patch Sources** | PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PATCH-GCP-01, PATCH-GKDL-01, PATCH-SPG-01, PATCH-CCS-01, ENH-4/5/6 (v4.4.1), PATCH-LEM-01 (v4.4.2), HO-BRAINSTORM-VALUE-01, HO-PLAN-BLUEPRINT-01, HO-BLUEPRINT-EXECUTE-01, HO-INTEGRITY-EXECUTE-01, HO-DOCTRINE-VALUE-01, HO-DISCOVER-BRAINSTORM-TOKEN-01, HO-INTEGRITY-AVL-01, HO-SECURITY-ROTATION-01, PATCH-SCOPE-CLARIFY-01 (v4.4.3), PATCH-NUMBERING-01 (v4.4.3), PATCH-ENG-01 (v4.5 — Engineering Governance), **PATCH-GOV-EXEC-01 (Baseline Extensions — Planned)**, **PATCH-ABL-PERSIST-GT2UTM-02 (APED Doctrine — Planned)**, **PATCH-D4-EXEC-ARCH-01 (D4-CHAT Architecture — Planned)**, **PATCH-D4-PERSIST-GT2UTM-01 (Artifact Persistence — Planned)** |
 | **Parts** | I–XIV (14 parts) |
 | **Gates** | 17 GA:\* gates + 6 GS:\* security gates + GA:CCS (conditional) |
 | **Phases** | SETUP → DISCOVER → BRAINSTORM → PLAN → BLUEPRINT (incl. SCOPE) → EXECUTE → AUDIT → VERIFY → LOCK |
@@ -255,6 +255,88 @@ D4-CHAT implements the AIXORD Authority Model:
 | L-OPS4-5 | L2+ alerting, dashboards, incident response | ⏳ Future (production readiness) |
 | L-OPS6-8 | LOCK requires ORL checklist PASS; deployment strategy required | ⏳ Future |
 
+### 2.5 Execution Architecture (Planned)
+
+**Status:** SPECIFIED — Architecture designed, implementation in progress
+
+D4-CHAT implements a **Human-AI manager/employee hierarchy** with mathematical governance and hybrid execution modes.
+
+#### 2.5.1 Human–AI Hierarchy
+
+| Role | Actor | Authority | D4-CHAT Implementation |
+|------|-------|-----------|------------------------|
+| **Director / Owner** | Human User | Decides WHAT may proceed; final approval authority | UI approval gates, phase finalization |
+| **Supervisor** | High-Reasoning AI | Plans, analyzes, calculates readiness, requests approval | Router intelligent model selection |
+| **Commander** | Task AI / Agent | Executes atomic steps only after authorization | AI execution within approved bounds |
+
+**Key Principle:** No AI role may bypass Director approval for phase promotion or LOCK.
+
+#### 2.5.2 Approval Gate Record (Planned)
+
+All approval gates will record:
+- `user_id` (who approved)
+- `timestamp` (when approved)
+- `decision` (approve / reject / feedback)
+
+**Enforcement:** Absence of a human decision record = INVALID GATE
+
+#### 2.5.3 Mathematical Governance (Planned)
+
+**Conservation Law:**
+```
+EXECUTION_TOTAL = FORMULA_EXECUTION + VERIFIED_REALITY
+```
+
+**Readiness Formula:**
+```
+R = L × P × V
+where:
+  L = Layering completeness
+  P = Prerequisite satisfaction
+  V = Verification quality
+```
+
+**Irreversibility Rule:**
+```
+VERIFIED → LOCK is forward-only
+Regression without Director override = violation
+```
+
+#### 2.5.4 Hybrid Execution Strategy (Planned)
+
+| Strategy | Use Cases | Execution Mode |
+|----------|-----------|----------------|
+| **Strategy A — Autonomous** | Code generation, API testing, tool-driven execution | GitHub Copilot, agents |
+| **Strategy B — User-Guided** | Database migrations, deployment, high-risk operations | Verifiable instructions + automated checks |
+
+**Hybrid Matrix** determines execution mode per task.
+
+#### 2.5.5 Lean Six Sigma (DMAIC) Mapping (Planned)
+
+| DMAIC Phase | AIXORD Phase |
+|-------------|--------------|
+| Define | DECISION / DISCOVER |
+| Measure | BRAINSTORM / PLAN |
+| Analyze | BLUEPRINT |
+| Improve | EXECUTE |
+| Control | AUDIT → VERIFY → LOCK |
+
+#### 2.5.6 GT2UTM (Governance-to-UI Traceability Matrix) (Planned)
+
+**Requirement:** GT2UTM is mandatory for any system with a user interface and is required to pass VERIFY prior to LOCK.
+
+**Structure:**
+```
+Governance Artifact → UI Element → Component → API Call → State Change → Evidence
+```
+
+**Failure Conditions:**
+- Missing UI mapping → FAIL
+- UI deviates from governance → FAIL
+- FAIL → HALT
+
+See §3.6 for detailed GT2UTM implementation.
+
 ---
 
 ## 3. UTILITY OBJECTIVES
@@ -340,6 +422,181 @@ aggregation at session, project, and account levels.
 - Session/project aggregation requires SQL queries on existing data (no new tables)
 - Activity tab content (currently blank) should display project-level metrics
 - Account-level requires new aggregation endpoint
+
+### 3.6 Artifact Persistence & GT2UTM (Planned)
+
+**Status:** SPECIFIED — Architecture defined, implementation pending
+
+#### 3.6.1 Problem Statement (Evidence-Based)
+
+**Confirmed Failures (from Test-issues.txt):**
+- Workspace binding reads files but does not persist artifacts
+- Scaffold shows "0 items" while folders exist
+- AI outputs are generated but not committed to disk
+- Session navigation does not allow reliable reopening
+- No visible Environment Awareness Report
+- No enforced artifact commit layer
+- No UI proof of artifact writes
+
+**Violations:**
+- GA:ENV expectations (workspace binding)
+- Artifact lifecycle intent
+- L-SSC continuity expectations
+- Governance → UI traceability (GT2UTM)
+
+#### 3.6.2 Mandatory Artifact Commit Layer (Planned)
+
+**Function:** `commitArtifactsToWorkspace(artifactBundle)`
+
+**Requirements:**
+1. Validate `binding_confirmed === true`
+2. Validate `folder_name !== null`
+3. Ensure `/aixord/` invariant directory exists
+4. Write canonical artifacts:
+   - `STATE.json`
+   - `ARTIFACTS/*`
+   - `HANDOFF/*`
+   - `AUDIT/*`
+   - `BLUEPRINT/*`
+
+**Returns:**
+- File paths
+- File sizes
+- SHA256 hashes
+- Timestamp
+
+**Enforcement Rule:**
+No phase transition allowed if `artifact_commit_evidence.missing = true`
+
+#### 3.6.3 Artifact Persistence Enforcement Gate (Non-New GA)
+
+**Not a new GA:* gate** — Instead, attach to existing gates.
+
+| Trigger | Enforcement |
+|---------|-------------|
+| Phase Finalize | Must verify artifact hashes exist |
+| Session End | Must write HANDOFF |
+| Blueprint Update | Must write BLUEPRINT artifact |
+| AUDIT Entry | Must write DTL |
+
+**UI Badge (if missing):**
+```
+⚠️ Artifact Not Persisted
+```
+
+#### 3.6.4 Environment Awareness Report (EAR-01) (Planned)
+
+**One-click report** that performs:
+1. Write proof test
+2. Read proof test
+3. Hash compare
+4. Artifact write test
+5. Directory list verification
+6. Binding metadata verification
+
+**Output:**
+```
+aixord/AUDIT/EAR-01.json
+```
+
+**Display:** EvidenceRibbon → "Environment Health"
+
+#### 3.6.5 Scaffold Status Reporting Fix (Planned)
+
+Modify scaffold generator to return:
+```json
+{
+  "itemsWritten": 12,
+  "pathsWritten": [...],
+  "startedAt": "...",
+  "endedAt": "..."
+}
+```
+
+Persist to `workspace_bindings` metadata. Refresh wizard summary screen.
+
+**Fixes:** "Scaffold: Generated (0 items)" bug
+
+#### 3.6.6 Session Reopen Fix (Planned)
+
+**Required Behavior:**
+- Persistent SessionList panel
+- URL parameter: `?session=<id>`
+- "New Session" does not hide prior sessions
+- Chat header dropdown: Recent Sessions
+
+**Satisfies:**
+- Project-level awareness
+- Non-isolated session model
+- GT2UTM continuity mapping
+
+#### 3.6.7 GT2UTM Mapping Table (Planned)
+
+| Governance Law | Backend Artifact | UI Confirmation |
+|----------------|------------------|-----------------|
+| GA:ENV | workspace_binding | ENV Pill |
+| GA:FLD | folder_name | FLD Pill |
+| L-SSC | HANDOFF artifact | SessionList |
+| L-AVL | DTL entry | Audit Ribbon |
+| Artifact Commit | Hash Evidence | EvidenceRibbon |
+| L-PS | Path validation | ErrorBoundary |
+
+#### 3.6.8 Acceptance Criteria
+
+**PATCH COMPLETE IF:**
+- ✓ AI output triggers artifact commit automatically
+- ✓ Hash + path evidence visible
+- ✓ EAR-01 passes
+- ✓ Scaffold count correct
+- ✓ Session reopening stable
+- ✓ Phase transitions blocked if no artifact commit evidence
+- ✓ GT2UTM table added to project plan
+
+#### 3.6.9 APED (Artifact Persistence Enforcement Doctrine)
+
+**Source:** PATCH-ABL-PERSIST-GT2UTM-02
+
+**APED-1 — Persistence Is Not Implied:**
+If platform claims workspace/file capability:
+- Artifact existence MUST be proven by file evidence
+- Chat claim ≠ persistence
+
+**APED-2 — Mandatory Commit Layer:**
+Systems implementing AIXORD MUST:
+- Provide a non-skippable artifact commit mechanism
+- Return file path + hash evidence
+- Block phase advancement if evidence missing
+
+**APED-3 — Persistence Visibility:**
+UI MUST expose:
+- Last artifact write timestamp
+- Files written
+- Hashes
+- Commit status
+
+If not visible → governance opacity violation.
+
+**APED-4 — Environment Awareness Requirement:**
+Platforms with file integration MUST provide:
+- Write proof test
+- Read proof test
+- Hash compare
+- Binding metadata display
+
+Failure → GA:ENV incomplete.
+
+**APED-5 — Session Continuity Enforcement:**
+If system supports multi-session project governance:
+- Session reopening MUST be deterministic
+- Session ID MUST be URL-resolvable or explicitly selectable
+- Session artifacts MUST be bindable
+
+Failure → L-SSC violation.
+
+**APED-6 — GT2UTM Enforcement:**
+If governance state changes:
+- UI MUST map: Governance event → Persistence action → Evidence display
+- Unmapped governance state = traceability failure
 
 ---
 
