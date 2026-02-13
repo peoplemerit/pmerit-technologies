@@ -53,6 +53,7 @@ import { NewSessionModal } from '../components/session/NewSessionModal';
 import { ProjectMemoryPanel } from '../components/ProjectMemoryPanel';
 import { useContinuity } from '../hooks/useContinuity';
 import { WorkspaceSetupWizard, type WorkspaceBindingData } from '../components/WorkspaceSetupWizard';
+import EnvironmentAwarenessReport from '../components/EnvironmentAwarenessReport';
 import type { Message, Conversation } from '../components/chat/types';
 
 // ============================================================================
@@ -227,6 +228,7 @@ export function Project() {
   });
 
   const [showWorkspaceWizard, setShowWorkspaceWizard] = useState(false);
+  const [showEnvReport, setShowEnvReport] = useState(false);
   const [workspaceChecked, setWorkspaceChecked] = useState(false);
   const [workspaceStatus, setWorkspaceStatus] = useState<{
     bound: boolean;
@@ -756,12 +758,31 @@ export function Project() {
       setShowWorkspaceWizard(false);
       // Phase 2: Auto-evaluate gates after workspace setup
       evaluateGatesAfterAction();
+      // Phase 3: Show environment awareness report with backend probes
+      setShowEnvReport(true);
     } catch (err) {
       console.error('Workspace setup failed:', err);
       // Still close wizard — binding was saved even if gate toggle failed
       setShowWorkspaceWizard(false);
     }
   }, [id, token, toggleGate, evaluateGatesAfterAction]);
+
+  const handleEnvReportClose = useCallback((allPassed: boolean) => {
+    setShowEnvReport(false);
+    const sysMsg: Message = {
+      id: generateId(),
+      role: 'system',
+      content: allPassed
+        ? '✅ **Environment Verified**\n\nAll probes passed — D1 database (read/write), R2 storage, model router, and environment config are operational.\n\nWorkspace is fully bound and verified. Ready to proceed.'
+        : '⚠️ **Environment Warning**\n\nWorkspace binding saved, but one or more environment probes reported issues. Check the report for details.\n\nYou can continue working — some backend capabilities may be limited.',
+      timestamp: new Date(),
+    };
+    setConversation((prev) => prev ? {
+      ...prev,
+      messages: [...prev.messages, sysMsg],
+      updatedAt: new Date(),
+    } : prev);
+  }, []);
 
   const handleGitHubConnect = useCallback(async () => {
     if (!id || !token) return;
@@ -1984,6 +2005,15 @@ export function Project() {
           onGitHubDisconnect={handleGitHubDisconnect}
           onGitHubSelectRepo={handleGitHubSelectRepo}
           githubRepos={githubRepos}
+        />
+      )}
+
+      {/* Environment Awareness Report (post-workspace-confirmation probes) */}
+      {showEnvReport && id && token && (
+        <EnvironmentAwarenessReport
+          projectId={id}
+          token={token}
+          onClose={handleEnvReportClose}
         />
       )}
 

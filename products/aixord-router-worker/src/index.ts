@@ -56,6 +56,7 @@ import brainstorm, { computeBrainstormReadiness } from './api/brainstorm';
 import assignments from './api/assignments';
 import continuity, { getProjectContinuityCompact } from './api/continuity';
 import conversations from './api/conversations';
+import governance from './api/governance';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -1209,5 +1210,8 @@ app.route('/api/v1/projects', continuity);
 
 // Conversation persistence routes (SYS-01)
 app.route('/api/v1/conversations', conversations);
+
+// Mathematical Governance routes (WU conservation, readiness, reconciliation)
+app.route('/api/v1/projects', governance);
 
 export default app;

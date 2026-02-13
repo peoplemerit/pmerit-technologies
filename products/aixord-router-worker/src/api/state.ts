@@ -16,6 +16,12 @@ import { requireAuth } from '../middleware/requireAuth';
 import { evaluateAllGates } from '../services/gateRules';
 import { validateBrainstormArtifact } from './brainstorm';
 import type { BrainstormOption, BrainstormDecisionCriteria } from '../types';
+import {
+  computeProjectReadiness,
+  getConservationSnapshot,
+  transferWorkUnits,
+  computeReconciliation,
+} from '../services/readinessEngine';
 
 const state = new Hono<{ Bindings: Env }>();
 
@@ -852,6 +858,48 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
           : `${noEvidence?.count} submission(s) missing evidence — each submission must include verification artifacts`,
       });
     }
+
+    // ── Mathematical Governance Checks (EXECUTE → REVIEW) ──
+
+    // E-GOV1: WU Conservation must hold
+    const execConservation = await getConservationSnapshot(c.env.DB, projectId);
+    if (execConservation.total > 0) {
+      artifactChecks.push({
+        check: 'wu_conservation_valid',
+        passed: execConservation.valid,
+        detail: execConservation.valid
+          ? `WU conservation holds: total=${execConservation.total}, formula=${execConservation.formula}, verified=${execConservation.verified}`
+          : `Conservation violation: delta=${execConservation.delta} (total=${execConservation.total} ≠ formula=${execConservation.formula} + verified=${execConservation.verified})`,
+      });
+    }
+
+    // E-GOV2: Project readiness must meet minimum threshold (R ≥ 0.6)
+    const execReadiness = await computeProjectReadiness(c.env.DB, projectId);
+    if (execReadiness.scopes.length > 0) {
+      const meetsThreshold = execReadiness.project_R >= 0.6;
+      artifactChecks.push({
+        check: 'project_readiness_threshold',
+        passed: meetsThreshold,
+        detail: meetsThreshold
+          ? `Project readiness R=${execReadiness.project_R} meets ≥0.6 threshold`
+          : `Project readiness R=${execReadiness.project_R} below 0.6 threshold — scopes need higher L×P×V scores`,
+      });
+
+      // E-GOV3: Auto-transfer WU for scopes that qualify (R > 0)
+      // This is an action, not a check — non-blocking, runs on successful finalize
+      // (Deferred to post-approval section below)
+
+      // E-GOV4: Reconciliation divergence check (warning, not blocking)
+      const execReconciliation = await computeReconciliation(c.env.DB, projectId);
+      if (execReconciliation.has_divergences) {
+        const divergent = execReconciliation.entries.filter(e => e.requires_attention);
+        warnChecks.push({
+          check: 'reconciliation_divergences',
+          passed: false,
+          detail: `${divergent.length} scope(s) with >20% reconciliation divergence: ${divergent.map(e => `${e.scope_name}(${e.divergence_pct}%)`).join(', ')}`,
+        });
+      }
+    }
   }
 
   if (currentPhase === 'REVIEW') {
@@ -883,6 +931,50 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
         ? 'Review session has summary'
         : 'Review session summary missing or too short (min 20 chars) — summarize review findings before finalizing',
     });
+
+    // ── Mathematical Governance Checks (REVIEW terminal finalization) ──
+
+    // R-GOV1: Project readiness must be ≥ 0.8 for terminal finalization
+    const reviewReadiness = await computeProjectReadiness(c.env.DB, projectId);
+    if (reviewReadiness.scopes.length > 0 && reviewReadiness.conservation.total > 0) {
+      artifactChecks.push({
+        check: 'project_readiness_final',
+        passed: reviewReadiness.project_R >= 0.8,
+        detail: reviewReadiness.project_R >= 0.8
+          ? `Project readiness R=${reviewReadiness.project_R} meets ≥0.8 final threshold`
+          : `Project readiness R=${reviewReadiness.project_R} below 0.8 final threshold — not ready for closure`,
+      });
+
+      // R-GOV2: All scopes with allocated WU must have verified WU
+      const unverifiedScopes = reviewReadiness.scopes.filter(s => s.allocated_wu > 0 && s.verified_wu === 0);
+      if (unverifiedScopes.length > 0) {
+        warnChecks.push({
+          check: 'all_scopes_verified',
+          passed: false,
+          detail: `${unverifiedScopes.length} scope(s) have allocated WU but zero verified: ${unverifiedScopes.map(s => s.scope_name).join(', ')}`,
+        });
+      }
+
+      // R-GOV3: Conservation must hold
+      artifactChecks.push({
+        check: 'final_conservation_valid',
+        passed: reviewReadiness.conservation.valid,
+        detail: reviewReadiness.conservation.valid
+          ? `Final conservation holds: total=${reviewReadiness.conservation.total}`
+          : `Final conservation violation: delta=${reviewReadiness.conservation.delta}`,
+      });
+
+      // R-GOV4: Final reconciliation check
+      const finalRecon = await computeReconciliation(c.env.DB, projectId);
+      if (finalRecon.has_divergences) {
+        const divergent = finalRecon.entries.filter(e => e.requires_attention);
+        warnChecks.push({
+          check: 'final_reconciliation',
+          passed: false,
+          detail: `Final reconciliation: ${divergent.length} scope(s) with >20% divergence: ${divergent.map(e => `${e.scope_name}(${e.divergence_pct}%)`).join(', ')}`,
+        });
+      }
+    }
   }
 
   // 4b. Fitness function validation (GFB-01 Task 1 — R2)
@@ -1030,6 +1122,46 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
         `UPDATE brainstorm_artifacts SET status = 'FROZEN', updated_at = ?
          WHERE project_id = ? AND status = 'ACTIVE'`
       ).bind(now, projectId).run();
+    } catch { /* Non-blocking */ }
+  }
+
+  // ── Mathematical Governance: Post-Finalization WU Operations ──
+
+  // On EXECUTE finalize: Auto-transfer WU for all qualifying scopes
+  if (currentPhase === 'EXECUTE') {
+    try {
+      const readiness = await computeProjectReadiness(c.env.DB, projectId);
+      for (const scope of readiness.scopes) {
+        if (scope.R > 0 && scope.allocated_wu > 0) {
+          await transferWorkUnits(c.env.DB, projectId, scope.scope_id, userId).catch(() => {});
+        }
+      }
+    } catch { /* Non-blocking — WU transfer is advisory */ }
+  }
+
+  // On REVIEW finalize: Lock scopes with R=1.0 and create final reconciliation snapshot
+  if (currentPhase === 'REVIEW') {
+    try {
+      const readiness = await computeProjectReadiness(c.env.DB, projectId);
+      // Lock high-readiness scopes
+      for (const scope of readiness.scopes) {
+        if (scope.R >= 1.0) {
+          await c.env.DB.prepare(
+            "UPDATE blueprint_scopes SET status = 'LOCKED' WHERE id = ? AND project_id = ?"
+          ).bind(scope.scope_id, projectId).run();
+        }
+      }
+      // Log final reconciliation snapshot
+      const finalRecon = await computeReconciliation(c.env.DB, projectId);
+      await c.env.DB.prepare(
+        `INSERT INTO wu_audit_log
+         (project_id, event_type, wu_amount, snapshot_total, snapshot_formula, snapshot_verified, conservation_valid, actor_id, notes, created_at)
+         VALUES (?, 'CONSERVATION_CHECK', 0, ?, ?, ?, ?, ?, 'REVIEW finalization — final reconciliation snapshot', ?)`
+      ).bind(
+        projectId,
+        finalRecon.conservation.total, finalRecon.conservation.formula, finalRecon.conservation.verified,
+        finalRecon.conservation.valid ? 1 : 0, userId, now
+      ).run();
     } catch { /* Non-blocking */ }
   }
 

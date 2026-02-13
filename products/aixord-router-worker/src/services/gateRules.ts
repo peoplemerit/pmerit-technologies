@@ -13,6 +13,11 @@
  */
 
 import type { Env } from '../types';
+import {
+  computeProjectReadiness,
+  getConservationSnapshot,
+  computeReconciliation,
+} from './readinessEngine';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -182,10 +187,152 @@ export const GATE_RULES: Record<string, GateRule> = {
     },
   },
 
-  // === EXECUTE EXIT GATES (manual for now, can be extended) ===
-  // GW:PRE, GW:VAL, GW:VER are currently manual — they require
-  // explicit evidence and are not auto-satisfiable from DB state alone.
-  // Future: could auto-evaluate based on engineering governance artifacts.
+  // === EXECUTE EXIT GATES (Mathematical Governance) ===
+
+  'GW:PRE': {
+    description: 'Pre-execution gate — all scopes have WU allocated, conservation is valid, execution layers exist',
+    evaluate: async (ctx) => {
+      // 1. Check that WU has been initialized (execution_total_wu > 0)
+      const project = await ctx.db.prepare(
+        'SELECT execution_total_wu FROM projects WHERE id = ?'
+      ).bind(ctx.projectId).first<{ execution_total_wu: number }>();
+
+      const totalWU = project?.execution_total_wu || 0;
+      if (totalWU <= 0) {
+        return { satisfied: false, reason: 'Project WU budget not initialized' };
+      }
+
+      // 2. Check conservation validity
+      const conservation = await getConservationSnapshot(ctx.db, ctx.projectId);
+      if (!conservation.valid) {
+        return {
+          satisfied: false,
+          reason: `Conservation violation: delta=${conservation.delta} (total=${conservation.total}, formula=${conservation.formula}, verified=${conservation.verified})`,
+        };
+      }
+
+      // 3. All tier-1 scopes must have WU allocated
+      const scopeResult = await ctx.db.prepare(
+        'SELECT COUNT(*) as total, SUM(CASE WHEN allocated_wu > 0 THEN 1 ELSE 0 END) as allocated FROM blueprint_scopes WHERE project_id = ? AND tier = 1'
+      ).bind(ctx.projectId).first<{ total: number; allocated: number }>();
+
+      const totalScopes = scopeResult?.total || 0;
+      const allocatedScopes = scopeResult?.allocated || 0;
+
+      if (totalScopes === 0) {
+        return { satisfied: false, reason: 'No scopes defined' };
+      }
+
+      if (allocatedScopes < totalScopes) {
+        return {
+          satisfied: false,
+          reason: `${totalScopes - allocatedScopes} of ${totalScopes} scope(s) have no WU allocated`,
+        };
+      }
+
+      // 4. Execution layers must exist for at least one scope
+      const layerCount = await ctx.db.prepare(
+        'SELECT COUNT(*) as cnt FROM execution_layers WHERE project_id = ?'
+      ).bind(ctx.projectId).first<{ cnt: number }>();
+
+      if ((layerCount?.cnt || 0) === 0) {
+        return { satisfied: false, reason: 'No execution layers created' };
+      }
+
+      return {
+        satisfied: true,
+        reason: `${totalScopes} scope(s) with WU allocated, conservation valid, ${layerCount!.cnt} execution layer(s) exist`,
+      };
+    },
+  },
+
+  'GW:VAL': {
+    description: 'Validation gate — all active scopes R ≥ 0.6, no FAILING deliverables',
+    evaluate: async (ctx) => {
+      // 1. Compute project readiness
+      const readiness = await computeProjectReadiness(ctx.db, ctx.projectId);
+
+      if (readiness.scopes.length === 0) {
+        return { satisfied: false, reason: 'No scopes to validate' };
+      }
+
+      // 2. Check that all scopes meet R ≥ 0.6
+      const belowThreshold = readiness.scopes.filter(s => s.R < 0.6);
+      if (belowThreshold.length > 0) {
+        const names = belowThreshold.map(s => `${s.scope_name}(R=${s.R})`).join(', ');
+        return {
+          satisfied: false,
+          reason: `${belowThreshold.length} scope(s) below R≥0.6 threshold: ${names}`,
+        };
+      }
+
+      // 3. No FAILED execution layers
+      const failedLayers = await ctx.db.prepare(
+        "SELECT COUNT(*) as cnt FROM execution_layers WHERE project_id = ? AND status = 'FAILED'"
+      ).bind(ctx.projectId).first<{ cnt: number }>();
+
+      if ((failedLayers?.cnt || 0) > 0) {
+        return {
+          satisfied: false,
+          reason: `${failedLayers!.cnt} execution layer(s) in FAILED state`,
+        };
+      }
+
+      return {
+        satisfied: true,
+        reason: `All ${readiness.scopes.length} scope(s) R≥0.6 (project R=${readiness.project_R}), no failing layers`,
+      };
+    },
+  },
+
+  'GW:VER': {
+    description: 'Verification gate — project R ≥ 0.8, all scopes verified, reconciliation has no major divergences',
+    evaluate: async (ctx) => {
+      // 1. Project-level readiness ≥ 0.8
+      const readiness = await computeProjectReadiness(ctx.db, ctx.projectId);
+
+      if (readiness.project_R < 0.8) {
+        return {
+          satisfied: false,
+          reason: `Project R=${readiness.project_R} is below 0.8 threshold`,
+        };
+      }
+
+      // 2. All scopes must have verified WU > 0 (i.e., WU transfer has occurred)
+      const unverified = readiness.scopes.filter(s => s.allocated_wu > 0 && s.verified_wu === 0);
+      if (unverified.length > 0) {
+        const names = unverified.map(s => s.scope_name).join(', ');
+        return {
+          satisfied: false,
+          reason: `${unverified.length} scope(s) have allocated WU but no verified WU: ${names}`,
+        };
+      }
+
+      // 3. Conservation must be valid
+      if (!readiness.conservation.valid) {
+        return {
+          satisfied: false,
+          reason: `Conservation violation: delta=${readiness.conservation.delta}`,
+        };
+      }
+
+      // 4. Reconciliation: no major divergences (>20%)
+      const reconciliation = await computeReconciliation(ctx.db, ctx.projectId);
+      if (reconciliation.has_divergences) {
+        const divergent = reconciliation.entries.filter(e => e.requires_attention);
+        const names = divergent.map(e => `${e.scope_name}(${e.divergence_pct}%)`).join(', ');
+        return {
+          satisfied: false,
+          reason: `Reconciliation divergences >20%: ${names}`,
+        };
+      }
+
+      return {
+        satisfied: true,
+        reason: `Project R=${readiness.project_R}≥0.8, all scopes verified, conservation valid, no reconciliation divergences`,
+      };
+    },
+  },
 };
 
 // ─── Core Evaluation Function ────────────────────────────────────────

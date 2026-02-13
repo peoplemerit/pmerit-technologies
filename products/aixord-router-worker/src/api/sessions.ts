@@ -73,9 +73,10 @@ sessions.post('/:projectId/sessions', async (c) => {
   const sessionId = crypto.randomUUID();
   const now = new Date().toISOString();
 
-  // If parent provided with edge type, close the parent session
+  // Validate parent + edge type before any writes
+  let edgeType: string | undefined;
   if (body.parent_session_id && body.edge_type) {
-    const edgeType = body.edge_type;
+    edgeType = body.edge_type;
     if (!EDGE_TYPES.includes(edgeType as typeof EDGE_TYPES[number])) {
       return c.json({ error: `Invalid edge_type. Must be one of: ${EDGE_TYPES.join(', ')}` }, 400);
     }
@@ -95,20 +96,22 @@ sessions.post('/:projectId/sessions', async (c) => {
         'UPDATE project_sessions SET status = ?, closed_at = ? WHERE id = ?'
       ).bind('CLOSED', now, body.parent_session_id).run();
     }
+  }
 
-    // Create the edge
+  // Create the session FIRST (must exist before edge FK constraint)
+  await c.env.DB.prepare(`
+    INSERT INTO project_sessions (id, project_id, session_number, session_type, status, phase, started_at, created_by)
+    VALUES (?, ?, ?, ?, 'ACTIVE', 'BRAINSTORM', ?, ?)
+  `).bind(sessionId, projectId, sessionNumber, sessionType, now, userId).run();
+
+  // Create the edge AFTER session exists (session_edges.to_session_id FK → project_sessions.id)
+  if (body.parent_session_id && edgeType) {
     const edgeId = crypto.randomUUID();
     await c.env.DB.prepare(`
       INSERT INTO session_edges (id, from_session_id, to_session_id, edge_type, created_at)
       VALUES (?, ?, ?, ?, ?)
     `).bind(edgeId, body.parent_session_id, sessionId, edgeType, now).run();
   }
-
-  // Create the session
-  await c.env.DB.prepare(`
-    INSERT INTO project_sessions (id, project_id, session_number, session_type, status, phase, started_at, created_by)
-    VALUES (?, ?, ?, ?, 'ACTIVE', 'BRAINSTORM', ?, ?)
-  `).bind(sessionId, projectId, sessionNumber, sessionType, now, userId).run();
 
   // Update capsule.session.number in project_state
   const stateRow = await c.env.DB.prepare(

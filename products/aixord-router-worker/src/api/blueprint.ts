@@ -14,6 +14,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
 import { triggerGateEvaluation } from '../services/gateRules';
+import { computeScopeReadiness } from '../services/readinessEngine';
 
 const blueprint = new Hono<{ Bindings: Env }>();
 
@@ -421,11 +422,41 @@ blueprint.put('/:projectId/blueprint/deliverables/:deliverableId', async (c) => 
   if (body.sort_order !== undefined) { sets.push('sort_order = ?'); params.push(body.sort_order); }
   if (body.notes !== undefined) { sets.push('notes = ?'); params.push(body.notes); }
 
+  // DMAIC Phase Auto-Advancement: Map deliverable status → DMAIC phase
+  // DRAFT→DEFINE, IN_PROGRESS→MEASURE, DONE→ANALYZE, VERIFIED→IMPROVE, LOCKED→CONTROL
+  if (body.status !== undefined) {
+    const statusToDmaic: Record<string, string> = {
+      'DRAFT': 'DEFINE',
+      'IN_PROGRESS': 'MEASURE',
+      'DONE': 'ANALYZE',
+      'VERIFIED': 'IMPROVE',
+      'LOCKED': 'CONTROL',
+    };
+    const dmaicPhase = statusToDmaic[body.status];
+    if (dmaicPhase) {
+      sets.push('dmaic_phase = ?');
+      params.push(dmaicPhase);
+    }
+  }
+
   params.push(deliverableId, projectId);
 
   await c.env.DB.prepare(
     `UPDATE blueprint_deliverables SET ${sets.join(', ')} WHERE id = ? AND project_id = ?`
   ).bind(...params).run();
+
+  // Trigger readiness recomputation after status change (updates L/P/V scores)
+  if (body.status !== undefined) {
+    const deliverable = await c.env.DB.prepare(
+      'SELECT scope_id FROM blueprint_deliverables WHERE id = ? AND project_id = ?'
+    ).bind(deliverableId, projectId).first<{ scope_id: string }>();
+
+    if (deliverable) {
+      c.executionCtx.waitUntil(
+        computeScopeReadiness(c.env.DB, projectId, deliverable.scope_id).catch(() => {})
+      );
+    }
+  }
 
   // Phase 2: Auto-evaluate gates after deliverable update (DoD completion may flip GA:BP)
   c.executionCtx.waitUntil(triggerGateEvaluation(c.env.DB, projectId, userId));
@@ -860,7 +891,7 @@ blueprint.post('/:projectId/blueprint/import', async (c) => {
   }
 
   const body = await c.req.json();
-  const { scopes: scopesInput = [], selected_option, milestones, tech_stack, risks } = body;
+  const { scopes: scopesInput = [], selected_option, milestones, tech_stack, risks, total_wu } = body;
 
   // Validate minimum requirements
   if (!Array.isArray(scopesInput) || scopesInput.length === 0) {
@@ -966,6 +997,40 @@ blueprint.post('/:projectId/blueprint/import', async (c) => {
       }
     }
 
+    // ── WU Initialization & Distribution ──
+    // If total_wu provided, initialize project WU budget and distribute evenly across tier-1 scopes
+    let wuInitialized = false;
+    if (total_wu && typeof total_wu === 'number' && total_wu > 0 && createdScopeIds.length > 0) {
+      // Check if WU was already initialized (avoid double-init)
+      const existingWU = await c.env.DB.prepare(
+        'SELECT execution_total_wu FROM projects WHERE id = ?'
+      ).bind(projectId).first<{ execution_total_wu: number }>();
+
+      if (!existingWU || (existingWU.execution_total_wu || 0) === 0) {
+        // Initialize project WU budget
+        await c.env.DB.prepare(
+          `UPDATE projects SET execution_total_wu = ?, formula_execution_wu = ?, verified_reality_wu = 0 WHERE id = ?`
+        ).bind(total_wu, total_wu, projectId).run();
+
+        // Distribute WU evenly across tier-1 scopes
+        const wuPerScope = Math.round((total_wu / createdScopeIds.length) * 100) / 100;
+        for (const scopeId of createdScopeIds) {
+          await c.env.DB.prepare(
+            'UPDATE blueprint_scopes SET allocated_wu = ? WHERE id = ? AND project_id = ?'
+          ).bind(wuPerScope, scopeId, projectId).run();
+        }
+
+        // Log the WU initialization
+        await c.env.DB.prepare(
+          `INSERT INTO wu_audit_log
+           (project_id, event_type, wu_amount, snapshot_total, snapshot_formula, snapshot_verified, conservation_valid, actor_id, notes, created_at)
+           VALUES (?, 'WU_ALLOCATED', ?, ?, ?, 0, 1, ?, 'WU initialized via blueprint import', ?)`
+        ).bind(projectId, total_wu, total_wu, total_wu, userId, now).run();
+
+        wuInitialized = true;
+      }
+    }
+
     // Store plan metadata (selected option, milestones, tech_stack, risks) as a note on the project
     // This preserves the full plan context beyond just scopes/deliverables
     if (selected_option || milestones || tech_stack || risks) {
@@ -1011,6 +1076,11 @@ blueprint.post('/:projectId/blueprint/import', async (c) => {
       },
       scope_ids: createdScopeIds,
       deliverable_ids: createdDeliverableIds,
+      wu: wuInitialized ? {
+        total_wu: total_wu,
+        wu_per_scope: Math.round((total_wu / createdScopeIds.length) * 100) / 100,
+        scopes_allocated: createdScopeIds.length,
+      } : null,
     }, 201);
 
   } catch (err) {

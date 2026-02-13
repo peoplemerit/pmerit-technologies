@@ -18,10 +18,11 @@ function makeSchema<T>(validator: (data: unknown) => T) {
 }
 
 // Auth schemas
+// Login: 6-char minimum to support users who registered under original rules
 export const loginSchema = makeSchema((data: unknown) => {
   const d = data as Record<string, unknown>;
   if (typeof d?.email !== 'string' || !d.email.includes('@')) fail('email', 'Valid email required');
-  if (typeof d?.password !== 'string' || d.password.length < 8) fail('password', 'Password min 8 chars');
+  if (typeof d?.password !== 'string' || d.password.length < 6) fail('password', 'Password min 6 chars');
   return d as { email: string; password: string };
 });
 

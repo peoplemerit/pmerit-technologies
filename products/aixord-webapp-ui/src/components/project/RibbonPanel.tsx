@@ -14,6 +14,7 @@ import BlueprintRibbon from '../ribbon/BlueprintRibbon';
 import { TaskBoard } from '../TaskBoard';
 import { EscalationBanner } from '../EscalationBanner';
 import { ProjectMemoryPanel } from '../ProjectMemoryPanel';
+import { GovernanceDashboard } from '../GovernanceDashboard';
 import { Ribbon } from '../layout/Ribbon';
 import type { Project, Decision } from '../../lib/api';
 
@@ -170,6 +171,12 @@ export function RibbonPanel(props: RibbonPanelProps) {
           compliance={props.engineering.compliance}
           isLoading={props.engineering.isLoading}
           onOpenPanel={props.onOpenEngineeringPanel}
+        />
+      )}
+      {props.activeTab === 'math-governance' && (
+        <GovernanceDashboard
+          projectId={props.projectId}
+          token={props.token}
         />
       )}
       {props.activeTab === 'tasks' && (

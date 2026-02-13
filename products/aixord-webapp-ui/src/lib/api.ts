@@ -4131,6 +4131,24 @@ export const blueprintApi = {
 // Workspace Binding Types & API (Unified GA:ENV + GA:FLD)
 // ============================================================================
 
+// Environment Confirmation Test types
+export interface EnvTestResult {
+  test_id: string;
+  name: string;
+  passed: boolean;
+  latency_ms: number;
+  evidence: Record<string, unknown>;
+  error?: string;
+}
+
+export interface EnvConfirmTestResult {
+  project_id: string;
+  ran_at: string;
+  all_passed: boolean;
+  duration_ms: number;
+  tests: EnvTestResult[];
+}
+
 export interface WorkspaceBinding {
   id: string;
   project_id: string;
@@ -4186,6 +4204,12 @@ export const workspaceApi = {
 
   async getStatus(projectId: string, token: string): Promise<WorkspaceStatus> {
     return request<WorkspaceStatus>(`/projects/${projectId}/workspace/status`, {}, token);
+  },
+
+  async confirmTest(projectId: string, token: string): Promise<EnvConfirmTestResult> {
+    return request<EnvConfirmTestResult>(`/projects/${projectId}/workspace/confirm-test`, {
+      method: 'POST',
+    }, token);
   },
 };
 

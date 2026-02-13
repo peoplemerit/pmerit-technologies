@@ -109,6 +109,21 @@ export function MiniBar({ currentPhase, gates, onTabClick, activeTab, hiddenTabs
             {tab === 'blueprint' ? 'BP' : tab === 'security' ? 'SEC' : 'EV'}
           </button>
         ))}
+
+        {/* Mathematical Governance Dashboard */}
+        {!hiddenTabs.includes('math-governance') && (
+          <button
+            onClick={() => onTabClick('math-governance')}
+            className={`px-1.5 py-0.5 rounded text-xs font-medium transition-colors ${
+              activeTab === 'math-governance'
+                ? 'bg-teal-600/20 text-teal-300'
+                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/50'
+            }`}
+            title="Mathematical Governance (WU Conservation · R=L×P×V · Reconciliation)"
+          >
+            WU
+          </button>
+        )}
       </div>
 
       {/* Right: Completion % */}

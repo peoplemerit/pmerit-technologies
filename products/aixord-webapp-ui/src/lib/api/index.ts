@@ -34,6 +34,9 @@ export * from './evidence-knowledge';
 // Media, Sessions, Workspace, Continuity, Usage
 export * from './media';
 
+// Mathematical Governance
+export * from './governance';
+
 // Combined API object for convenience
 import { authApi } from './auth';
 import { projectsApi, stateApi } from './projects';
@@ -44,6 +47,7 @@ import { engineeringApi, blueprintApi } from './engineering';
 import { securityApi, ccsApi } from './security';
 import { githubApi, evidenceApi, knowledgeApi } from './evidence-knowledge';
 import { imageApi, layersApi, sessionsApi, workspaceApi, continuityApi, usageApi } from './media';
+import { governanceApi } from './governance';
 
 export const api = {
   auth: authApi,
@@ -68,6 +72,7 @@ export const api = {
   continuity: continuityApi,
   brainstorm: brainstormApi,
   assignments: assignmentsApi,
+  governance: governanceApi,
 };
 
 export default api;
