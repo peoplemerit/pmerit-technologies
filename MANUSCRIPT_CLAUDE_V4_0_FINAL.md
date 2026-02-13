@@ -20,7 +20,7 @@ No part of this publication may be reproduced, distributed, or transmitted in an
 
 For permission requests, contact: info@pmerit.com
 
-Printed in United States
+Printed in the United States of America
 
 First Edition
 
@@ -265,7 +265,7 @@ Understanding which document to use when:
                       │
                       ▼
 ┌──────────────────────────────────────────────┐
-│ AIXORD_GOVERNANCE_CLAUDE_PROJECT_V4.0-FINAL  │
+│ AIXORD_GOVERNANCE_CLAUDE_PROJECT_V4.0-FINAL.md│
 │ (CONDENSED — For Claude Pro Projects)        │
 └──────────────────────────────────────────────┘
 ```
@@ -1428,7 +1428,7 @@ You can force enforcement anytime:
 
 **Q: Can I use AIXORD with other AI platforms?**
 
-A: Yes. AIXORD has variants for ChatGPT, Gemini, Copilot, DeepSeek, and Opera Aria. Each is optimized for its platform's characteristics. This book covers the Claude variant specifically.
+A: Yes. AIXORD has variants for ChatGPT, Gemini, Copilot, DeepSeek, and Grok. Each is optimized for its platform's characteristics. This book covers the Claude variant specifically.
 
 **Q: Does AIXORD work with Claude Free?**
 
