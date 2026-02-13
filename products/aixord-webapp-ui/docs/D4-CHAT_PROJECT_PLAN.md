@@ -100,7 +100,7 @@ EXECUTION_TOTAL = VERIFIED_REALITY + FORMULA_EXECUTION
 |----------|-------|
 | **Version** | 4.5 |
 | **Status** | RELEASE-READY |
-| **Patch Sources** | PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PATCH-GCP-01, PATCH-GKDL-01, PATCH-SPG-01, PATCH-CCS-01, ENH-4/5/6 (v4.4.1), PATCH-LEM-01 (v4.4.2), HO-BRAINSTORM-VALUE-01, HO-PLAN-BLUEPRINT-01, HO-BLUEPRINT-EXECUTE-01, HO-INTEGRITY-EXECUTE-01, HO-DOCTRINE-VALUE-01, HO-DISCOVER-BRAINSTORM-TOKEN-01, HO-INTEGRITY-AVL-01, HO-SECURITY-ROTATION-01, PATCH-SCOPE-CLARIFY-01 (v4.4.3), PATCH-NUMBERING-01 (v4.4.3), **PATCH-ENG-01 (v4.5 — Engineering Governance)** |
+| **Patch Sources** | PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PATCH-GCP-01, PATCH-GKDL-01, PATCH-SPG-01, PATCH-CCS-01, ENH-4/5/6 (v4.4.1), PATCH-LEM-01 (v4.4.2), HO-BRAINSTORM-VALUE-01, HO-PLAN-BLUEPRINT-01, HO-BLUEPRINT-EXECUTE-01, HO-INTEGRITY-EXECUTE-01, HO-DOCTRINE-VALUE-01, HO-DISCOVER-BRAINSTORM-TOKEN-01, HO-INTEGRITY-AVL-01, HO-SECURITY-ROTATION-01, PATCH-SCOPE-CLARIFY-01 (v4.4.3), PATCH-NUMBERING-01 (v4.4.3), **PATCH-ENG-01 (v4.5 — Engineering Governance)**, **PATCH-GOV-EXEC-01 (v4.5 — Agentic Governance Extensions)**, **PATCH-ABL-PERSIST-GT2UTM-02 (v4.5 — Artifact Persistence Enforcement)** |
 | **Parts** | I–XIV (14 parts) |
 | **Gates** | 17 GA:\* gates + 6 GS:\* security gates + GA:CCS (conditional) |
 | **Phases** | SETUP → DISCOVER → BRAINSTORM → PLAN → BLUEPRINT (incl. SCOPE) → EXECUTE → AUDIT → VERIFY → LOCK |
@@ -255,6 +255,195 @@ D4-CHAT implements the AIXORD Authority Model:
 | L-OPS4-5 | L2+ alerting, dashboards, incident response | ⏳ Future (production readiness) |
 | L-OPS6-8 | LOCK requires ORL checklist PASS; deployment strategy required | ⏳ Future |
 
+### 2.5 Execution Architecture (Planned)
+
+**Source:** PATCH-GOV-EXEC-01, PATCH-D4-EXEC-ARCH-01  
+**Status:** PLANNED — Architectural design complete, implementation pending  
+**Applies To:** D4-CHAT agentic execution model
+
+#### 2.5.1 Human–AI Hierarchy (Planned)
+
+D4-CHAT implements a formal manager/employee execution model:
+
+| Role | Actor | Authority | D4-CHAT Implementation |
+|------|-------|-----------|------------------------|
+| **Director (Owner)** | Human User | Provides objectives, approves gates, owns LOCK decisions | UI approval gates, phase finalization |
+| **Supervisor AI** | High-Reasoning Model | Parses criteria, generates plans, calculates Readiness Metric (R), requests approval | Router model selection, Blueprint validation |
+| **Worker/Agent** | Autonomous Agent | Executes atomic steps (CREATE_FILE, API_TEST, RUN_COMMAND), cannot promote phases | Planned for Path B Phase 2-3 |
+
+**Authority Model:**
+- No AI role may bypass Director approval for phase promotion or LOCK
+- All approval gates MUST record: `user_id`, `timestamp`, `decision` (approve/reject/feedback)
+- Absence of human decision record = INVALID GATE
+
+#### 2.5.2 Hybrid Execution Strategy (Planned)
+
+D4-CHAT will support two execution modes:
+
+| Strategy | Use Cases | Control Model | Status |
+|----------|-----------|---------------|--------|
+| **Strategy A — Autonomous** | Code generation, API testing, tool-driven execution (GitHub Copilot, agents) | AI executes after approval gate | Planned |
+| **Strategy B — User-Guided** | Database migrations, deployment, high-risk operations | Verifiable instructions + automated checks | Planned |
+
+**Hybrid Matrix:** Task classification determines execution mode per deliverable.
+
+#### 2.5.3 Mathematical Governance (Planned)
+
+D4-CHAT will enforce mathematical readiness and conservation laws:
+
+**Master Formula:**
+```
+EXECUTION_TOTAL = FORMULA_EXECUTION + VERIFIED_REALITY
+```
+
+**Readiness Formula:**
+```
+R = L × P × V
+```
+Where:
+- **L** = Layering (execution decomposition quality)
+- **P** = Preparedness (input availability)
+- **V** = Validation (verification readiness)
+
+**Approval Threshold:** R ≥ 0.8 required before phase advancement
+
+**Irreversibility Rule:**
+- VERIFIED → LOCK is forward-only
+- Regression without Director override = governance violation
+
+#### 2.5.4 DMAIC Mapping (Planned)
+
+AIXORD phases map to Lean Six Sigma DMAIC methodology:
+
+| DMAIC Phase | AIXORD Phase | Purpose |
+|-------------|--------------|---------|
+| **Define** | DECISION / DISCOVER | Problem definition, scope establishment |
+| **Measure** | BRAINSTORM / PLAN | Options exploration, measurement planning |
+| **Analyze** | BLUEPRINT | Root cause analysis, solution design |
+| **Improve** | EXECUTE | Implementation, testing |
+| **Control** | AUDIT → VERIFY → LOCK | Validation, control plan, sustainability |
+
+#### 2.5.5 DAG, Poka-Yoke, Reconciliation (Planned)
+
+**DAG Enforcement:**
+- `scope_dependencies` table enforces directed acyclic graph
+- No cyclic execution permitted
+- Parallel execution only when dependencies satisfied
+
+**Reconciliation Triad:**
+- PLANNED (from Blueprint)
+- CLAIMED (from execution logs)
+- VERIFIED (from evidence)
+- **Divergence requires Director decision:** FIX or WAIVE
+
+**Poka-Yoke (Error Proofing):**
+- Execution blocked if gates fail
+- No silent failures propagate
+- Failed layer isolation (L-LEM compliance)
+
+#### 2.5.6 Session Awareness & Persistent Memory (Planned)
+
+**Planned Implementation:**
+- Persistent agent state via Cloudflare Durable Objects
+- Centralized `projects` table = Source of Truth
+- All sessions read/write same state
+- Session graph tracks continuity (§9.2 — `project_sessions`, `session_edges`)
+
+**Current Status:**
+- ✅ Project state persistence working
+- ✅ Session graph model deployed (v4.4)
+- ⏳ Durable Objects integration pending (Path B Phase 2)
+
+#### 2.5.7 GT2UTM Requirement (Planned)
+
+**Governance-to-UI Traceability Matrix (GT2UTM)** is required before VERIFY → LOCK:
+
+GT2UTM maps:
+```
+Governance Artifact → UI Element → Component → API Call → State Change → Evidence
+```
+
+**GT2UTM is required before:**
+- VERIFY phase completion
+- LOCK phase entry
+
+**Failure Conditions:**
+- Missing UI mapping → FAIL
+- UI deviates from governance → FAIL
+- FAIL → HALT
+
+See §3.6 for detailed GT2UTM mapping.
+
+### 2.6 AIXORD Baseline Extensions (Planned)
+
+**Source:** PATCH-GOV-EXEC-01, PATCH-ABL-PERSIST-GT2UTM-02  
+**Status:** PLANNED — Formal extensions to AIXORD v4.5 baseline  
+**Classification:** Non-breaking additions
+
+#### 2.6.1 Artifact Persistence Enforcement Doctrine (APED)
+
+**Purpose:** Close the governance blind spot where artifact binding is enforced at reasoning layer but not at tool/persistence layer.
+
+**APED-1 — Persistence Is Not Implied:**
+- If platform claims workspace/file capability, artifact existence MUST be proven by file evidence
+- Chat output alone ≠ persistence proof
+
+**APED-2 — Mandatory Commit Layer:**
+- Systems implementing AIXORD MUST provide non-skippable artifact commit mechanism
+- Return: file path + hash evidence
+- Block phase advancement if evidence missing
+
+**APED-3 — Persistence Visibility:**
+- UI MUST expose: last artifact write timestamp, files written, hashes, commit status
+- Missing visibility = governance opacity violation
+
+**APED-4 — Environment Awareness Requirement:**
+- Platforms with file integration MUST provide:
+  - Write proof test
+  - Read proof test
+  - Hash compare
+  - Binding metadata display
+- Failure → GA:ENV incomplete
+
+**APED-5 — Session Continuity Enforcement:**
+- Session reopening MUST be deterministic
+- Session ID MUST be URL-resolvable or explicitly selectable
+- Session artifacts MUST be bindable
+- Failure → L-SSC violation
+
+**APED-6 — GT2UTM Enforcement:**
+- Governance state changes MUST map to: Persistence action → Evidence display
+- Unmapped governance state = traceability failure
+
+**D4-CHAT Compliance Status:**
+- ⏳ APED-2 (Mandatory commit layer) — Planned (§3.6.1)
+- ⏳ APED-3 (Persistence visibility) — Planned (§3.6.2)
+- ⏳ APED-4 (Environment awareness) — Planned (§3.6.3)
+- ✅ APED-5 (Session continuity) — Partially implemented (session graph v4.4)
+- ⏳ APED-6 (GT2UTM) — Planned (§3.6.4)
+
+#### 2.6.2 Approval Gate Record Requirement
+
+**Requirement:** All approval gates MUST record:
+- `user_id` (who approved)
+- `timestamp` (when)
+- `decision` (approve / reject / feedback)
+
+**D4-CHAT Status:**
+- ✅ `decision_ledger` table deployed (Session 36)
+- ✅ Phase finalization records approval (§16.22)
+- ⏳ Full approval metadata capture pending
+
+#### 2.6.3 GT2UTM as Required Artifact
+
+**Declaration:** GT2UTM (Governance-to-UI Traceability Matrix) is a **mandatory artifact** for any AIXORD system with a user interface.
+
+**Required Before:**
+- VERIFY phase completion
+- LOCK phase entry
+
+**See §3.6.4 for D4-CHAT GT2UTM mapping.**
+
 ---
 
 ## 3. UTILITY OBJECTIVES
@@ -340,6 +529,178 @@ aggregation at session, project, and account levels.
 - Session/project aggregation requires SQL queries on existing data (no new tables)
 - Activity tab content (currently blank) should display project-level metrics
 - Account-level requires new aggregation endpoint
+
+### 3.6 Artifact Persistence & GT2UTM (Planned)
+
+**Source:** PATCH-D4-PERSIST-GT2UTM-01  
+**Status:** PLANNED — Critical infrastructure for governance integrity  
+**Priority:** P0 — Foundational requirement
+
+#### 3.6.1 Mandatory Artifact Commit Layer (Planned)
+
+**Problem Identified:**
+- Workspace binding reads files but does not enforce persistence
+- Scaffold shows "0 items" while folders exist
+- AI outputs generated but not committed to disk
+- No visible Environment Awareness Report
+- No enforced artifact commit layer
+
+**Required Implementation:**
+
+**Function:** `commitArtifactsToWorkspace(artifactBundle)`
+
+**Requirements:**
+- Validate `binding_confirmed === true`
+- Validate `folder_name !== null`
+- Ensure `/aixord/` invariant directory exists
+- Write canonical artifacts:
+  - `STATE.json`
+  - `ARTIFACTS/*`
+  - `HANDOFF/*`
+  - `AUDIT/*`
+  - `BLUEPRINT/*`
+
+**Returns:**
+```typescript
+{
+  filePaths: string[],
+  fileSizes: number[],
+  sha256Hashes: string[],
+  timestamp: string
+}
+```
+
+**Enforcement Rule:**
+```
+NO phase transition allowed if artifact_commit_evidence.missing = true
+```
+
+**D4-CHAT Status:** ⏳ Planned (not yet implemented)
+
+#### 3.6.2 Artifact Persistence Enforcement Gate (Planned)
+
+**Not a new GA:\* gate** — attaches to existing gates as enforcement criteria.
+
+| Trigger | Enforcement |
+|---------|-------------|
+| Phase Finalize | Must verify artifact hashes exist |
+| Session End | Must write HANDOFF |
+| Blueprint Update | Must write BLUEPRINT artifact |
+| AUDIT Entry | Must write DTL (Deliverable Truth Ledger) |
+
+**If missing → UI badge:**
+```
+⚠️ Artifact Not Persisted
+```
+
+**D4-CHAT Status:** ⏳ Planned (enforcement logic not yet implemented)
+
+#### 3.6.3 Environment Awareness Report (EAR-01) (Planned)
+
+**Purpose:** One-click diagnostic report that proves workspace binding functional integrity.
+
+**Report Checks:**
+1. Write proof test (create temp file, verify exists)
+2. Read proof test (read known file, verify hash)
+3. Hash compare (artifact hash vs. workspace hash)
+4. Artifact write test (write canonical artifact structure)
+5. Directory list verification (confirm expected folders)
+6. Binding metadata verification (workspace_bindings table vs. IndexedDB)
+
+**Output:**
+```
+aixord/AUDIT/EAR-01.json
+```
+
+**Display Location:**
+- EvidenceRibbon → "Environment Health" section
+
+**D4-CHAT Status:** ⏳ Planned (not yet implemented)
+
+#### 3.6.4 GT2UTM Mapping (Planned)
+
+**Governance-to-UI Traceability Matrix**
+
+| Governance Law | Backend Artifact | API Endpoint | UI Component | Evidence Display |
+|----------------|------------------|--------------|--------------|------------------|
+| GA:ENV | `workspace_bindings` | `GET /api/v1/projects/:id/workspace/status` | `GovernanceRibbon` (ENV pill) | Binding status badge |
+| GA:FLD | `workspace_bindings.folder_name` | `GET /api/v1/projects/:id/workspace` | `FolderPicker.tsx` | Folder name display |
+| L-SSC | `HANDOFF` artifact | `POST /api/v1/projects/:id/phases/:phase/finalize` | `SessionList.tsx` | Session history |
+| L-AVL | `decision_ledger` | `GET /api/v1/projects/:id/decisions` | `DecisionLog.tsx` | Audit ribbon |
+| Artifact Commit | Hash evidence | `commitArtifactsToWorkspace()` | `EvidenceRibbon.tsx` | Hash display |
+| L-PS | Path validation | `validateBody.ts` | `ErrorBoundary.tsx` | Error display |
+| L-BPX | `blueprint_scopes`, `blueprint_deliverables` | `GET /api/v1/projects/:id/blueprint/summary` | `BlueprintRibbon.tsx` | Scope/deliverable tree |
+| L-IVL | `blueprint_integrity_reports` | `GET /api/v1/projects/:id/blueprint/integrity` | `GovernanceRibbon` (GA:BP pill) | Integrity status |
+| L-SPG | `data_classification` | `GET /api/v1/projects/:id/data-classification` | `SecurityRibbon.tsx` | Classification display |
+| L-CCS | `ccs_incidents` | `GET /api/v1/projects/:id/ccs/status` | `CCSIncidentBanner.tsx` | Incident banner |
+
+**Acceptance Criteria:**
+- ✅ Every governance law has a backend artifact
+- ✅ Every backend artifact has an API endpoint
+- ⏳ Every API endpoint has a UI component (partial)
+- ⏳ Every UI component displays evidence (partial)
+
+**D4-CHAT Status:** ~60% complete (backend + API wired, frontend partial)
+
+#### 3.6.5 Scaffold Status Reporting Fix (Planned)
+
+**Problem:** Scaffold generator does not return item count, causing UI to display "Generated (0 items)"
+
+**Required Fix:**
+
+Modify scaffold generator to return:
+```typescript
+{
+  itemsWritten: number,
+  pathsWritten: string[],
+  startedAt: string,
+  endedAt: string
+}
+```
+
+**Persist to:** `workspace_bindings.metadata` (JSON column)
+
+**Refresh:** Wizard summary screen displays actual count
+
+**D4-CHAT Status:** ⏳ Planned (scaffold exists, metadata reporting missing)
+
+#### 3.6.6 Session Reopen Fix (Planned)
+
+**Problem:** Sessions API exists but UI not first-class; no reliable session reopening
+
+**Required Behavior:**
+1. Persistent `SessionList` panel (always visible)
+2. URL parameter: `?session=<id>` (bookmarkable)
+3. "New Session" does not hide prior sessions
+4. Chat header dropdown: "Recent Sessions"
+
+**GT2UTM Alignment:**
+- Session continuity (L-SSC) → Session ID → URL parameter → `SessionList.tsx`
+
+**D4-CHAT Status:**
+- ✅ Sessions API deployed (§6.3)
+- ✅ `SessionList.tsx` component exists (Session 20)
+- ⏳ URL routing not yet implemented
+- ⏳ "Recent Sessions" dropdown not yet implemented
+
+#### 3.6.7 Acceptance Criteria
+
+**PATCH COMPLETE IF:**
+- ✅ AI output triggers artifact commit automatically
+- ✅ Hash + path evidence visible in UI
+- ✅ EAR-01 passes (environment health check)
+- ✅ Scaffold count displays correctly
+- ✅ Session reopening stable (URL parameter works)
+- ✅ Phase transitions blocked if no artifact commit evidence
+- ✅ GT2UTM table complete (all rows mapped)
+
+**Expected Outcome:**
+D4-CHAT becomes:
+- **Deterministic** in artifact persistence
+- **Observable** in file writes
+- **Traceable** governance-to-UI
+- **Session-aware** at project level
+- **Resistant** to "AI talked but nothing committed" failure
 
 ---
 
