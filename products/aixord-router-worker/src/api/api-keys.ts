@@ -6,8 +6,12 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { nanoid } from 'nanoid';
+import { requireAuth } from '../middleware/requireAuth';
 
 const app = new Hono<{ Bindings: Env }>();
+
+// Apply authentication middleware to all routes
+app.use('/*', requireAuth);
 
 /**
  * GET /api-keys
