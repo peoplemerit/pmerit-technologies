@@ -337,6 +337,10 @@ auth.get('/subscription', async (c) => {
   if (!subscription) {
     // No subscription found, return default TRIAL with PLATFORM keys
     // TRIAL users get platform-provided keys (dual-mode: BYOK optional)
+    c.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    c.header('Pragma', 'no-cache');
+    c.header('Expires', '0');
+
     return c.json({
       tier: 'TRIAL',
       status: 'active',
@@ -350,6 +354,11 @@ auth.get('/subscription', async (c) => {
   // TRIAL is excluded from BYOK-only tiers — trial users use platform keys by default
   const byokTiers = ['MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
   const keyMode = byokTiers.includes(subscription.tier) ? 'BYOK' : 'PLATFORM';
+
+  // Set no-cache headers to prevent stale subscription data
+  c.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  c.header('Pragma', 'no-cache');
+  c.header('Expires', '0');
 
   return c.json({
     tier: subscription.tier,

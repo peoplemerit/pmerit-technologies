@@ -64,7 +64,7 @@ export const GATE_RULES: Record<string, GateRule> = {
         'SELECT subscription_tier FROM users WHERE id = ?'
       ).bind(ctx.userId).first<{ subscription_tier: string | null }>();
       const satisfied = !!user?.subscription_tier &&
-        ['TRIAL', 'STARTER', 'PRO', 'PREMIUM'].includes(user.subscription_tier);
+        ['TRIAL', 'MANUSCRIPT_BYOK', 'BYOK_STANDARD', 'PLATFORM_STANDARD', 'PLATFORM_PRO', 'ENTERPRISE', 'STARTER', 'PRO', 'PREMIUM'].includes(user.subscription_tier);
       return {
         satisfied,
         reason: satisfied
@@ -97,7 +97,7 @@ export const GATE_RULES: Record<string, GateRule> = {
         'SELECT subscription_tier FROM users WHERE id = ?'
       ).bind(ctx.userId).first<{ subscription_tier: string | null }>();
       const satisfied = !!user?.subscription_tier &&
-        ['TRIAL', 'STARTER', 'PRO', 'PREMIUM'].includes(user.subscription_tier);
+        ['TRIAL', 'MANUSCRIPT_BYOK', 'BYOK_STANDARD', 'PLATFORM_STANDARD', 'PLATFORM_PRO', 'ENTERPRISE', 'STARTER', 'PRO', 'PREMIUM'].includes(user.subscription_tier);
       return {
         satisfied,
         reason: satisfied
