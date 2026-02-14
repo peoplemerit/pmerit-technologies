@@ -127,7 +127,7 @@ export function Settings() {
     setSaveMessage(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('aixord_token');
       if (!token) {
         throw new Error('Not authenticated');
       }
