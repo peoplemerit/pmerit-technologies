@@ -16,14 +16,15 @@ const BYOK_REQUIRED_TIERS = ['MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
 /**
  * Resolve the API key to use for a given provider
  *
- * - BYOK mode: Use user-provided key
+ * - BYOK mode: Fetch user-provided key for specific provider from database
  * - Platform mode: Use environment keys
  */
-export function resolveApiKey(
+export async function resolveApiKey(
   subscription: Subscription,
   provider: Provider,
-  env: Env
-): string {
+  env: Env,
+  userId: string
+): Promise<string> {
   // Check if this tier requires BYOK
   if (BYOK_REQUIRED_TIERS.includes(subscription.tier)) {
     if (subscription.key_mode !== 'BYOK') {
@@ -35,16 +36,22 @@ export function resolveApiKey(
     }
   }
 
-  // BYOK mode - use user-provided key
+  // BYOK mode - fetch provider-specific key from database
   if (subscription.key_mode === 'BYOK') {
-    if (!subscription.user_api_key) {
+    const userKey = await env.DB.prepare(`
+      SELECT api_key FROM user_api_keys
+      WHERE user_id = ? AND provider = ?
+    `).bind(userId, provider).first<{ api_key: string }>();
+
+    if (!userKey) {
       throw new RouterError(
         'BYOK_KEY_MISSING',
-        'BYOK mode requires user_api_key in subscription',
+        `No API key configured for ${provider}. Please add your ${provider} API key in Settings.`,
         400
       );
     }
-    return subscription.user_api_key;
+
+    return userKey.api_key;
   }
 
   // Platform mode - use environment keys
@@ -70,13 +77,14 @@ export function resolveApiKey(
 /**
  * Check if a provider is available (has API key configured)
  */
-export function isProviderAvailable(
+export async function isProviderAvailable(
   subscription: Subscription,
   provider: Provider,
-  env: Env
-): boolean {
+  env: Env,
+  userId: string
+): Promise<boolean> {
   try {
-    resolveApiKey(subscription, provider, env);
+    await resolveApiKey(subscription, provider, env, userId);
     return true;
   } catch {
     return false;

@@ -912,10 +912,18 @@ export async function executeWithFallback(
     );
   }
 
-  // Filter to available providers
-  const availableCandidates = candidates.filter(c =>
-    isProviderAvailable(request.subscription, c.provider, env)
+  // Filter to available providers (async check for BYOK keys)
+  const userId = request.trace.user_id;
+  const availabilityChecks = await Promise.all(
+    candidates.map(async (c) => ({
+      candidate: c,
+      available: await isProviderAvailable(request.subscription, c.provider, env, userId)
+    }))
   );
+
+  const availableCandidates = availabilityChecks
+    .filter(check => check.available)
+    .map(check => check.candidate);
 
   if (availableCandidates.length === 0) {
     throw new RouterError(
@@ -933,7 +941,7 @@ export async function executeWithFallback(
     const startTime = Date.now();
 
     try {
-      const apiKey = resolveApiKey(request.subscription, candidate.provider, env);
+      const apiKey = await resolveApiKey(request.subscription, candidate.provider, env, userId);
 
       const response = await callProvider(
         candidate,

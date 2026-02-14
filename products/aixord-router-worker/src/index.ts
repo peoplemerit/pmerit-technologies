@@ -58,6 +58,7 @@ import continuity, { getProjectContinuityCompact } from './api/continuity';
 import conversations from './api/conversations';
 import governance from './api/governance';
 import artifacts from './api/artifacts';
+import apiKeys from './api/api-keys';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -1151,6 +1152,9 @@ app.post('/v1/billing/activate/kdp', requireAuth, async (c) => {
 
 // Auth routes
 app.route('/api/v1/auth', auth);
+
+// API Keys routes (BYOK key management)
+app.route('/api/v1/api-keys', apiKeys);
 
 // Projects routes
 app.route('/api/v1/projects', projects);
