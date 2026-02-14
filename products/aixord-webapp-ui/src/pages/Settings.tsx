@@ -15,6 +15,7 @@ import { useUserSettings, type SubscriptionTier, type ApiKeys, type AssistanceMo
 import { billingApi, api, type UsageData, API_BASE } from '../lib/api';
 import { UsageMeter } from '../components/UsageMeter';
 import { TrialBanner } from '../components/TrialBanner';
+import { ProviderStatus } from '../components/ProviderStatus';
 
 // Price IDs for Stripe checkout (Production)
 // AIXORD Standard (BYOK): $9.99/month
@@ -108,6 +109,10 @@ export function Settings() {
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
 
+  // Test API key state (P1.3)
+  const [testingProvider, setTestingProvider] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { valid: boolean; message: string }>>({});
+
   // Fetch usage data when authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -194,8 +199,23 @@ export function Settings() {
       // Save API keys to backend for BYOK users
       const savePromises = providers.map(async (provider) => {
         const key = settings.apiKeys[provider];
-        if (key) {
-          // POST to backend API to save the key
+
+        // CASE 1: Empty key → DELETE
+        if (!key || key.trim() === '') {
+          const response = await fetch(`${API_BASE}/api-keys/${provider}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || `Failed to delete ${provider} key`);
+          }
+        }
+        // CASE 2: Non-empty key → CREATE/UPDATE
+        else {
           const response = await fetch(`${API_BASE}/api-keys`, {
             method: 'POST',
             headers: {
@@ -239,6 +259,65 @@ export function Settings() {
     } else {
       removeApiKey(provider);
     }
+    // Clear test results when key changes
+    setTestResults(prev => {
+      const updated = { ...prev };
+      delete updated[provider];
+      return updated;
+    });
+  };
+
+  /**
+   * Test an API key against the provider's API
+   * P1.3: Test API Key Endpoint (Frontend)
+   */
+  const handleTestKey = async (provider: string) => {
+    const key = settings.apiKeys[provider as keyof ApiKeys];
+    if (!key || key.trim() === '') {
+      setTestResults(prev => ({
+        ...prev,
+        [provider]: { valid: false, message: `No ${provider} key entered` }
+      }));
+      return;
+    }
+
+    setTestingProvider(provider);
+    setTestResults(prev => {
+      const updated = { ...prev };
+      delete updated[provider];
+      return updated;
+    });
+
+    try {
+      const token = localStorage.getItem('aixord_token');
+      const response = await fetch(`${API_BASE}/api-keys/test`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ provider, apiKey: key }),
+      });
+
+      const result = await response.json();
+      setTestResults(prev => ({
+        ...prev,
+        [provider]: {
+          valid: result.valid,
+          message: result.message || result.error || 'Test completed'
+        }
+      }));
+    } catch (error) {
+      setTestResults(prev => ({
+        ...prev,
+        [provider]: {
+          valid: false,
+          message: `Test failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        }
+      }));
+    } finally {
+      setTestingProvider(null);
+    }
   };
 
   const handlePreferenceChange = <K extends keyof typeof settings.preferences>(
@@ -248,7 +327,11 @@ export function Settings() {
     updatePreferences({ [key]: value });
   };
 
-  const isByokTier = ['TRIAL', 'MANUSCRIPT_BYOK', 'BYOK_STANDARD'].includes(settings.subscription.tier);
+  const BYOK_TIERS = ['MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
+  const PLATFORM_TIERS = ['TRIAL', 'PLATFORM_STANDARD', 'PLATFORM_PRO', 'ENTERPRISE'];
+  
+  const isByokTier = BYOK_TIERS.includes(settings.subscription.tier);
+  const isPlatformTier = PLATFORM_TIERS.includes(settings.subscription.tier);
 
   /**
    * Handle upgrade button click - opens modal to select plan
@@ -574,21 +657,45 @@ export function Settings() {
         {/* API Keys Tab */}
         {activeTab === 'api-keys' && (
           <div className="space-y-6">
-            {!isByokTier && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-amber-300">
-                <p className="text-sm">
-                  Your plan includes platform API keys. You can optionally provide your own keys below.
-                </p>
+            {/* Tier-Aware Messaging */}
+            {isPlatformTier && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">✅</div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-green-300 mb-1">Platform Keys Included</h3>
+                    <p className="text-sm text-green-200/80">
+                      Your <strong>{TIER_INFO[settings.subscription.tier].name}</strong> plan includes fully-managed API keys from PMERIT.
+                      You don't need to configure anything – all AI providers are ready to use immediately.
+                    </p>
+                    <p className="text-xs text-green-200/60 mt-2">
+                      Want to use your own keys instead? You can optionally add them below.
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
             {isByokTier && (
-              <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-4 text-violet-300">
-                <p className="text-sm">
-                  Your plan requires BYOK (Bring Your Own Key). Please provide at least one API key below.
-                </p>
+              <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <div className="text-2xl">🔑</div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-violet-300 mb-1">BYOK Required</h3>
+                    <p className="text-sm text-violet-200/80">
+                      Your <strong>{TIER_INFO[settings.subscription.tier].name}</strong> plan requires you to bring your own API keys.
+                      Add at least one provider key below to start using AIXORD.
+                    </p>
+                    <p className="text-xs text-violet-200/60 mt-2">
+                      Get API keys from: <a href="https://console.anthropic.com" target="_blank" rel="noopener" className="underline">Anthropic</a> • <a href="https://platform.openai.com" target="_blank" rel="noopener" className="underline">OpenAI</a> • <a href="https://makersuite.google.com" target="_blank" rel="noopener" className="underline">Google</a> • <a href="https://platform.deepseek.com" target="_blank" rel="noopener" className="underline">DeepSeek</a>
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
+
+            {/* Provider Status Dashboard (only for BYOK) */}
+            <ProviderStatus show={isByokTier} />
 
             <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
               <h2 className="text-lg font-semibold mb-4">API Keys</h2>
@@ -602,13 +709,27 @@ export function Settings() {
                   <label className="block text-sm font-medium text-gray-300 mb-1">
                     Anthropic API Key
                   </label>
-                  <input
-                    type="password"
-                    value={settings.apiKeys.anthropic || ''}
-                    onChange={(e) => handleApiKeyChange('anthropic', e.target.value)}
-                    placeholder="sk-ant-..."
-                    className="w-full px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={settings.apiKeys.anthropic || ''}
+                      onChange={(e) => handleApiKeyChange('anthropic', e.target.value)}
+                      placeholder="sk-ant-..."
+                      className="flex-1 px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
+                    />
+                    <button
+                      onClick={() => handleTestKey('anthropic')}
+                      disabled={testingProvider === 'anthropic' || !settings.apiKeys.anthropic}
+                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      {testingProvider === 'anthropic' ? 'Testing...' : 'Test'}
+                    </button>
+                  </div>
+                  {testResults['anthropic'] && (
+                    <div className={`mt-2 p-2 rounded-lg text-sm ${testResults['anthropic'].valid ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+                      {testResults['anthropic'].valid ? '✅' : '❌'} {testResults['anthropic'].message}
+                    </div>
+                  )}
                   <p className="text-xs text-gray-500 mt-1">For Claude models (Opus, Sonnet, Haiku)</p>
                 </div>
 
@@ -617,13 +738,27 @@ export function Settings() {
                   <label className="block text-sm font-medium text-gray-300 mb-1">
                     OpenAI API Key
                   </label>
-                  <input
-                    type="password"
-                    value={settings.apiKeys.openai || ''}
-                    onChange={(e) => handleApiKeyChange('openai', e.target.value)}
-                    placeholder="sk-..."
-                    className="w-full px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={settings.apiKeys.openai || ''}
+                      onChange={(e) => handleApiKeyChange('openai', e.target.value)}
+                      placeholder="sk-..."
+                      className="flex-1 px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
+                    />
+                    <button
+                      onClick={() => handleTestKey('openai')}
+                      disabled={testingProvider === 'openai' || !settings.apiKeys.openai}
+                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      {testingProvider === 'openai' ? 'Testing...' : 'Test'}
+                    </button>
+                  </div>
+                  {testResults['openai'] && (
+                    <div className={`mt-2 p-2 rounded-lg text-sm ${testResults['openai'].valid ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+                      {testResults['openai'].valid ? '✅' : '❌'} {testResults['openai'].message}
+                    </div>
+                  )}
                   <p className="text-xs text-gray-500 mt-1">For GPT-4o, GPT-4.5 models</p>
                 </div>
 
@@ -632,13 +767,27 @@ export function Settings() {
                   <label className="block text-sm font-medium text-gray-300 mb-1">
                     Google AI API Key
                   </label>
-                  <input
-                    type="password"
-                    value={settings.apiKeys.google || ''}
-                    onChange={(e) => handleApiKeyChange('google', e.target.value)}
-                    placeholder="AIza..."
-                    className="w-full px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={settings.apiKeys.google || ''}
+                      onChange={(e) => handleApiKeyChange('google', e.target.value)}
+                      placeholder="AIza..."
+                      className="flex-1 px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
+                    />
+                    <button
+                      onClick={() => handleTestKey('google')}
+                      disabled={testingProvider === 'google' || !settings.apiKeys.google}
+                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      {testingProvider === 'google' ? 'Testing...' : 'Test'}
+                    </button>
+                  </div>
+                  {testResults['google'] && (
+                    <div className={`mt-2 p-2 rounded-lg text-sm ${testResults['google'].valid ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+                      {testResults['google'].valid ? '✅' : '❌'} {testResults['google'].message}
+                    </div>
+                  )}
                   <p className="text-xs text-gray-500 mt-1">For Gemini models</p>
                 </div>
 
@@ -647,13 +796,27 @@ export function Settings() {
                   <label className="block text-sm font-medium text-gray-300 mb-1">
                     DeepSeek API Key
                   </label>
-                  <input
-                    type="password"
-                    value={settings.apiKeys.deepseek || ''}
-                    onChange={(e) => handleApiKeyChange('deepseek', e.target.value)}
-                    placeholder="sk-..."
-                    className="w-full px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={settings.apiKeys.deepseek || ''}
+                      onChange={(e) => handleApiKeyChange('deepseek', e.target.value)}
+                      placeholder="sk-..."
+                      className="flex-1 px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
+                    />
+                    <button
+                      onClick={() => handleTestKey('deepseek')}
+                      disabled={testingProvider === 'deepseek' || !settings.apiKeys.deepseek}
+                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                    >
+                      {testingProvider === 'deepseek' ? 'Testing...' : 'Test'}
+                    </button>
+                  </div>
+                  {testResults['deepseek'] && (
+                    <div className={`mt-2 p-2 rounded-lg text-sm ${testResults['deepseek'].valid ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+                      {testResults['deepseek'].valid ? '✅' : '❌'} {testResults['deepseek'].message}
+                    </div>
+                  )}
                   <p className="text-xs text-gray-500 mt-1">For DeepSeek models (ultra-cheap option)</p>
                 </div>
               </div>
