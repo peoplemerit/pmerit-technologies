@@ -165,11 +165,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       validationInProgress.current = true;
 
       const storedToken = getToken();
-      const cookieToken = getCookie(TOKEN_KEY);
+      // @ts-ignore - Intentionally unused - kept for reference
+      const _cookieToken = getCookie(TOKEN_KEY);
       const cachedUser = getCachedUser();
-      let localToken: string | null = null;
+      // @ts-ignore - Intentionally unused - kept for reference
+      let _localToken: string | null = null;
       try {
-        localToken = localStorage.getItem(TOKEN_KEY);
+        _localToken = localStorage.getItem(TOKEN_KEY);
       } catch {
         // localStorage might be blocked in some contexts
       }

@@ -1577,7 +1577,7 @@ export function Project() {
         )}
         {activeTab === 'engineering' && (
           <EngineeringRibbon
-            compliance={engineering.compliance}
+            compliance={engineering.compliance || undefined}
             isLoading={engineering.isLoading}
             onOpenPanel={(section: string) => {
               setEngineeringPanelSection((section as EngineeringSection) || 'sar');

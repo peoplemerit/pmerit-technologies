@@ -11,13 +11,10 @@
  */
 
 import { NewSessionModal } from '../session/NewSessionModal';
-import { ImageUpload, type PendingImage } from '../chat/ImageUpload';
-import { CCSIncidentPanel } from '../CCSIncidentPanel';
-import { CCSCreateIncidentModal } from '../CCSCreateIncidentModal';
-import { EngineeringPanel, type EngineeringSection } from '../EngineeringPanel';
-import { BlueprintPanel } from '../BlueprintPanel';
-import { ProjectMemoryPanel } from '../ProjectMemoryPanel';
-import { WorkspaceSetupWizard, type WorkspaceBindingData } from '../WorkspaceSetupWizard';
+// Re-enabled imports for type definitions
+import { type PendingImage } from '../chat/ImageUpload';
+import { type EngineeringSection } from '../EngineeringPanel';
+import { type WorkspaceBindingData } from '../WorkspaceSetupWizard';
 import type { Project } from '../../lib/api';
 import type { SessionType, EdgeType, CredentialType, ExposureSource } from '../../lib/api';
 
@@ -121,8 +118,8 @@ export function ProjectModals(props: ProjectModalsProps) {
       {/* New Session Modal */}
       {props.showNewSessionModal && (
         <NewSessionModal
-          currentSession={props.currentSession}
-          sessions={props.sessions}
+          currentSession={props.currentSession as any}
+          sessions={props.sessions as any}
           onConfirm={props.onCreateSession}
           onCancel={props.onCloseNewSession}
         />

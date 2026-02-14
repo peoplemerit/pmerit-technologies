@@ -8,6 +8,12 @@
 
 import type { EngineeringCompliance } from '../../lib/api';
 
+interface EngineeringRibbonProps {
+  compliance?: EngineeringCompliance;
+  isLoading?: boolean;
+  onOpenPanel?: (section: string) => void;
+}
+
 interface CompliancePillProps {
   label: string;
   value: string;
