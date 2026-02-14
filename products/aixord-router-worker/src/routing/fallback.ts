@@ -936,6 +936,7 @@ export async function executeWithFallback(
   const messages = buildMessages(request);
   let lastError: Error | null = null;
   let fallbackCount = 0;
+  const providerErrors: Array<{ provider: string; error: string }> = [];
 
   for (const candidate of availableCandidates) {
     const startTime = Date.now();
@@ -994,6 +995,12 @@ export async function executeWithFallback(
       lastError = error as Error;
       fallbackCount++;
 
+      // Track provider-specific error
+      providerErrors.push({
+        provider: candidate.provider,
+        error: error instanceof Error ? error.message : String(error)
+      });
+
       // Don't retry on budget/policy errors
       if (error instanceof RouterError) {
         if (['BUDGET_EXCEEDED', 'BYOK_KEY_MISSING', 'BYOK_REQUIRED'].includes(error.code)) {
@@ -1010,10 +1017,19 @@ export async function executeWithFallback(
     }
   }
 
-  // All candidates failed
+  // All candidates failed - provide detailed per-provider breakdown
+  const errorMessage = `No available providers worked for ${modelClass}. Details:\n` +
+    providerErrors.map(e => `  • ${e.provider}: ${e.error}`).join('\n');
+
   throw new RouterError(
     'ALL_PROVIDERS_FAILED',
-    `All providers failed for class ${modelClass}. Last error: ${lastError?.message}`,
-    503
+    errorMessage,
+    503,
+    {
+      model_class: modelClass,
+      provider_errors: providerErrors,
+      suggestion: 'Check your API keys in Settings or verify your subscription tier',
+      settings_url: '/settings?tab=api-keys'
+    }
   );
 }

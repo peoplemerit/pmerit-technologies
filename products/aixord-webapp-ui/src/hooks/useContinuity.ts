@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { continuityApi, type ContinuityCapsule, type ContinuityPin } from '../lib/api';
+import { continuityApi, type ContinuityCapsule } from '../lib/api';
 
 interface UseContinuityOptions {
   projectId: string | null;

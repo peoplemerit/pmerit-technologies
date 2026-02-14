@@ -51,7 +51,7 @@ export const billingApi = {
    * Returns URL to redirect user to Stripe checkout
    */
   async createCheckout(
-    userId: string,
+    _userId: string,
     priceId: string,
     successUrl: string,
     cancelUrl: string

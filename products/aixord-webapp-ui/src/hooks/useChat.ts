@@ -217,18 +217,23 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         throw new Error(result.error || 'Router error');
       }
 
+      // DEBUG: Log response structure to diagnose missing fields
+      if (!result.model_used) {
+        console.error('[AIXORD SDK] Missing model_used in response:', result);
+      }
+
       // Build metadata from response
       const metadata: MessageMetadata = {
         model: {
-          provider: result.model_used.provider,
-          model: result.model_used.model,
-          class: result.model_used.class
+          provider: result.model_used?.provider || 'unknown',
+          model: result.model_used?.model || 'unknown',
+          class: result.model_used?.class
         },
         usage: {
-          inputTokens: result.usage.input_tokens,
-          outputTokens: result.usage.output_tokens,
-          costUsd: result.usage.cost_usd,
-          latencyMs: result.usage.latency_ms
+          inputTokens: result.usage?.input_tokens || 0,
+          outputTokens: result.usage?.output_tokens || 0,
+          costUsd: result.usage?.cost_usd || 0,
+          latencyMs: result.usage?.latency_ms || 0
         },
         verification: result.verification,
         phase: activeConversation.capsule?.phase

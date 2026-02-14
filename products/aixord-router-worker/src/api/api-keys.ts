@@ -209,4 +209,154 @@ app.delete('/:provider', async (c) => {
   });
 });
 
+/**
+ * POST /api-keys/test
+ * Test an API key against the provider's API to verify it works
+ *
+ * Body: { provider: string, apiKey: string }
+ */
+app.post('/test', async (c) => {
+  const userId = c.get('userId') as string | undefined;
+  if (!userId) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const body = await c.req.json<{
+    provider: string;
+    apiKey: string;
+  }>();
+
+  if (!body.provider || !body.apiKey) {
+    return c.json({
+      valid: false,
+      error: 'Missing provider or apiKey',
+      stage: 'validation'
+    }, 400);
+  }
+
+  // Validate format first
+  const validation = validateApiKey(body.provider, body.apiKey);
+  if (!validation.valid) {
+    return c.json({
+      valid: false,
+      error: validation.error,
+      stage: 'format_validation',
+    });
+  }
+
+  // Test actual API call
+  try {
+    let testResult;
+
+    switch (body.provider) {
+      case 'anthropic':
+        testResult = await testAnthropicKey(body.apiKey);
+        break;
+      case 'openai':
+        testResult = await testOpenAIKey(body.apiKey);
+        break;
+      case 'google':
+        testResult = await testGoogleKey(body.apiKey);
+        break;
+      case 'deepseek':
+        testResult = await testDeepSeekKey(body.apiKey);
+        break;
+      default:
+        return c.json({
+          valid: false,
+          error: `Unknown provider: ${body.provider}`,
+          stage: 'validation'
+        }, 400);
+    }
+
+    return c.json({
+      valid: testResult.valid,
+      provider: body.provider,
+      message: testResult.message,
+      stage: 'api_test',
+    });
+  } catch (error: any) {
+    return c.json({
+      valid: false,
+      error: error.message || 'Test failed',
+      stage: 'api_test',
+    });
+  }
+});
+
+// Test helper functions
+async function testAnthropicKey(apiKey: string): Promise<{ valid: boolean; message: string }> {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 10,
+      messages: [{ role: 'user', content: 'test' }],
+    }),
+  });
+
+  if (response.ok) {
+    return { valid: true, message: 'Anthropic API key is valid' };
+  } else if (response.status === 401) {
+    return { valid: false, message: 'Invalid Anthropic API key' };
+  } else {
+    const error = await response.text();
+    return { valid: false, message: `Anthropic API error: ${response.status} - ${error}` };
+  }
+}
+
+async function testOpenAIKey(apiKey: string): Promise<{ valid: boolean; message: string }> {
+  const response = await fetch('https://api.openai.com/v1/models', {
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+    },
+  });
+
+  if (response.ok) {
+    return { valid: true, message: 'OpenAI API key is valid' };
+  } else if (response.status === 401) {
+    return { valid: false, message: 'Invalid OpenAI API key' };
+  } else {
+    const error = await response.text();
+    return { valid: false, message: `OpenAI API error: ${response.status} - ${error}` };
+  }
+}
+
+async function testGoogleKey(apiKey: string): Promise<{ valid: boolean; message: string }> {
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+  );
+
+  if (response.ok) {
+    return { valid: true, message: 'Google API key is valid' };
+  } else if (response.status === 400) {
+    return { valid: false, message: 'Invalid Google API key' };
+  } else {
+    const error = await response.text();
+    return { valid: false, message: `Google API error: ${response.status} - ${error}` };
+  }
+}
+
+async function testDeepSeekKey(apiKey: string): Promise<{ valid: boolean; message: string }> {
+  const response = await fetch('https://api.deepseek.com/v1/models', {
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+    },
+  });
+
+  if (response.ok) {
+    return { valid: true, message: 'DeepSeek API key is valid' };
+  } else if (response.status === 401) {
+    return { valid: false, message: 'Invalid DeepSeek API key' };
+  } else {
+    const error = await response.text();
+    return { valid: false, message: `DeepSeek API error: ${response.status} - ${error}` };
+  }
+}
+
 export default app;

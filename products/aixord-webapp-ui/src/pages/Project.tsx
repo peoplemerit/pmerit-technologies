@@ -170,6 +170,9 @@ export function Project() {
   } = useProjectState(id || null, token);
 
   // AIXORD SDK Client
+  // FIX: Get active API key once to avoid calling getActiveApiKey() twice and handle null safely
+  const activeApiKey = settings.subscription.keyMode === 'BYOK' ? getActiveApiKey() : null;
+  
   const {
     send: sdkSend,
   } = useAIXORDSDK({
@@ -178,8 +181,8 @@ export function Project() {
     userId: user?.id || null,
     tier: settings.subscription.tier,
     keyMode: settings.subscription.keyMode,
-    userApiKey: settings.subscription.keyMode === 'BYOK' ? getActiveApiKey()?.key : undefined,
-    userApiProvider: settings.subscription.keyMode === 'BYOK' ? getActiveApiKey()?.provider : undefined,
+    userApiKey: activeApiKey?.key ?? undefined,
+    userApiProvider: activeApiKey?.provider ?? undefined,
     autoInit: true,
   });
 

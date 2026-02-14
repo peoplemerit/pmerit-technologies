@@ -10,11 +10,17 @@
 // =============================================================================
 
 export interface Env {
-  // API Keys (secrets)
+  // API Keys (secrets) - Legacy platform keys
   ANTHROPIC_API_KEY: string;
   OPENAI_API_KEY: string;
   GOOGLE_API_KEY: string;
   DEEPSEEK_API_KEY?: string;
+
+  // Platform-managed API keys (for non-BYOK tiers)
+  PLATFORM_ANTHROPIC_KEY?: string;
+  PLATFORM_OPENAI_KEY?: string;
+  PLATFORM_GOOGLE_KEY?: string;
+  PLATFORM_DEEPSEEK_KEY?: string;
 
   // Billing (secrets)
   STRIPE_SECRET_KEY?: string;
@@ -505,13 +511,17 @@ export const TIER_LIMITS: Record<SubscriptionTier, TierLimits> = {
 // =============================================================================
 
 export class RouterError extends Error {
+  public details?: Record<string, any>;
+
   constructor(
     public code: string,
     message: string,
-    public statusCode: number = 400
+    public statusCode: number = 400,
+    details?: Record<string, any>
   ) {
     super(message);
     this.name = 'RouterError';
+    this.details = details;
   }
 }
 

@@ -16,7 +16,7 @@ import { EscalationBanner } from '../EscalationBanner';
 import { ProjectMemoryPanel } from '../ProjectMemoryPanel';
 import { GovernanceDashboard } from '../GovernanceDashboard';
 import { Ribbon } from '../layout/Ribbon';
-import type { Project, Decision } from '../../lib/api';
+import type { Project } from '../../lib/api';
 
 interface RibbonPanelProps {
   activeTab: string | null;
@@ -117,7 +117,7 @@ export function RibbonPanel(props: RibbonPanelProps) {
           currentPhase={props.currentPhase}
           onSetPhase={props.onSetPhase}
           gates={props.gates}
-          onToggleGate={props.onToggleGate}
+          onToggleGate={(gateId) => props.onToggleGate(gateId, props.gates[gateId] || false)}
           isLoading={props.isLoading}
           phaseError={props.phaseError}
           onOpenWorkspaceSetup={props.onOpenWorkspaceSetup}
@@ -213,7 +213,7 @@ export function RibbonPanel(props: RibbonPanelProps) {
           error={props.continuity.error}
           onRefresh={props.continuity.refresh}
           onPin={props.continuity.pinItem}
-          onUnpin={props.continuity.unpinItem}
+          onUnpin={(pinId) => props.continuity.unpinItem('pin', pinId)}
         />
       )}
       {props.activeTab === 'info' && props.project && (
