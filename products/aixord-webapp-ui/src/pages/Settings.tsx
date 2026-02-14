@@ -12,7 +12,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserSettings, type SubscriptionTier, type ApiKeys, type AssistanceMode } from '../contexts/UserSettingsContext';
-import { billingApi, api, type UsageData } from '../lib/api';
+import { billingApi, api, type UsageData, API_BASE } from '../lib/api';
 import { UsageMeter } from '../components/UsageMeter';
 import { TrialBanner } from '../components/TrialBanner';
 
@@ -127,12 +127,45 @@ export function Settings() {
     setSaveMessage(null);
 
     try {
-      // Settings are auto-saved to localStorage via the context
-      // This simulates API save for future backend sync
-      await new Promise(resolve => setTimeout(resolve, 500));
+      const token = localStorage.getItem('token');
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      // Save API keys to backend for BYOK users
+      const providers: (keyof ApiKeys)[] = ['anthropic', 'openai', 'google', 'deepseek'];
+      const savePromises = providers.map(async (provider) => {
+        const key = settings.apiKeys[provider];
+        if (key) {
+          // POST to backend API to save the key
+          const response = await fetch(`${API_BASE}/api-keys`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              provider,
+              apiKey: key,
+              label: `My ${provider.charAt(0).toUpperCase() + provider.slice(1)} Key`
+            }),
+          });
+
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || `Failed to save ${provider} key`);
+          }
+        }
+      });
+
+      await Promise.all(savePromises);
       setSaveMessage({ type: 'success', text: 'Settings saved successfully' });
-    } catch {
-      setSaveMessage({ type: 'error', text: 'Failed to save settings' });
+    } catch (error) {
+      console.error('Save error:', error);
+      setSaveMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to save settings'
+      });
     } finally {
       setIsSaving(false);
     }
