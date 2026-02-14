@@ -13,6 +13,7 @@ export function Signup() {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [name, setName] = useState('');
+  const [localError, setLocalError] = useState<string | null>(null);
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const { register, isLoading, error, user } = useAuth();
   const navigate = useNavigate();
@@ -24,13 +25,37 @@ export function Signup() {
     }
   }, []); // Empty deps - only check on mount
 
+  // Combined error: local validation errors take priority over auth context errors
+  const displayError = localError || error;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLocalError(null);
+    console.log('[Signup] Form submitted');
+
+    // Client-side validation (matches backend registerSchema requirements)
+    if (!email || !email.includes('@')) {
+      setLocalError('Please enter a valid email address.');
+      return;
+    }
+    if (!password || password.length < 8) {
+      setLocalError('Password must be at least 8 characters.');
+      return;
+    }
+    // Username validation (optional, but if provided must match format)
+    if (username && !/^[a-zA-Z0-9_-]{3,30}$/.test(username)) {
+      setLocalError('Username must be 3-30 characters using letters, numbers, _ or -');
+      return;
+    }
+
+    console.log('[Signup] Validation passed, calling register API...');
     try {
       await register(email, password, name || undefined, username || undefined);
+      console.log('[Signup] Registration successful');
       setRegistrationComplete(true);
-    } catch {
-      // Error is handled by useAuth
+    } catch (err) {
+      console.error('[Signup] Registration failed:', err);
+      // Error is also handled by useAuth (sets context error)
     }
   };
 
@@ -109,9 +134,9 @@ export function Signup() {
 
         <div className="bg-gray-800/50 rounded-xl p-8 border border-gray-700/50">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
+            {displayError && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
-                <p className="text-red-400 text-sm">{error}</p>
+                <p className="text-red-400 text-sm">{displayError}</p>
               </div>
             )}
 
@@ -140,9 +165,9 @@ export function Signup() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={6}
+                minLength={8}
                 className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 transition-colors"
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters"
               />
             </div>
 
@@ -157,7 +182,6 @@ export function Signup() {
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-violet-500 transition-colors"
                 placeholder="your-username"
-                pattern="^[a-zA-Z0-9_-]{3,30}$"
               />
               <p className="text-xs text-gray-500 mt-1">3-30 characters, letters, numbers, _ or -</p>
             </div>

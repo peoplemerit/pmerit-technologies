@@ -69,10 +69,21 @@ export async function request<T>(
   }
 
   if (!response.ok) {
+    // Include validation details in error message when available
+    let errorMessage = (data.error as string) || 'An unknown error occurred';
+    if (data.details && Array.isArray(data.details)) {
+      const detailMessages = (data.details as Array<{ message?: string }>)
+        .map(d => d.message)
+        .filter(Boolean)
+        .join('. ');
+      if (detailMessages) {
+        errorMessage = detailMessages;
+      }
+    }
     throw new APIError(
       response.status,
       (data.code as string) || 'UNKNOWN_ERROR',
-      (data.error as string) || 'An unknown error occurred'
+      errorMessage
     );
   }
 

@@ -1215,7 +1215,7 @@ export function Project() {
         if (planArtifactMatch) {
           try {
             const planData = JSON.parse(planArtifactMatch[1]);
-            const importResult = await blueprintApi.importFromPlanArtifact(id, {
+            await blueprintApi.importFromPlanArtifact(id, {
               scopes: planData.scopes || [],
               selected_option: planData.selected_option || undefined,
               milestones: planData.milestones || [],
@@ -1298,7 +1298,7 @@ export function Project() {
               await tdl.postStandup({
                 session_id: activeSession.id,
                 working_on: fields.working_on,
-                completed: fields.completed ? [fields.completed] : [],
+                completed_since_last: fields.completed ? [fields.completed] : [],
                 blocked: fields.blocked ? [fields.blocked] : [],
                 next_actions: fields.next ? [fields.next] : [],
                 estimate_to_completion: fields.estimate || undefined,
@@ -1579,7 +1579,7 @@ export function Project() {
           <EngineeringRibbon
             compliance={engineering.compliance}
             isLoading={engineering.isLoading}
-            onOpenPanel={(section) => {
+            onOpenPanel={(section: string) => {
               setEngineeringPanelSection((section as EngineeringSection) || 'sar');
               setEngineeringPanelOpen(true);
             }}

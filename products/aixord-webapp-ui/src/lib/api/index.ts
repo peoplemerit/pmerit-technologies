@@ -37,6 +37,9 @@ export * from './media';
 // Mathematical Governance
 export * from './governance';
 
+// Artifact Persistence
+export * from './artifacts';
+
 // Combined API object for convenience
 import { authApi } from './auth';
 import { projectsApi, stateApi } from './projects';
@@ -48,6 +51,7 @@ import { securityApi, ccsApi } from './security';
 import { githubApi, evidenceApi, knowledgeApi } from './evidence-knowledge';
 import { imageApi, layersApi, sessionsApi, workspaceApi, continuityApi, usageApi } from './media';
 import { governanceApi } from './governance';
+import { artifactsApi } from './artifacts';
 
 export const api = {
   auth: authApi,
@@ -73,6 +77,7 @@ export const api = {
   brainstorm: brainstormApi,
   assignments: assignmentsApi,
   governance: governanceApi,
+  artifacts: artifactsApi,
 };
 
 export default api;

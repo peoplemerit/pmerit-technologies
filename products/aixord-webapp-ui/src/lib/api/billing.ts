@@ -113,7 +113,7 @@ export const billingApi = {
    * Activate a Gumroad license (one-time purchase)
    */
   async activateGumroad(
-    userId: string,
+    _userId: string,
     licenseKey: string
   ): Promise<{ success: boolean; tier: SubscriptionTier }> {
     const response = await fetch(`${BILLING_BASE}/activate/gumroad`, {
@@ -137,7 +137,7 @@ export const billingApi = {
    * Activate a KDP book code (one-time purchase)
    */
   async activateKdp(
-    userId: string,
+    _userId: string,
     code: string
   ): Promise<{ success: boolean; tier: SubscriptionTier }> {
     const response = await fetch(`${BILLING_BASE}/activate/kdp`, {

@@ -2,7 +2,7 @@
  * AIXORD Web App API Client - Projects & State Management
  */
 
-import { API_BASE, APIError, request, normalizeDate, type Project, type ProjectType, type AIXORDState, type DataClassificationValue, type AIExposureLevel, type ReconciliationTriad } from './core';
+import { API_BASE, APIError, request, normalizeDate, type Project, type ProjectType, type AIXORDState, type DataClassificationValue, type AIExposureLevel } from './core';
 
 /**
  * Backend project response type (snake_case from D1 database)

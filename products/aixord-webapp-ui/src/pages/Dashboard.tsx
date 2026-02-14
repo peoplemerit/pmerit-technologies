@@ -584,7 +584,7 @@ export function Dashboard() {
         throw new Error('Project created but no ID returned');
       }
       setShowCreateModal(false);
-      setNewProject({ name: '', objective: '', realityClassification: 'GREENFIELD' });
+      setNewProject({ name: '', objective: '', realityClassification: 'GREENFIELD', projectType: 'software' });
       navigate(`/project/${project.id}`);
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create project');

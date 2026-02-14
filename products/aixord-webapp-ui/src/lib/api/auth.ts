@@ -17,7 +17,7 @@ export const authApi = {
       message?: string;
     }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password, username }),
+      body: JSON.stringify({ email, password, username, name }),
     });
     return {
       id: response.user.id,

@@ -77,9 +77,9 @@ export function useProjectData({ projectId, token, autoFetch = true }: UseProjec
       if (data.connection) {
         setGithubConnection({
           connected: true,
-          repo_owner: data.connection.repo_owner,
-          repo_name: data.connection.repo_name,
-          last_sync: data.connection.last_sync,
+          repo_owner: data.connection.repo_owner || undefined,
+          repo_name: data.connection.repo_name || undefined,
+          last_sync: data.connection.last_sync || undefined,
         });
       }
     } catch {
