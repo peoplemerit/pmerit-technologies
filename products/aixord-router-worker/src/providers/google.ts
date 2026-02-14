@@ -90,6 +90,12 @@ export async function callGoogle(
 
   if (!response.ok) {
     const errorText = await response.text();
+    
+    // Enhanced error logging for Google API issues
+    console.error(`[Google Provider] API error ${response.status}:`, errorText);
+    console.error(`[Google Provider] Request URL: ${apiUrl.replace(/key=.+$/, 'key=***')}`);
+    console.error(`[Google Provider] Model: ${model}`);
+    
     throw new RouterError(
       'GOOGLE_ERROR',
       `Google API error: ${response.status} - ${errorText}`,

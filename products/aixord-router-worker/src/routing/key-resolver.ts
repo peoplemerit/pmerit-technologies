@@ -39,9 +39,9 @@ export async function resolveApiKey(
   // BYOK mode - fetch provider-specific key from database
   if (subscription.key_mode === 'BYOK') {
     const userKey = await env.DB.prepare(`
-      SELECT api_key FROM user_api_keys
+      SELECT api_key, updated_at FROM user_api_keys
       WHERE user_id = ? AND provider = ?
-    `).bind(userId, provider).first<{ api_key: string }>();
+    `).bind(userId, provider).first<{ api_key: string; updated_at: string }>();
 
     if (!userKey) {
       throw new RouterError(
@@ -50,6 +50,10 @@ export async function resolveApiKey(
         400
       );
     }
+
+    // Debug logging to track key resolution and cache issues
+    const keyPreview = userKey.api_key.substring(0, 15) + '...';
+    console.log(`[Key Resolver] ${provider} key for user ${userId.substring(0, 8)}... | Updated: ${userKey.updated_at} | Preview: ${keyPreview}`);
 
     return userKey.api_key;
   }

@@ -39,6 +39,12 @@ export async function callDeepSeek(
 
   if (!response.ok) {
     const errorText = await response.text();
+    
+    // Enhanced error logging for DeepSeek API issues
+    console.error(`[DeepSeek Provider] API error ${response.status}:`, errorText);
+    console.error(`[DeepSeek Provider] Model: ${model}`);
+    console.error(`[DeepSeek Provider] Auth header present: ${!!apiKey}`);
+    
     throw new RouterError(
       'DEEPSEEK_ERROR',
       `DeepSeek API error: ${response.status} - ${errorText}`,
