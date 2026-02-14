@@ -4,18 +4,59 @@
  */
 
 import { Hono } from 'hono';
-import type { Env } from '../types';
+import type { Env, Provider } from '../types';
 import { nanoid } from 'nanoid';
 import { requireAuth } from '../middleware/requireAuth';
+import { invalidateKeyCache } from '../routing/key-resolver';
 
 const app = new Hono<{ Bindings: Env }>();
 
 // Apply authentication middleware to all routes
 app.use('/*', requireAuth);
 
+// API Key validation patterns
+const API_KEY_PATTERNS: Record<string, RegExp> = {
+  anthropic: /^sk-ant-[a-zA-Z0-9\-_]{95,}$/,
+  openai: /^sk-[a-zA-Z0-9\-_]{20,}$/,
+  google: /^AIzaSy[a-zA-Z0-9\-_]{33}$/,
+  deepseek: /^sk-[a-zA-Z0-9]{32,}$/,
+};
+
+const API_KEY_EXAMPLES: Record<string, string> = {
+  anthropic: 'sk-ant-api03-...',
+  openai: 'sk-proj-... or sk-...',
+  google: 'AIzaSy...',
+  deepseek: 'sk-...',
+};
+
+/**
+ * Validate API key format
+ */
+function validateApiKey(provider: string, apiKey: string): { valid: boolean; error?: string } {
+  if (!apiKey || apiKey.trim() === '') {
+    return { valid: false, error: 'API key cannot be empty' };
+  }
+
+  const pattern = API_KEY_PATTERNS[provider];
+  if (!pattern) {
+    // Unknown provider, skip validation
+    return { valid: true };
+  }
+
+  if (!pattern.test(apiKey.trim())) {
+    const example = API_KEY_EXAMPLES[provider];
+    return {
+      valid: false,
+      error: `Invalid ${provider} API key format. Should look like: ${example}`
+    };
+  }
+
+  return { valid: true };
+}
+
 /**
  * GET /api-keys
- * List all configured API keys for the current user (keys are masked)
+ * List all configured API keys for the current user
  */
 app.get('/', async (c) => {
   const userId = c.get('userId') as string | undefined;
@@ -24,14 +65,16 @@ app.get('/', async (c) => {
   }
 
   const keys = await c.env.DB.prepare(`
-    SELECT id, provider, label, created_at, updated_at
+    SELECT id, provider, api_key, label, created_at, updated_at
     FROM user_api_keys
     WHERE user_id = ?
     ORDER BY provider
   `).bind(userId).all();
 
   return c.json({
-    keys: keys.results || []
+    success: true,
+    keys: keys.results || [],
+    count: keys.results?.length || 0
   });
 });
 
@@ -61,9 +104,13 @@ app.post('/', async (c) => {
     }, 400);
   }
 
-  // Validate API key format (basic check)
-  if (!body.apiKey || body.apiKey.trim().length < 10) {
-    return c.json({ error: 'Invalid API key format' }, 400);
+  // Validate API key format
+  const validation = validateApiKey(body.provider, body.apiKey);
+  if (!validation.valid) {
+    return c.json({
+      error: validation.error,
+      provider: body.provider
+    }, 400);
   }
 
   // Check if user already has a key for this provider
@@ -88,9 +135,15 @@ app.post('/', async (c) => {
       body.provider
     ).run();
 
+    // Invalidate cache to ensure new key is used immediately
+    invalidateKeyCache(userId, body.provider as Provider);
+    console.log(`[API KEY UPDATED] ${body.provider} key for user ${userId.substring(0, 8)}... - cache invalidated`);
+
     return c.json({
+      success: true,
       message: `${body.provider} API key updated successfully`,
-      provider: body.provider
+      provider: body.provider,
+      cache_cleared: true
     });
   } else {
     // Insert new key
@@ -108,10 +161,16 @@ app.post('/', async (c) => {
       now
     ).run();
 
+    // Invalidate cache to ensure new key is used immediately
+    invalidateKeyCache(userId, body.provider as Provider);
+    console.log(`[API KEY SAVED] ${body.provider} key for user ${userId.substring(0, 8)}... - cache invalidated`);
+
     return c.json({
+      success: true,
       message: `${body.provider} API key added successfully`,
       provider: body.provider,
-      id: keyId
+      id: keyId,
+      cache_cleared: true
     });
   }
 });
@@ -138,9 +197,15 @@ app.delete('/:provider', async (c) => {
     WHERE user_id = ? AND provider = ?
   `).bind(userId, provider).run();
 
+  // Invalidate cache after deletion
+  invalidateKeyCache(userId, provider as Provider);
+  console.log(`[API KEY DELETED] ${provider} key for user ${userId.substring(0, 8)}... - cache invalidated`);
+
   return c.json({
+    success: true,
     message: `${provider} API key removed successfully`,
-    provider
+    provider,
+    cache_cleared: true
   });
 });
 

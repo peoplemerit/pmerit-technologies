@@ -135,6 +135,37 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
   const [billingInfo, setBillingInfo] = useState<BillingInfo>(defaultBillingInfo);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Fetch API keys from backend
+  const fetchApiKeysFromBackend = async (): Promise<ApiKeys> => {
+    if (!token) return {};
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE || 'https://aixord-router-worker.peoplemerit.workers.dev'}/api/v1/api-keys`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.warn('[SETTINGS] Failed to fetch API keys from backend');
+        return {};
+      }
+
+      const data = await response.json();
+      const keys: ApiKeys = {};
+      
+      for (const record of data.keys || []) {
+        keys[record.provider as keyof ApiKeys] = record.api_key;
+      }
+
+      console.log('[SETTINGS] Fetched API keys from backend:', Object.keys(keys));
+      return keys;
+    } catch (error) {
+      console.error('[SETTINGS] Error fetching API keys:', error);
+      return {};
+    }
+  };
+
   // Fetch subscription from backend
   const refreshSubscription = async () => {
     if (!token) return;
@@ -163,16 +194,27 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Load settings when user authenticates
+  // Load settings when user authenticates and sync with backend
   useEffect(() => {
     if (isAuthenticated && user?.id) {
       const loaded = loadSettings(user.id);
       setSettings(loaded);
       setIsLoading(false);
 
-      // Sync subscription from backend (async, non-blocking)
+      // Sync subscription and API keys from backend (async, non-blocking)
       if (token) {
         refreshSubscription();
+        
+        // Sync API keys from backend
+        fetchApiKeysFromBackend().then(backendKeys => {
+          if (Object.keys(backendKeys).length > 0) {
+            setSettings(prev => ({
+              ...prev,
+              apiKeys: { ...prev.apiKeys, ...backendKeys }
+            }));
+            console.log('[SETTINGS] Synced API keys with backend');
+          }
+        });
       }
     } else if (!isAuthenticated) {
       setSettings(defaultSettings);
@@ -180,6 +222,21 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   }, [isAuthenticated, user?.id, token]);
+
+  // Listen for API key updates (from Settings page save)
+  useEffect(() => {
+    const handleKeysUpdated = async () => {
+      console.log('[SETTINGS] Keys updated event received, resyncing...');
+      const backendKeys = await fetchApiKeysFromBackend();
+      setSettings(prev => ({
+        ...prev,
+        apiKeys: backendKeys
+      }));
+    };
+
+    window.addEventListener('api-keys-updated', handleKeysUpdated);
+    return () => window.removeEventListener('api-keys-updated', handleKeysUpdated);
+  }, [token]);
 
   // Save settings when they change
   useEffect(() => {

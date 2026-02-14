@@ -2,6 +2,7 @@
  * API Key Resolver
  *
  * Resolves API keys based on subscription mode (BYOK vs Platform).
+ * Includes cache layer with invalidation support.
  */
 
 import type { Provider, Subscription, Env } from '../types';
@@ -12,6 +13,19 @@ import { RouterError } from '../types';
  * TRIAL is excluded — trial users can use BYOK or platform keys.
  */
 const BYOK_REQUIRED_TIERS = ['MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
+
+/**
+ * Cache for BYOK API keys
+ * Key format: "userId:provider"
+ * Value: { key: string, timestamp: number, updated_at: string }
+ */
+const KEY_CACHE = new Map<string, { key: string; timestamp: number; updated_at: string }>();
+
+/**
+ * Cache TTL (30 seconds)
+ * Keys are cached to reduce database queries, but short enough to pick up changes quickly
+ */
+const CACHE_TTL = 30000;
 
 /**
  * Resolve the API key to use for a given provider
@@ -36,8 +50,20 @@ export async function resolveApiKey(
     }
   }
 
-  // BYOK mode - fetch provider-specific key from database
+  // BYOK mode - fetch provider-specific key from database (with caching)
   if (subscription.key_mode === 'BYOK') {
+    // Cache key: userId:provider
+    const cacheKey = `${userId}:${provider}`;
+    const cached = KEY_CACHE.get(cacheKey);
+    const now = Date.now();
+
+    // Return cached if fresh
+    if (cached && (now - cached.timestamp) < CACHE_TTL) {
+      console.log(`[CACHE HIT] Using cached ${provider} key for user ${userId.substring(0, 8)}... | Updated: ${cached.updated_at}`);
+      return cached.key;
+    }
+
+    // Fetch from database
     const userKey = await env.DB.prepare(`
       SELECT api_key, updated_at FROM user_api_keys
       WHERE user_id = ? AND provider = ?
@@ -51,9 +77,16 @@ export async function resolveApiKey(
       );
     }
 
+    // Update cache
+    KEY_CACHE.set(cacheKey, {
+      key: userKey.api_key,
+      timestamp: now,
+      updated_at: userKey.updated_at
+    });
+
     // Debug logging to track key resolution and cache issues
     const keyPreview = userKey.api_key.substring(0, 15) + '...';
-    console.log(`[Key Resolver] ${provider} key for user ${userId.substring(0, 8)}... | Updated: ${userKey.updated_at} | Preview: ${keyPreview}`);
+    console.log(`[CACHE MISS] Fetched fresh ${provider} key for user ${userId.substring(0, 8)}... | Updated: ${userKey.updated_at} | Preview: ${keyPreview}`);
 
     return userKey.api_key;
   }
@@ -92,5 +125,30 @@ export async function isProviderAvailable(
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Invalidate cached API key(s)
+ * Called after updating/deleting keys to ensure fresh data is used
+ * 
+ * @param userId - User ID whose keys to invalidate
+ * @param provider - Specific provider to invalidate, or undefined to clear all for user
+ */
+export function invalidateKeyCache(userId: string, provider?: Provider): void {
+  if (provider) {
+    const cacheKey = `${userId}:${provider}`;
+    KEY_CACHE.delete(cacheKey);
+    console.log(`[CACHE CLEAR] Cleared ${provider} key for user ${userId.substring(0, 8)}...`);
+  } else {
+    // Clear all keys for user
+    let cleared = 0;
+    for (const key of KEY_CACHE.keys()) {
+      if (key.startsWith(`${userId}:`)) {
+        KEY_CACHE.delete(key);
+        cleared++;
+      }
+    }
+    console.log(`[CACHE CLEAR] Cleared ${cleared} keys for user ${userId.substring(0, 8)}...`);
   }
 }

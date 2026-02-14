@@ -122,6 +122,42 @@ export function Settings() {
     }
   }, [isAuthenticated, user]);
 
+  // API Key validation patterns
+  const API_KEY_PATTERNS: Record<string, RegExp> = {
+    anthropic: /^sk-ant-[a-zA-Z0-9\-_]{95,}$/,
+    openai: /^sk-[a-zA-Z0-9\-_]{20,}$/,
+    google: /^AIzaSy[a-zA-Z0-9\-_]{33}$/,
+    deepseek: /^sk-[a-zA-Z0-9]{32,}$/,
+  };
+
+  const API_KEY_EXAMPLES: Record<string, string> = {
+    anthropic: 'sk-ant-api03-...',
+    openai: 'sk-proj-... or sk-...',
+    google: 'AIzaSy...',
+    deepseek: 'sk-...',
+  };
+
+  function validateApiKey(provider: string, key: string): { valid: boolean; error?: string } {
+    if (!key || key.trim() === '') {
+      return { valid: false, error: 'API key cannot be empty' };
+    }
+
+    const pattern = API_KEY_PATTERNS[provider as keyof typeof API_KEY_PATTERNS];
+    if (!pattern) {
+      return { valid: true }; // Unknown provider, skip validation
+    }
+
+    if (!pattern.test(key)) {
+      const example = API_KEY_EXAMPLES[provider as keyof typeof API_KEY_EXAMPLES];
+      return {
+        valid: false,
+        error: `Invalid ${provider} API key format. Should look like: ${example}`
+      };
+    }
+
+    return { valid: true };
+  }
+
   const handleSave = async () => {
     setIsSaving(true);
     setSaveMessage(null);
@@ -132,8 +168,30 @@ export function Settings() {
         throw new Error('Not authenticated');
       }
 
-      // Save API keys to backend for BYOK users
+      // Validate all keys before saving
+      const validationErrors: string[] = [];
       const providers: (keyof ApiKeys)[] = ['anthropic', 'openai', 'google', 'deepseek'];
+      
+      for (const provider of providers) {
+        const key = settings.apiKeys[provider];
+        if (key && key.trim() !== '') {
+          const validation = validateApiKey(provider, key);
+          if (!validation.valid) {
+            validationErrors.push(`${provider}: ${validation.error}`);
+          }
+        }
+      }
+
+      if (validationErrors.length > 0) {
+        setSaveMessage({
+          type: 'error',
+          text: `Validation failed:\n${validationErrors.join('\n')}`
+        });
+        setIsSaving(false);
+        return;
+      }
+
+      // Save API keys to backend for BYOK users
       const savePromises = providers.map(async (provider) => {
         const key = settings.apiKeys[provider];
         if (key) {
@@ -159,7 +217,11 @@ export function Settings() {
       });
 
       await Promise.all(savePromises);
-      setSaveMessage({ type: 'success', text: 'Settings saved successfully' });
+      
+      // Dispatch event to trigger cache invalidation and state refresh
+      window.dispatchEvent(new Event('api-keys-updated'));
+      
+      setSaveMessage({ type: 'success', text: 'Settings saved successfully. Keys are now active!' });
     } catch (error) {
       console.error('Save error:', error);
       setSaveMessage({
