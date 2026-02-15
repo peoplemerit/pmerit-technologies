@@ -1,7 +1,7 @@
-# AIXORD v4.4 COMPACT CORE
+# AIXORD v4.5 COMPACT CORE
 
 Version: 4.5-C | Portable Governance | <20000 chars
-Source: AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4.4 (canonical)
+Source: AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_5 (canonical)
 Patches: PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PATCH-GCP-01, PATCH-GKDL-01, PATCH-SPG-01, **PATCH-CCS-01**, **ENH-4/5/6 (v4.4.1)**, **PATCH-LEM-01 (v4.4.2)**, **HO-BRAINSTORM-VALUE-01 (v4.4.2)**, **HO-PLAN-BLUEPRINT-01 (v4.4.2)**, **HO-BLUEPRINT-EXECUTE-01 (v4.4.2)**, **HO-INTEGRITY-EXECUTE-01 (v4.4.2)**, **HO-DOCTRINE-VALUE-01 (v4.4.2)**, **HO-DISCOVER-BRAINSTORM-TOKEN-01 (v4.4.2)**, **HO-INTEGRITY-AVL-01 (v4.4.2)**, **HO-SECURITY-ROTATION-01 (v4.4.2)**, **PATCH-SCOPE-CLARIFY-01 (v4.4.3)**, **PATCH-COMPACT-CONTRACTS-01 (v4.4.3)**, **PATCH-NUMBERING-01 (v4.4.3)**, **PATCH-ENG-01 (v4.5)**
 
 ---
@@ -14,10 +14,12 @@ Patches: PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PA
 **Task:** T=TRIVIAL | S=SIMPLE | N=STANDARD | C=COMPLEX
 **Confidence:** H=HIGH | M=MEDIUM | L=LOW | U=UNVERIFIED
 **Quality:** BP=BestPractices | CP=Completeness | AC=Accuracy | SU=Sustainability | RL=Reliability | UF=UserFriendly | AX=Accessibility
-**Gates (Setup):** LIC DIS TIR ENV FLD CIT CON OBJ RA DC
-**Gates (Execution):** FX PD PR BP MS VA HO
-**Security Gates:** GS:DC GS:DP GS:AC GS:AI GS:JR GS:RT
+**Gates (Setup, 10):** GA:LIC GA:DIS GA:TIR GA:ENV GA:FLD GA:CIT GA:CON GA:OBJ GA:RA GA:DC
+**Gates (Execution, 7):** GA:FX GA:PD GA:PR GA:BP GA:MS GA:VA GA:HO
+**Security Gates (6):** GS:DC GS:DP GS:AI GS:JR GS:RT GS:SA
+**Agent Gates (6, v4.5.1):** GA:AGT1 GA:AGT2 GA:AGT3 GA:AGT4 GA:AGT5 GA:AGT6
 **Credential Gate:** GA:CCS (conditional blocking)
+**Total Gates:** 29
 **Enhancement:** ENH:FS=FileSystem | ENH:HR=HallucinationReliability | ENH:OA=OutputAwareness | ENH:2M=TwoModel | ENH:IE=ImageEvidence | ENH:PD=ProgressiveDisclosure | ENH:UM=UsageMetrics
 **Execution Doctrine:** EX:LEM=LayeredExecutionMode (non-gate, inside EXECUTE)
 **Session:** SSC:SEQ=SequenceNumber | SSC:PREV=PreviousFile | SSC:DRIFT=DriftDetected
@@ -54,21 +56,26 @@ EXECUTION_TOTAL = VERIFIED_REALITY + FORMULA_EXECUTION
 
 ---
 
-## 3. GATE CHAIN
+## 3. GATE CHAIN (29 total — PATCH-GATE-RECONCILIATION-01)
 
-**Setup Gates (10 Steps):**
+**Setup Gates (10):**
 ```
-LIC → DIS → TIR → ENV → FLD → CIT → CON → OBJ → RA → DC
-```
-
-**Execution Gates:**
-```
-FX → PD → PR → BP → MS → VA → HO
+GA:LIC → GA:DIS → GA:TIR → GA:ENV → GA:FLD → GA:CIT → GA:CON → GA:OBJ → GA:RA → GA:DC
 ```
 
-**Security Gates (Integrated):**
+**Security Gates (6):**
 ```
-GS:DC (Setup) → GS:DP + GS:AC + GS:AI + GS:JR (Execute) → GS:RT (Lock)
+GS:DC → GS:DP → GS:AI → GS:JR → GS:RT → GS:SA
+```
+
+**Execution Gates (7):**
+```
+GA:FX → GA:PD → GA:PR → GA:BP → GA:MS → GA:VA → GA:HO
+```
+
+**Agent Gates (6 — v4.5.1):**
+```
+GA:AGT1 → GA:AGT2 → GA:AGT3 → GA:AGT4 → GA:AGT5 → GA:AGT6
 ```
 
 **Credential Gate (Conditional):**
@@ -80,7 +87,24 @@ All blocking. No skip. AB is continuous enforcement.
 
 ---
 
-## 4. NORMATIVE LAWS
+## 4. PHASE SEQUENCE & NORMATIVE LAWS
+
+### Phase Sequence (v4.5.1)
+
+**Canonical Phase Chain:**
+```
+SETUP → DISCOVER → BRAINSTORM → PLAN → BLUEPRINT → EXECUTE → AUDIT → VERIFY → LOCK
+```
+
+**Phase Contracts:**
+- BRAINSTORM → PLAN: Requires L-BRN (≥3 options)
+- PLAN → BLUEPRINT: Requires L-PLN (DAG defined)
+- EXECUTE → VERIFY: Requires L-BPX (deliverables complete)
+- VERIFY → LOCK: Requires L-IVL (tests passing)
+
+**Phase Abbreviations:**
+- SU=Setup, DS=Discover, BR=Brainstorm, PL=Plan, BP=Blueprint
+- EX=Execute, AU=Audit, VF=Verify, LK=Lock
 
 ### Authority (L-AU)
 ```
@@ -548,6 +572,20 @@ All 10 complete → DECISION phase authorized.
 | CCS-03: ROTATION_PROOF | Proof of credential rotation & invalidation |
 | CCS-04: FORWARD_SAFETY_ATTESTATION | Director attestation of forward safety |
 | CCS-05: AUDIT_TRAIL | Complete timeline and lessons learned |
+
+### Required Artifacts (v4.5.1)
+| Artifact | Source |
+|----------|--------|
+| L-DBT4: Reality Snapshot (R-SNAP) | From GA:RA |
+| L-IVL4: Blueprint Integrity Report | From VERIFY phase |
+| L-AVL1: Deliverable Truth Ledger (DTL) | From AUDIT phase |
+| L-SRI6: Secret Rotation Record (SRR) | From GS:SA |
+| L-SRI9: Vulnerability Assurance Vetting (VAV) | From security audit |
+| L-AGT1-6: Agent audit logs | From agent gates (v4.5.1) |
+
+### Artifact Naming Convention
+- `L-XXX#` where XXX = category, # = version
+- Categories: DBT (database), IVL (integration), AVL (approval), SRI (security), AGT (agent)
 
 ---
 

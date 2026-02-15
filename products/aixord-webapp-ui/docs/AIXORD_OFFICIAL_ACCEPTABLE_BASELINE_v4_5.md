@@ -1,4 +1,4 @@
-# AIXORD OFFICIAL ACCEPTABLE BASELINE v4.4
+# AIXORD OFFICIAL ACCEPTABLE BASELINE v4.5
 
 ## Formula & Engine Edition — Security, Privacy & Credential Governance
 
@@ -270,6 +270,8 @@ After completing all 10 steps, AI MUST display:
 | **GA:CCS** | Credential compromise sanitization | CONDITIONAL **(NEW in v4.4)** |
 
 **Blocking gates MUST be satisfied before any work.**
+
+**GA:RA Note (v4.5.1):** GA:RA (Reality Absorption) appears ONLY in the Setup phase. It loads session history, project state, and prior decisions. GA:RA is NOT part of the §6.3 execution gate chain. Its artifact is the Reality Snapshot (R-SNAP).
 
 **GA:CCS Note:** This gate is only activated when a credential exposure is detected. When active, it blocks ALL execution until sanitization is complete and Director attestation is provided.
 
@@ -681,11 +683,46 @@ Artifacts must exist outside the chat.
 | **GA:VA** | Evidence / Visual Audit | Before VERIFYâ†’LOCK | Evidence provided |
 | **GA:HO** | HANDOFF | Session end | Saved + confirmed |
 
-### 6.3 Canonical Gate Ordering (v4.2)
+### 6.3 Canonical Gate Chain (v4.5.1 — PATCH-GATE-RECONCILIATION-01)
 
-```
-GA:PD â†’ GA:RA â†’ GA:FX â†’ GA:PR â†’ GA:BP â†’ GA:MS â†’ GA:VA â†’ GA:HO
-```
+**Total Gates:** 29
+
+#### Setup Phase (10 gates)
+1. GA:LIC — License Gate
+2. GA:DIS — Disclaimer Gate
+3. GA:TIR — Task Intent Review
+4. GA:ENV — Environment Awareness
+5. GA:FLD — File/Folder Linkage
+6. GA:CIT — Citation Requirement
+7. GA:CON — Context Limits
+8. GA:OBJ — Objective Clarity
+9. GA:RA — Reality Absorption
+10. GA:DC — Dependency Check
+
+#### Security Phase (6 gates)
+11. GS:DC — Data Classification
+12. GS:DP — Data Protection
+13. GS:AI — AI Exposure Control
+14. GS:JR — Jurisdiction Review
+15. GS:RT — Retention Enforcement
+16. GS:SA — Secret Audit
+
+#### Execution Phase (7 gates)
+17. GA:FX — Formula Execution
+18. GA:PD — Project Docs
+19. GA:PR — Plan Review
+20. GA:BP — Blueprint
+21. GA:MS — Master Scope
+22. GA:VA — Visual Audit
+23. GA:HO — Handoff
+
+#### Agent Phase (6 gates — v4.5.1)
+24. GA:AGT1 — Agent Authority
+25. GA:AGT2 — Agent Escalation
+26. GA:AGT3 — Agent Audit
+27. GA:AGT4 — HITL Requirement
+28. GA:AGT5 — Agent State Persistence
+29. GA:AGT6 — Agent WU Conservation
 
 **This ordering is mandatory.** Skipping gates = HALT.
 
@@ -1540,7 +1577,7 @@ This section ensures that **EXECUTE only begins on a Blueprint that is structura
 |----------|-------|
 | **Type** | Mandatory Structural Validation + Execution Behavioral Contract |
 | **Authority** | None â€" Integrity Validation is non-authoritative |
-| **GA:\* Gates** | None added (existing 17 gates unchanged) |
+| **GA:\* Gates** | 29 total gates (PATCH-GATE-RECONCILIATION-01) |
 | **Phase Impact** | None â€" No new phases introduced |
 | **Governance Hierarchy** | Contract under EXECUTE phase |
 | **Activation** | Automatic at BLUEPRINT â†' EXECUTE transition |
@@ -1812,7 +1849,7 @@ This section integrates **named doctrines only where they deliver real psycholog
 |----------|-------|
 | **Type** | Doctrine Naming & Clarification |
 | **Authority** | None â€" non-authoritative |
-| **GA:\* Gates** | None added (existing 17 gates unchanged) |
+| **GA:\* Gates** | 29 total gates (PATCH-GATE-RECONCILIATION-01) |
 | **Phase Impact** | None â€" No new phases introduced |
 | **Gate Order** | Unchanged |
 | **Law Changes** | None â€" names existing best practices |
@@ -2004,7 +2041,7 @@ It solves three problems simultaneously:
 |----------|-------|
 | **Type** | Doctrine + System Behavior |
 | **Authority** | None â€" non-authoritative |
-| **GA:\* Gates** | None added (existing 17 gates unchanged) |
+| **GA:\* Gates** | 29 total gates (PATCH-GATE-RECONCILIATION-01) |
 | **Phase Impact** | None â€" No new phases introduced |
 | **Phase Order** | Unchanged |
 | **Applies To** | SETUP, DISCOVER, BRAINSTORM |
@@ -2212,7 +2249,7 @@ And it guarantees:
 |----------|-------|
 | **Type** | Doctrine + System Behavior |
 | **Authority** | None â€" non-authoritative |
-| **GA:\* Gates** | None added (existing 17 gates unchanged) |
+| **GA:\* Gates** | 29 total gates (PATCH-GATE-RECONCILIATION-01) |
 | **Phase Impact** | None â€" No new phases introduced |
 | **Phase Order** | Unchanged |
 | **Applies To** | EXECUTE, AUDIT, VERIFY, LOCK |
@@ -2451,7 +2488,7 @@ It prevents the most dangerous modern failure mode:
 |----------|-------|
 | **Type** | Doctrine + Enforcement |
 | **Authority** | None â€" non-authoritative |
-| **GA:\* Gates** | None added (existing 17 gates unchanged) |
+| **GA:\* Gates** | 29 total gates (PATCH-GATE-RECONCILIATION-01) |
 | **Phase Impact** | None â€" No new phases introduced |
 | **Phase Order** | Unchanged |
 | **Applies To** | SETUP, DISCOVER, EXECUTE, AUDIT, VERIFY, LOCK |
@@ -3607,7 +3644,7 @@ NAV:DIR="Approve Blueprint"
 | Operational Readiness Criteria (§67) | ✅ L0–L3, deployment, observability, incident response |
 | §10.9.11 Blueprint Acceptance Criteria | ✅ Extended with 6 engineering items |
 | §10.13.10 AUDIT→VERIFY→LOCK Acceptance Criteria | ✅ Extended with 4 engineering items |
-| GA:\* gate list | ✅ Unchanged (17 gates) |
+| GA:\* gate list | ✅ Updated to 29 gates (PATCH-GATE-RECONCILIATION-01) |
 | Canonical phase ordering | ✅ Unchanged |
 
 ### Integration Summary (v4.2)
@@ -5750,7 +5787,7 @@ Part XIV closes these gaps by making engineering concerns **first-class governed
 |----------|-------|
 | **Type** | Engineering Doctrine + System Behavior |
 | **Authority** | None — non-authoritative |
-| **GA:\* Gates** | None added (existing 17 gates unchanged) |
+| **GA:\* Gates** | 29 total gates (PATCH-GATE-RECONCILIATION-01) |
 | **Phase Impact** | None — No new phases introduced |
 | **Phase Order** | Unchanged |
 | **Applies To** | BLUEPRINT, EXECUTE, AUDIT, VERIFY, LOCK |

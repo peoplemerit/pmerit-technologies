@@ -102,7 +102,7 @@ EXECUTION_TOTAL = VERIFIED_REALITY + FORMULA_EXECUTION
 | **Status** | RELEASE-READY |
 | **Patch Sources** | PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PATCH-GCP-01, PATCH-GKDL-01, PATCH-SPG-01, PATCH-CCS-01, ENH-4/5/6 (v4.4.1), PATCH-LEM-01 (v4.4.2), HO-BRAINSTORM-VALUE-01, HO-PLAN-BLUEPRINT-01, HO-BLUEPRINT-EXECUTE-01, HO-INTEGRITY-EXECUTE-01, HO-DOCTRINE-VALUE-01, HO-DISCOVER-BRAINSTORM-TOKEN-01, HO-INTEGRITY-AVL-01, HO-SECURITY-ROTATION-01, PATCH-SCOPE-CLARIFY-01 (v4.4.3), PATCH-NUMBERING-01 (v4.4.3), **PATCH-ENG-01 (v4.5 — Engineering Governance)** |
 | **Parts** | I–XIV (14 parts) |
-| **Gates** | 17 GA:\* gates + 6 GS:\* security gates + GA:CCS (conditional) |
+| **Gates** | 29 total: 10 Setup + 6 Security + 7 Execution + 6 Agent (PATCH-GATE-RECONCILIATION-01) |
 | **Phases** | SETUP → DISCOVER → BRAINSTORM → PLAN → BLUEPRINT (incl. SCOPE) → EXECUTE → AUDIT → VERIFY → LOCK |
 
 ### 2.2 Authority Model Implementation
@@ -505,6 +505,10 @@ aggregation at session, project, and account levels.
 | D41 | SYS-02 Execution Layer E2E Test Suite | ✅ **COMPLETE** | **100%** |
 | D42 | Zod Removal + Lightweight Validation | ✅ **DEPLOYED** | **100%** |
 | D43 | Conversation Persistence (SYS-01) | ✅ **DEPLOYED** | **100%** |
+
+**Total Deliverables:** 43 (D1-D43)
+
+**Note (PATCH-CGC-01, GAP-9):** Session 23 sprint deliverables (§16.10) used internal numbering D7-D16 that maps to the main deliverable matrix as follows: Sprint-D10+D11 (Session Metrics) = main D10 (Usage Statistics). Sprint-D14+D15 (Prompt Caching) are implementation details within D1 (Model Router Worker). The main D1-D43 numbering is canonical.
 
 ### 6.3 API Endpoint Status (168+ Endpoints across 22 Modules)
 
@@ -1489,8 +1493,8 @@ D4-CHAT is classified as **COMPLEX** (multi-component, multi-provider, persisten
 
 | Document | Version | Purpose |
 |----------|---------|---------|
-| AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_4.md | **v4.5** | Full governance rules (Parts I–XIV, 17 gates, 9 phases) |
-| AIXORD_v4.4_COMPACT_CORE.md | **v4.5-C** | Compact reference (~29 law blocks) |
+| AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_5.md | **v4.5** | Full governance rules (Parts I–XIV, 29 gates, 9 phases) |
+| AIXORD_v4_5_COMPACT_CORE.md | **v4.5-C** | Compact reference (~29 law blocks) |
 | PATCH-ENG-01 | **Applied (v4.5)** | Part XIV Engineering Governance (§64–69) |
 | PATCH-SCOPE-CLARIFY-01 | Applied (v4.4.3) | SCOPE as Blueprint sub-step |
 | PATCH-LEM-01 | Applied (v4.4.2) | Layered Execution Mode |
@@ -2598,7 +2602,7 @@ npx wrangler pages deploy dist --project-name=aixord-webapp-ui
 | SPG-01 Backend | Complete | Complete | **API + enforcement ✅ (Session 13)** |
 | D3 SDK Integration | Complete | Complete | **sdk.ts + hook + chat binding ✅ (Session 13)** |
 | GKDL-01 Knowledge | Complete | Complete | API + UI deployed ✅ |
-| GateTracker v4.3 | 17 gates | 17 gates | Frontend + Companion ✅ |
+| GateTracker v4.5.1 | 29 gates | 29 gates | Frontend + Companion ✅ (PATCH-GATE-RECONCILIATION-01) |
 | D5 Companion Sync | Complete | Complete | API client + hooks ✅ |
 | Billing E2E | Complete | Complete | Checkout verified ✅ (Session 13) |
 | Session Graph (v4.4) | Complete | Complete | API + UI deployed ✅ (Session 20) |
