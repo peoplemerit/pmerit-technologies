@@ -5,6 +5,8 @@
 **Total Findings:** 16 (3 Critical, 4 High, 5 Medium, 4 Low)
 **Disposition:** 8 Fixed, 7 Accepted, 1 Deferred
 
+> **See also:** `THIRD_AUDIT_DECISIONS.md` for HANDOFF-COPILOT-AUDIT-03 (13 findings, triaged 2026-02-15)
+
 ---
 
 ## Accepted Risks
