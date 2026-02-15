@@ -61,6 +61,7 @@ import artifacts from './api/artifacts';
 import apiKeys from './api/api-keys';
 import agents from './api/agents';
 import { decryptAESGCM } from './utils/crypto';
+import { trackError } from './utils/errorTracker';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -69,6 +70,19 @@ app.use('*', async (c, next) => {
   const requestId = c.req.header('X-Request-ID') || crypto.randomUUID();
   c.header('X-Request-ID', requestId);
   await next();
+});
+
+// Global error tracking middleware — captures unhandled errors with structured logging
+app.onError((err, c) => {
+  const requestId = c.res.headers.get('X-Request-ID') || 'unknown';
+  trackError(err, {
+    requestId,
+    userId: c.get('userId'),
+    path: c.req.path,
+    method: c.req.method,
+    statusCode: 500,
+  });
+  return c.json({ error: 'Internal server error', requestId }, 500);
 });
 
 // CORS middleware (PATCH-CORS-01: Updated for new domains, LOW-07: localhost conditional)

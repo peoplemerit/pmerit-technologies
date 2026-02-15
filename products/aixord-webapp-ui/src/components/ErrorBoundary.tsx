@@ -27,6 +27,31 @@ class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+
+    // Structured error report for remote tracking
+    try {
+      const apiBase = import.meta.env.VITE_API_BASE || '';
+      if (apiBase) {
+        const report = {
+          level: 'error',
+          message: error.message,
+          error: error.name,
+          stack: error.stack?.split('\n').slice(0, 5).join('\n'),
+          componentStack: errorInfo.componentStack?.slice(0, 500),
+          url: window.location.href,
+          userAgent: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+        };
+        // Fire-and-forget error report to backend
+        fetch(`${apiBase}/v1/router/health`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ errorReport: report }),
+        }).catch(() => { /* silent — error tracking should never throw */ });
+      }
+    } catch {
+      // Error tracking itself must never crash the app
+    }
   }
 
   handleReload = () => {

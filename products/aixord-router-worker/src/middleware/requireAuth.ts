@@ -4,11 +4,19 @@
  * Validates Bearer token and attaches user context to request.
  * HANDOFF-COPILOT-AUDIT-01: Uses SHA-256 token hash for DB lookup
  * with transparent fallback to plaintext for migration period.
+ *
+ * MIGRATION DEADLINE: 2026-03-15
+ * After this date, plaintext token fallback is removed.
+ * All sessions created after 2026-02-15 already use token_hash.
+ * The 30-day window covers max session lifetime (7 days) with margin.
  */
 
 import { Context, Next } from 'hono';
 import type { Env } from '../types';
 import { hashSHA256 } from '../utils/crypto';
+
+// Deadline after which plaintext token fallback is removed
+const LEGACY_TOKEN_DEADLINE = new Date('2026-03-15T00:00:00Z').getTime();
 
 // Extend Hono context to include user info
 declare module 'hono' {
@@ -35,8 +43,8 @@ export async function requireAuth(c: Context<{ Bindings: Env }>, next: Next) {
     WHERE s.token_hash = ? AND s.expires_at > datetime('now')
   `).bind(tokenHash).first<{ user_id: string; id: string; email: string }>();
 
-  if (!session) {
-    // Fallback: plaintext token lookup (legacy sessions)
+  if (!session && Date.now() < LEGACY_TOKEN_DEADLINE) {
+    // Fallback: plaintext token lookup (legacy sessions — expires 2026-03-15)
     session = await c.env.DB.prepare(`
       SELECT s.user_id, s.id, u.email
       FROM sessions s

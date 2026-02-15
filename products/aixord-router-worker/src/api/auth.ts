@@ -20,6 +20,9 @@ import { loginSchema, registerSchema } from '../schemas/common';
 import { isByokTier } from '../config/tiers';
 import { hashPasswordPBKDF2, verifyPasswordPBKDF2, hashSHA256 } from '../utils/crypto';
 
+// Deadline after which plaintext token fallback is removed (matches requireAuth.ts)
+const LEGACY_TOKEN_DEADLINE = new Date('2026-03-15T00:00:00Z').getTime();
+
 const auth = new Hono<{ Bindings: Env }>();
 
 /**
@@ -312,8 +315,8 @@ auth.get('/me', async (c) => {
     WHERE s.token_hash = ? AND s.expires_at > datetime('now')
   `).bind(tokenHash).first<{ user_id: string; email: string; email_verified: number; id: string }>();
 
-  if (!session) {
-    // Fallback: plaintext token lookup (legacy sessions without token_hash)
+  if (!session && Date.now() < LEGACY_TOKEN_DEADLINE) {
+    // Fallback: plaintext token lookup (legacy sessions — expires 2026-03-15)
     session = await c.env.DB.prepare(`
       SELECT s.*, u.email, u.email_verified
       FROM sessions s
@@ -376,7 +379,8 @@ auth.get('/subscription', async (c) => {
     WHERE s.token_hash = ? AND s.expires_at > datetime('now')
   `).bind(tokenHash).first<{ user_id: string; id: string }>();
 
-  if (!session) {
+  if (!session && Date.now() < LEGACY_TOKEN_DEADLINE) {
+    // Fallback: plaintext token lookup (legacy sessions — expires 2026-03-15)
     session = await c.env.DB.prepare(`
       SELECT s.user_id, s.id
       FROM sessions s

@@ -122,11 +122,11 @@ D4-CHAT implements the AIXORD Authority Model:
 | Gate | Name | D4-CHAT Status | Implementation |
 |------|------|----------------|----------------|
 | GA:LIC | License Check | ✅ Backend ready | Subscription validation |
-| GA:DIS | Disclaimer | ⏳ UI pending | Terms acceptance flow |
+| GA:DIS | Disclaimer | ✅ Implemented | DisclaimerGate.tsx + DisclaimerContext.tsx |
 | GA:TIR | Tier Detection | ✅ Implemented | Subscription tier system |
 | GA:ENV | Environment | ✅ Auto-detected | Browser environment |
 | GA:FLD | Folder Structure | ✅ IndexedDB | File system access API |
-| GA:CIT | Citation Mode | ⏳ UI pending | Settings page |
+| GA:CIT | Citation Mode | ✅ Implemented | GovernanceRibbon.tsx + MiniBar.tsx |
 | GA:CON | Continuity Mode | ✅ Session persistence | State API |
 | GA:OBJ | Objective | ✅ Project creation | Project objective field |
 | GA:RA | Reality Classification | ✅ Implemented | GREENFIELD/BROWNFIELD/LEGACY |
@@ -645,8 +645,8 @@ pmerit-technologies/products/aixord-router-worker/
 │   ├── providers/
 │   │   ├── index.ts                     # Provider registry + execution
 │   │   ├── anthropic.ts                 # Claude API (+ multimodal vision support)
-│   │   ├── openai.ts                    # OpenAI API (vision TODO)
-│   │   ├── google.ts                    # Gemini API (vision TODO)
+│   │   ├── openai.ts                    # OpenAI API (+ multimodal vision support)
+│   │   ├── google.ts                    # Gemini API (+ multimodal vision support)
 │   │   └── deepseek.ts                  # DeepSeek API
 │   ├── routing/
 │   │   ├── table.ts                     # Model class routing table
