@@ -14,10 +14,14 @@ export async function validateSubscription(
   request: RouterRequest,
   db: D1Database
 ): Promise<void> {
-  const { tier, key_mode, user_api_key } = request.subscription;
+  const { tier, key_mode } = request.subscription;
   const { user_id } = request.trace;
 
-  // 1. Verify BYOK tiers have user key
+  // Session 6 (API Audit): Removed user_api_key from validation
+  // The key-resolver.ts handles checking D1 database for BYOK keys
+  // and throws BYOK_KEY_MISSING if not found
+
+  // 1. Verify BYOK tiers have correct mode
   // TRIAL is excluded — trial users can use BYOK or platform keys (dual-mode)
   const byokTiers: SubscriptionTier[] = ['MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
   if (byokTiers.includes(tier) && key_mode !== 'BYOK') {
@@ -28,13 +32,8 @@ export async function validateSubscription(
     );
   }
 
-  if (key_mode === 'BYOK' && !user_api_key) {
-    throw new RouterError(
-      'BYOK_KEY_MISSING',
-      'BYOK mode requires user_api_key',
-      400
-    );
-  }
+  // Note: BYOK key existence is validated by key-resolver when needed
+  // This allows better error messages with provider-specific guidance
 
   // 2. Check subscription is active (skip for TRIAL)
   if (tier !== 'TRIAL') {

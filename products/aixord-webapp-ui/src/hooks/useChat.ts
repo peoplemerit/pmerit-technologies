@@ -151,7 +151,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         subscription: {
           tier: options.subscriptionTier,
           key_mode: options.keyMode,
-          user_api_key: options.userApiKey
+          // Session 6 (API Audit): Removed user_api_key from body
+          // Backend resolves BYOK keys from D1 database using authenticated userId
         },
         capsule: {
           objective: activeConversation.capsule?.objective || '',
@@ -199,19 +200,62 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
       };
 
-      // Get auth token from options or localStorage fallback
-      const authToken = options.userApiKey || localStorage.getItem('aixord_token') || '';
+      // Session 6 (API Audit): CRITICAL FIX - Separate JWT auth token from BYOK provider key
+      // The Authorization header MUST contain the JWT session token for user authentication.
+      // The BYOK provider key (e.g., sk-ant-...) is NOT a JWT and should NEVER be sent as Bearer token.
+      // Backend key-resolver.ts handles fetching the correct provider key from D1 database.
+      const authToken = localStorage.getItem('aixord_token') || '';
 
-      const response = await fetch(`${options.routerEndpoint}/v1/router/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify(routerRequest)
-      });
+      // 60s timeout for router execute (AI responses can be slow)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-      const result = await response.json();
+      let response: Response;
+      try {
+        response = await fetch(`${options.routerEndpoint}/v1/router/execute`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify(routerRequest),
+          signal: controller.signal,
+        });
+      } catch (fetchError) {
+        if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+          throw new Error('Request timed out. The AI provider took too long to respond. Please try again.');
+        }
+        throw fetchError;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      // Session 3 Fix: Check HTTP status BEFORE parsing body
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `Request failed with status ${response.status}`;
+
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.error || errorJson.message || errorMessage;
+        } catch {
+          // Not JSON, use raw text
+          errorMessage = `${errorMessage}: ${errorText.slice(0, 200)}`;
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      // Session 3 Fix: Safe JSON parsing (handles Worker crashes returning HTML)
+      const responseText = await response.text();
+      let result: any;
+      try {
+        result = JSON.parse(responseText);
+      } catch (parseError) {
+        throw new Error(
+          `Router returned non-JSON response (${response.status}): ${responseText.slice(0, 200)}`
+        );
+      }
 
       if (result.status === 'ERROR') {
         throw new Error(result.error || 'Router error');
@@ -240,7 +284,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       };
 
       // Parse options from response content if present
-      const optionsMatch = result.content.match(/\b(O\d+):\s*([^\n]+)/g);
+      // Session 3 Fix: Check result.content exists before calling .match()
+      const optionsMatch = result.content?.match(/\b(O\d+):\s*([^\n]+)/g);
       if (optionsMatch) {
         metadata.options = optionsMatch.map((match: string) => {
           const [id, ...labelParts] = match.split(':');

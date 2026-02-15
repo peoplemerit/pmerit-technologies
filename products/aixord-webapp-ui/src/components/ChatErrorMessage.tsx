@@ -31,6 +31,46 @@ const ERROR_GUIDANCE: Record<string, ErrorGuidance> = {
       path: '/settings'
     }
   },
+  'BYOK_REQUIRED': {
+    code: 'BYOK_REQUIRED',
+    title: 'BYOK Key Required',
+    message: 'Your subscription tier requires you to provide your own API key.',
+    icon: <Key size={20} />,
+    action: {
+      label: 'Add API Key in Settings',
+      path: '/settings'
+    }
+  },
+  'PLATFORM_KEY_MISSING': {
+    code: 'PLATFORM_KEY_MISSING',
+    title: 'Service Temporarily Unavailable',
+    message: 'The AI provider is temporarily unavailable. Please try again shortly.',
+    icon: <RefreshCw size={20} />,
+    action: {
+      label: 'Retry',
+      onClick: () => {}
+    }
+  },
+  'ALL_PROVIDERS_FAILED': {
+    code: 'ALL_PROVIDERS_FAILED',
+    title: 'All Providers Failed',
+    message: 'Unable to reach any AI provider. This may be a temporary issue.',
+    icon: <RefreshCw size={20} />,
+    action: {
+      label: 'Retry',
+      onClick: () => {}
+    }
+  },
+  'NO_AVAILABLE_PROVIDERS': {
+    code: 'NO_AVAILABLE_PROVIDERS',
+    title: 'No Providers Available',
+    message: 'No AI providers are available for your subscription. Check your API keys.',
+    icon: <Key size={20} />,
+    action: {
+      label: 'Check API Keys',
+      path: '/settings'
+    }
+  },
   'RATE_LIMIT': {
     code: 'RATE_LIMIT',
     title: 'Rate Limited',
@@ -38,7 +78,47 @@ const ERROR_GUIDANCE: Record<string, ErrorGuidance> = {
     icon: <Clock size={20} />,
     action: {
       label: 'Retry',
-      onClick: () => window.location.reload()
+      onClick: () => {}
+    }
+  },
+  'LIMIT_EXCEEDED': {
+    code: 'LIMIT_EXCEEDED',
+    title: 'Usage Limit Reached',
+    message: 'You have reached your monthly request limit. Upgrade your plan or wait for reset.',
+    icon: <AlertCircle size={20} />,
+    action: {
+      label: 'View Pricing',
+      path: '/pricing'
+    }
+  },
+  'TRIAL_EXPIRED': {
+    code: 'TRIAL_EXPIRED',
+    title: 'Trial Expired',
+    message: 'Your 14-day trial has expired. Upgrade to continue using AI chat.',
+    icon: <AlertCircle size={20} />,
+    action: {
+      label: 'Upgrade Plan',
+      path: '/pricing'
+    }
+  },
+  'NO_ACTIVE_SUBSCRIPTION': {
+    code: 'NO_ACTIVE_SUBSCRIPTION',
+    title: 'No Active Subscription',
+    message: 'No active subscription found. Subscribe to continue.',
+    icon: <AlertCircle size={20} />,
+    action: {
+      label: 'View Plans',
+      path: '/pricing'
+    }
+  },
+  'CLASS_NOT_ALLOWED': {
+    code: 'CLASS_NOT_ALLOWED',
+    title: 'Model Not Available',
+    message: 'This model tier is not available on your subscription. Upgrade for access.',
+    icon: <Settings size={20} />,
+    action: {
+      label: 'View Plans',
+      path: '/pricing'
     }
   },
   'AUTH_EXPIRED': {
@@ -88,7 +168,7 @@ const ERROR_GUIDANCE: Record<string, ErrorGuidance> = {
     icon: <RefreshCw size={20} />,
     action: {
       label: 'Retry',
-      onClick: () => window.location.reload()
+      onClick: () => {}
     }
   }
 };
@@ -96,9 +176,9 @@ const ERROR_GUIDANCE: Record<string, ErrorGuidance> = {
 function extractErrorCode(message: string): string | null {
   // Match patterns like "BYOK_KEY_MISSING:" or "Error: BYOK_KEY_MISSING"
   const patterns = [
-    /([A-Z_]+):/,                    // BYOK_KEY_MISSING:
-    /Error:\s*([A-Z_]+)/,            // Error: BYOK_KEY_MISSING
-    /code[:\s]+["']?([A-Z_]+)/i,     // code: "BYOK_KEY_MISSING"
+    /([A-Z][A-Z_]{2,}):/,           // BYOK_KEY_MISSING: (3+ uppercase chars)
+    /Error:\s*([A-Z][A-Z_]{2,})/,   // Error: BYOK_KEY_MISSING
+    /code[:\s]+["']?([A-Z_]+)/i,    // code: "BYOK_KEY_MISSING"
   ];
 
   for (const pattern of patterns) {
@@ -115,6 +195,17 @@ function extractErrorCode(message: string): string | null {
     }
   }
 
+  // Map HTTP status codes to error codes
+  const statusMatch = message.match(/status\s+(\d{3})/i);
+  if (statusMatch) {
+    const status = parseInt(statusMatch[1]);
+    if (status === 401) return 'AUTH_EXPIRED';
+    if (status === 429) return 'RATE_LIMIT';
+  }
+
+  // Detect rate limit from middleware response (not RouterError format)
+  if (/rate limit exceeded/i.test(message)) return 'RATE_LIMIT';
+
   return null;
 }
 
@@ -127,9 +218,9 @@ export function ChatErrorMessage({ message, onRetry }: ChatErrorMessageProps) {
   const errorCode = extractErrorCode(message);
   const guidance = errorCode ? ERROR_GUIDANCE[errorCode] : null;
 
-  // If we have an onRetry handler, use it for retry actions
+  // Use onRetry handler for any error that has an onClick action (retryable errors)
   const getActionHandler = (g: ErrorGuidance) => {
-    if (g.action.onClick && onRetry && g.code === 'RATE_LIMIT') {
+    if (g.action.onClick && onRetry) {
       return onRetry;
     }
     return g.action.onClick;

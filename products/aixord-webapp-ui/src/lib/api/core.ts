@@ -4,7 +4,9 @@
  * Base types, request helper, error handling, and shared utilities
  */
 
-export const API_BASE = import.meta.env.VITE_API_URL || 'https://aixord-router-worker.peoplemerit.workers.dev/api/v1';
+// Session 6 (API Audit Fix): Import from unified config instead of reading env directly
+import { API_BASE } from './config';
+export { API_BASE };
 
 /**
  * API Error class for structured error handling
@@ -34,13 +36,16 @@ export class APIError extends Error {
 }
 
 /**
- * Helper to make authenticated requests
+ * Helper to make authenticated requests with retry for transient failures
  */
 export async function request<T>(
   endpoint: string,
   options: RequestInit = {},
   token?: string
 ): Promise<T> {
+  const MAX_RETRIES = 2;
+  const RETRY_DELAY_MS = 1000;
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
@@ -50,44 +55,83 @@ export async function request<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let lastError: APIError | null = null;
 
-  // Safely parse JSON — backend may return non-JSON on Worker-level crashes
-  const responseText = await response.text();
-  let data: Record<string, unknown>;
-  try {
-    data = JSON.parse(responseText);
-  } catch {
-    throw new APIError(
-      response.status,
-      'PARSE_ERROR',
-      `Server returned non-JSON response (${response.status}): ${responseText.slice(0, 200)}`
-    );
-  }
-
-  if (!response.ok) {
-    // Include validation details in error message when available
-    let errorMessage = (data.error as string) || 'An unknown error occurred';
-    if (data.details && Array.isArray(data.details)) {
-      const detailMessages = (data.details as Array<{ message?: string }>)
-        .map(d => d.message)
-        .filter(Boolean)
-        .join('. ');
-      if (detailMessages) {
-        errorMessage = detailMessages;
-      }
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    // Wait before retry (exponential backoff)
+    if (attempt > 0) {
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
     }
-    throw new APIError(
-      response.status,
-      (data.code as string) || 'UNKNOWN_ERROR',
-      errorMessage
-    );
+
+    // 30s timeout for regular API calls
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}${endpoint}`, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+        lastError = new APIError(408, 'TIMEOUT', 'Request timed out. Please try again.');
+        continue; // Retry on timeout
+      }
+      lastError = new APIError(0, 'NETWORK_ERROR', 'Unable to connect to the server. Check your internet connection.');
+      continue; // Retry on network error
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    // Safely parse JSON — backend may return non-JSON on Worker-level crashes
+    const responseText = await response.text();
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      throw new APIError(
+        response.status,
+        'PARSE_ERROR',
+        `Server returned non-JSON response (${response.status}): ${responseText.slice(0, 200)}`
+      );
+    }
+
+    if (!response.ok) {
+      // Include validation details in error message when available
+      let errorMessage = (data.error as string) || 'An unknown error occurred';
+      if (data.details && Array.isArray(data.details)) {
+        const detailMessages = (data.details as Array<{ message?: string }>)
+          .map(d => d.message)
+          .filter(Boolean)
+          .join('. ');
+        if (detailMessages) {
+          errorMessage = detailMessages;
+        }
+      }
+
+      const apiError = new APIError(
+        response.status,
+        (data.code as string) || 'UNKNOWN_ERROR',
+        errorMessage
+      );
+
+      // Only retry on 429 (rate limit) and 5xx (server errors)
+      if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
+        lastError = apiError;
+        continue;
+      }
+
+      throw apiError;
+    }
+
+    return data as T;
   }
 
-  return data as T;
+  // All retries exhausted
+  throw lastError || new APIError(0, 'NETWORK_ERROR', 'Request failed after multiple retries.');
 }
 
 // ============================================================================

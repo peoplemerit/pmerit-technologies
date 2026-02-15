@@ -6,8 +6,9 @@ import { APIError } from './core';
 
 /**
  * Billing base URL (same worker, different endpoint path)
+ * Session 6 (API Audit Fix): Import from unified config
  */
-const BILLING_BASE = `${import.meta.env.VITE_ROUTER_URL || 'https://aixord-router-worker.peoplemerit.workers.dev'}/v1/billing`;
+import { BILLING_BASE } from './config';
 
 /**
  * Subscription tier type

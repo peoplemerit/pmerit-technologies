@@ -8,6 +8,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { authApi } from '../lib/api';
+import { API_BASE } from '../lib/api/config'; // Session 6: Unified config
 
 // ============================================================================
 // Types
@@ -140,7 +141,8 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
     if (!token) return {};
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE || 'https://aixord-router-worker.peoplemerit.workers.dev'}/api/v1/api-keys`, {
+      // Session 6: Use unified API_BASE from config
+      const response = await fetch(`${API_BASE}/api-keys`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

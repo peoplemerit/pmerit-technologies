@@ -39,27 +39,38 @@ export interface ArtifactCommitRecord extends ArtifactCommitEvidence {
 }
 
 /**
+ * Get auth token from localStorage
+ */
+function getToken(): string | undefined {
+  try {
+    return localStorage.getItem('aixord_token') || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Commit artifacts to the workspace with evidence tracking
  */
-async function commit(data: ArtifactCommitRequest): Promise<ArtifactCommitEvidence> {
+async function commit(data: ArtifactCommitRequest, token?: string): Promise<ArtifactCommitEvidence> {
   return request<ArtifactCommitEvidence>(`/artifacts/commit`, {
     method: 'POST',
     body: JSON.stringify(data),
-  });
+  }, token || getToken());
 }
 
 /**
  * Get artifact commit history for a project
  */
-async function getCommits(projectId: string): Promise<ArtifactCommitRecord[]> {
-  return request<ArtifactCommitRecord[]>(`/artifacts/commits/${projectId}`);
+async function getCommits(projectId: string, token?: string): Promise<ArtifactCommitRecord[]> {
+  return request<ArtifactCommitRecord[]>(`/artifacts/commits/${projectId}`, {}, token || getToken());
 }
 
 /**
  * Get last artifact commit for a project
  */
-async function getLastCommit(projectId: string): Promise<ArtifactCommitRecord | null> {
-  const commits = await getCommits(projectId);
+async function getLastCommit(projectId: string, token?: string): Promise<ArtifactCommitRecord | null> {
+  const commits = await getCommits(projectId, token);
   return commits.length > 0 ? commits[0] : null;
 }
 

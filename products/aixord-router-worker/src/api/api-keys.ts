@@ -14,12 +14,15 @@ const app = new Hono<{ Bindings: Env }>();
 // Apply authentication middleware to all routes
 app.use('/*', requireAuth);
 
-// API Key validation patterns
+// API Key validation patterns (relaxed to accept modern key formats)
+// Session 3 Fix: OpenAI now accepts sk-proj- prefix and dots
+// Session 3 Fix: DeepSeek now accepts dashes and underscores
+// Session 3 Fix: Google flexible length (30+ chars instead of exactly 33)
 const API_KEY_PATTERNS: Record<string, RegExp> = {
-  anthropic: /^sk-ant-[a-zA-Z0-9\-_]{95,}$/,
-  openai: /^sk-[a-zA-Z0-9\-_]{20,}$/,
-  google: /^AIzaSy[a-zA-Z0-9\-_]{33}$/,
-  deepseek: /^sk-[a-zA-Z0-9]{32,}$/,
+  anthropic: /^sk-ant-api03-[a-zA-Z0-9_-]{32,}$/,
+  openai: /^sk-[a-zA-Z0-9._-]{20,}$/,
+  google: /^AIzaSy[a-zA-Z0-9_-]{30,}$/,
+  deepseek: /^sk-[a-zA-Z0-9_-]{32,}$/,
 };
 
 const API_KEY_EXAMPLES: Record<string, string> = {
@@ -294,7 +297,7 @@ async function testAnthropicKey(apiKey: string): Promise<{ valid: boolean; messa
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-3-5-haiku-20241022',  // Session 3: Use Haiku for testing (faster, always available)
       max_tokens: 10,
       messages: [{ role: 'user', content: 'test' }],
     }),

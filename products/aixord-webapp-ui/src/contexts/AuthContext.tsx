@@ -228,6 +228,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Cross-tab logout: Listen for storage changes from other tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === TOKEN_KEY) {
+        if (e.newValue === null) {
+          // Token was removed in another tab — log out this tab too
+          setToken(null);
+          setUser(null);
+        } else if (e.newValue && e.newValue !== token) {
+          // Token was changed in another tab — update this tab
+          setToken(e.newValue);
+          const cachedUser = getCachedUser();
+          if (cachedUser) setUser(cachedUser);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [token]);
+
   const register = useCallback(async (email: string, password: string, name?: string, username?: string) => {
     setIsLoading(true);
     setError(null);

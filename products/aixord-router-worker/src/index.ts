@@ -834,7 +834,8 @@ app.post('/v1/router/execute', async (c) => {
     const modelClass = affinitySelection.modelClass;
 
     // Verify class is allowed for tier (BYOK users bypass — they provide their own key)
-    const isBYOK = request.subscription?.key_mode === 'BYOK' && request.subscription?.user_api_key;
+    // Session 6 (API Audit): Don't check for user_api_key in body - key-resolver handles it
+    const isBYOK = request.subscription?.key_mode === 'BYOK';
     if (!isBYOK && !isClassAllowedForTier(request.subscription.tier, modelClass)) {
       throw new RouterError(
         'CLASS_NOT_ALLOWED',

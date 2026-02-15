@@ -685,19 +685,19 @@ export class AIXORDSDKClient {
           : 'ERROR';
 
     return {
-      content: routerResponse.content,
+      content: routerResponse.content || '',
       status: sdkStatus,
       error: routerResponse.error,
       model: {
-        provider: routerResponse.model_used.provider,
-        model: routerResponse.model_used.model,
+        provider: routerResponse.model_used?.provider || 'unknown',
+        model: routerResponse.model_used?.model || 'unknown',
         class: options.mode,
       },
       usage: {
-        inputTokens: routerResponse.usage.input_tokens,
-        outputTokens: routerResponse.usage.output_tokens,
-        costUsd: routerResponse.usage.cost_usd,
-        latencyMs: routerResponse.usage.latency_ms,
+        inputTokens: routerResponse.usage?.input_tokens || 0,
+        outputTokens: routerResponse.usage?.output_tokens || 0,
+        costUsd: routerResponse.usage?.cost_usd || 0,
+        latencyMs: routerResponse.usage?.latency_ms || 0,
       },
       enforcement: {
         gatesPassed: gateResult.gateResults.filter((g) => g.passed).map((g) => g.gate),

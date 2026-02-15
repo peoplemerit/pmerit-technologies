@@ -127,8 +127,9 @@ export const messagesApi = {
 
 /**
  * Router base URL (same worker, different endpoint path)
+ * Session 6 (API Audit Fix): Import from unified config
  */
-const ROUTER_BASE = 'https://aixord-router-worker.peoplemerit.workers.dev/v1/router';
+import { ROUTER_BASE } from './config';
 
 /**
  * Router request types
@@ -238,13 +239,22 @@ export interface RouterResponse {
 export const routerApi = {
   /**
    * Execute a chat request through the model router
+   * Session 6 (API Audit): Added optional token parameter for authentication
    */
-  async execute(request: RouterRequest): Promise<RouterResponse> {
+  async execute(request: RouterRequest, token?: string): Promise<RouterResponse> {
+    // Session 6 (API Audit): CRITICAL FIX - Send JWT auth token in Authorization header
+    const authToken = token || localStorage.getItem('aixord_token') || '';
+    
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
     const response = await fetch(`${ROUTER_BASE}/execute`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify(request),
     });
 
@@ -261,8 +271,13 @@ export const routerApi = {
       );
     }
 
-    if (!response.ok && !data.error) {
-      throw new APIError(response.status, 'ROUTER_ERROR', 'Failed to execute router request');
+    // Session 4 Fix: Always throw on non-OK responses, even if error field exists
+    if (!response.ok) {
+      throw new APIError(
+        response.status,
+        data.error ? 'ROUTER_ERROR' : 'UNKNOWN_ERROR',
+        (data.error as string) || `Router request failed with status ${response.status}`
+      );
     }
 
     return data;
