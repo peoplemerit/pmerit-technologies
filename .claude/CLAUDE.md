@@ -1,7 +1,7 @@
 # PMERIT TECHNOLOGIES LLC — Claude Code Instructions
 
-**Version:** 6.0 (Unified Router Compatible)
-**Updated:** 2026-01-19
+**Version:** 7.0 (MOSA Modular Documentation)
+**Updated:** 2026-02-15
 **Status:** Active under AIXORD v2.1 governance
 
 ---
@@ -111,6 +111,35 @@ You are the **Technologies Assistant** for PMERIT TECHNOLOGIES LLC. Your job is 
 
 ---
 
+## D4-CHAT MODULAR DOCUMENTATION (MOSA Architecture)
+
+**CRITICAL — Context Window Optimization Rules:**
+
+### On `TECH CONTINUE` Startup, Load ONLY:
+1. `docs/D4-CHAT_PROJECT_PLAN.md` — Manifest (~100 lines)
+2. `docs/d4-modules/STATUS.md` — Current metrics (~184 lines)
+3. `docs/d4-modules/ROADMAP.md` — Next priorities (~38 lines)
+
+**Total startup context: ~322 lines** (NOT the old 2,962-line monolith)
+
+### Load Modules ON DEMAND Based on Task:
+| Task Type | Additional Modules |
+|-----------|-------------------|
+| API endpoint work | + API-REFERENCE.md + ARCHITECTURE.md |
+| Schema/migration | + DATABASE.md + ARCHITECTURE.md |
+| Security/audit | + GOVERNANCE-IMPL.md + RECONCILIATION.md |
+| Bug fix | + ISSUES.md + ARCHITECTURE.md |
+| Context recovery | + SESSION-HISTORY.md |
+| Onboarding/audit | + IDENTITY.md |
+
+### Rules:
+- **Max ~800 lines** of docs loaded simultaneously
+- **NEVER load IMPLEMENTATION-LOG.md on startup** — it's archival (1,119 lines)
+- **Do NOT look for docs in `products/aixord-webapp-ui/docs/`** — that directory contains only a README pointer to `docs/`
+- All modules are in `docs/d4-modules/`
+
+---
+
 ## DIRECTORY STRUCTURE
 
 ```
@@ -119,7 +148,15 @@ pmerit-technologies/                    <- PMERIT TECHNOLOGIES LLC
 |   +-- CLAUDE.md                       <- This file
 |   +-- scopes/
 |
++-- docs/                               <- CANONICAL documentation
+|   +-- D4-CHAT_PROJECT_PLAN.md         <- Module Manifest (start here)
+|   +-- d4-modules/                     <- 13 modular doc files
+|   +-- AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_5.md
+|   +-- AIXORD_v4_5_COMPACT_CORE.md
+|
 +-- products/                           <- ALL product folders
+|   +-- aixord-router-worker/           <- D4-CHAT Backend (Workers + Hono + D1)
+|   +-- aixord-webapp-ui/              <- D4-CHAT Frontend (React 19 + Vite)
 |   +-- AIXORD-Variants/                <- KDP Tools
 |   |   +-- staging/                    <- Input files
 |   |   +-- output/                     <- Generated DOCX
@@ -129,7 +166,6 @@ pmerit-technologies/                    <- PMERIT TECHNOLOGIES LLC
 |   +-- ARCHIVE/                        <- Archived products
 |
 +-- Chat-Histories/                     <- Brainstorming sessions
-+-- docs/                               <- Reference docs
 +-- templates/                          <- Shared templates
 +-- Product-Stock/                      <- Raw assets
 ```
@@ -207,4 +243,4 @@ When user says `LAUNCH: [product]`, execute this workflow:
 
 *AIXORD v2.1 — Authority. Execution. Confirmation. Genesis.*
 *PMERIT TECHNOLOGIES LLC*
-*Updated: 2026-01-19*
+*Updated: 2026-02-15*

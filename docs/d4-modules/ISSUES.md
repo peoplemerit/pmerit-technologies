@@ -1,0 +1,67 @@
+# D4-CHAT: Development Issues
+
+**Module:** Fixed issues, known issues, technical debt, backlog items (§13)
+**Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
+**Growth Class:** SHRINKING
+**Last Updated:** 2026-02-15 (Session 53)
+
+---
+
+## 13. DEVELOPMENT ISSUES
+
+### 13.1 Fixed Issues
+
+| Session | Issue | Root Cause | Fix | Status |
+|---------|-------|------------|-----|--------|
+| 4 | Login returns 404 | No auth endpoints | Added backend APIs | ✅ |
+| 4 | Auth response mismatch | Response structure | Fixed api.ts parsing | ✅ |
+| 4 | Column mismatches | snake_case vs camelCase | Transform functions | ✅ |
+| Post-4 | Invalid Date display | Date parsing | normalizeDate() | ✅ |
+| Post-4 | White screen on create | Navigation method | React Router | ✅ |
+| 5 | No usage stats | Missing aggregation | UsageStatsPanel | ✅ |
+| 29 | Messages 500 error | Undeployed worker + broken FK | Deploy + migration 019 | ✅ |
+| 30 | TRIAL users forced BYOK | TRIAL in BYOK_REQUIRED_TIERS | Removed from BYOK list | ✅ |
+| 31 | UAT: governance prompt, empty state, UX | Multiple frontend issues | NLP file detection, UI fixes | ✅ |
+| 32 | DELETE project 500 | images FK missing CASCADE + no try/catch | Migration 020 + batch DELETE | ✅ |
+| 33 | GitHub OAuth callback 401 | `requireAuth` blocked `/callback` | Exempt callback from auth middleware | ✅ |
+| 33 | DELETE project 500 (still) | Missing tables in batch (artifacts, state) | Added all FK-referencing tables | ✅ |
+| 26b | DELETE project 500 (still) | `scope_id` column doesn't exist in `blueprint_integrity_reports` | Changed to `project_id` | ✅ |
+| 49 | 11 TypeScript errors (backend) | zod not installed but imported; unsafe D1 casts; missing AuthContext export; Hono status code types | Rewrote validateBody.ts + schemas/common.ts without zod; fixed casts in layers.ts, security.ts, index.ts, subscription.ts | ✅ |
+| 49 | Stale ChatWindow export | ChatWindow moved to `_orphaned/` but still in chat/index.ts barrel | Removed stale export | ✅ |
+| 49 | DB migration 027 column mismatch | Live knowledge_artifacts has 19 cols, migration expected 10 | Adapted migration to match live schema | ✅ |
+| 49 | DB migration 027 github_evidence mismatch | Live table has 17 cols, migration expected 9 | Adapted migration to match live schema | ✅ |
+
+### 13.2 Known Issues
+
+| # | Issue | Impact | Priority | Status |
+|---|-------|--------|----------|--------|
+| 1 | ~~Chat UI not connected to Router~~ | Core feature | HIGH | ✅ RESOLVED (Session 7+) |
+| 2 | ~~State not initialized on create~~ | UX friction | MEDIUM | ✅ RESOLVED (Session 6+) |
+| 3 | ~~AIXORD v4.3 gates not implemented~~ | Compliance | MEDIUM | ✅ RESOLVED (Session 10) |
+| 4 | ~~Data classification UI missing~~ | Security | MEDIUM | ✅ RESOLVED (Session 7+) |
+
+**All critical issues resolved as of Session 10.**
+
+### 13.3 Technical Debt
+
+| Item | Description | Remediation |
+|------|-------------|-------------|
+| ~~SDK not used~~ | ~~Direct API calls~~ | ~~Integrate D3 SDK~~ ✅ RESOLVED (Session 13) |
+| ~~Mock tasks~~ | ~~Dashboard mock data~~ | ~~Implement task system~~ ✅ RESOLVED (Session 42 — TDL) |
+| Local settings | Not persisted | Backend storage |
+| Dependabot branches stale | 4 branches on old main | Close stale router-worker multi; review 3 minor bumps |
+
+### 13.4 Backlog Items
+
+| ID | Title | Source | Priority | Status |
+|----|-------|--------|----------|--------|
+| UI-GOV-001 | Differentiate phase indicators from gate checkpoints in UI | HO-BASELINE-UPDATE-01, PATCH-UI-GOVERNANCE-01 | P2 | OPEN |
+
+**UI-GOV-001 Detail:**
+- **Requirement:** Gates must be visually distinct from phases.
+  - Gates: prominent, blocking (red/green status, requires action)
+  - Phases: informational, non-blocking (breadcrumb or progress indicator)
+- **Doctrine Reference:** AIXORD Baseline §10.11.5.5 — Authority Clarity Doctrine ("Phase != Authority", "Gates Grant Permission")
+
+---
+
