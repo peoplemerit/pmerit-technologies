@@ -13,7 +13,7 @@
     "@types/chrome": "^0.0.287",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",
-    "esbuild": "^0.24.2",
+    "esbuild": "^0.27.3",
     "rimraf": "^5.0.0",
     "typescript": "^5.9.3"
   },

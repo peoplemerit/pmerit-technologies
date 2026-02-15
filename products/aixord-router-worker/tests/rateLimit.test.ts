@@ -8,6 +8,7 @@ import { rateLimit } from '../src/middleware/rateLimit';
 import type { Env } from '../src/types';
 
 // Mock D1 Database
+// Simulates the atomic INSERT ... ON CONFLICT ... RETURNING request_count upsert
 const createMockDB = () => {
   const store = new Map<string, { request_count: number }>();
 
@@ -15,20 +16,23 @@ const createMockDB = () => {
     prepare: (query: string) => ({
       bind: (...args: unknown[]) => ({
         first: async () => {
-          const key = `${args[0]}:${args[1]}`;
-          return store.get(key);
-        },
-        run: async () => {
-          if (query.includes('INSERT')) {
-            const key = `${args[0]}:${args[1]}`;
-            store.set(key, { request_count: 1 });
-          } else if (query.includes('UPDATE')) {
-            const key = `${args[0]}:${args[1]}`;
-            const current = store.get(key);
-            if (current) {
-              store.set(key, { request_count: current.request_count + 1 });
+          // Handle atomic upsert: INSERT ... ON CONFLICT DO UPDATE SET request_count = request_count + 1 RETURNING
+          if (query.includes('INSERT') && query.includes('ON CONFLICT') && query.includes('RETURNING')) {
+            const compositeKey = args[0] as string;
+            const existing = store.get(compositeKey);
+            if (existing) {
+              existing.request_count += 1;
+              return { request_count: existing.request_count };
+            } else {
+              store.set(compositeKey, { request_count: 1 });
+              return { request_count: 1 };
             }
           }
+          // Fallback for plain SELECT queries
+          const key = `${args[0]}:${args[1]}`;
+          return store.get(key) || null;
+        },
+        run: async () => {
           return { meta: { changes: 1 } };
         },
       }),

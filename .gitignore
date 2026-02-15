@@ -18,6 +18,9 @@ Thumbs.db
 # Archives (don't commit zips)
 *.zip
 
+# Database backups
+backup_*.sql
+
 # Logs
 *.log
 npm-debug.log*
