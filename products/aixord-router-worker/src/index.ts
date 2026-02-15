@@ -85,7 +85,13 @@ app.use('*', async (c, next) => {
     : [...prodOrigins, 'http://localhost:5173', 'http://localhost:3000'];
 
   const corsMiddleware = cors({
-    origin: allowedOrigins,
+    origin: (origin) => {
+      // Exact match against allowed origins
+      if (allowedOrigins.includes(origin)) return origin;
+      // Allow Cloudflare Pages preview/branch deployments (*.aixord-webapp-ui.pages.dev)
+      if (origin && /^https:\/\/[a-z0-9-]+\.aixord-webapp-ui\.pages\.dev$/.test(origin)) return origin;
+      return allowedOrigins[0]; // fallback — won't match, CORS will block
+    },
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
