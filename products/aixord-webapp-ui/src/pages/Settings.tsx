@@ -128,6 +128,71 @@ export function Settings() {
   // Track which providers are in "edit mode" (user wants to enter new key)
   const [editingProviders, setEditingProviders] = useState<Set<string>>(new Set());
 
+  // Change password state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
+  const [passwordChangeMessage, setPasswordChangeMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleChangePassword = async () => {
+    setPasswordChangeMessage(null);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordChangeMessage({ type: 'error', text: 'All fields are required.' });
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordChangeMessage({ type: 'error', text: 'New password must be at least 8 characters.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordChangeMessage({ type: 'error', text: 'New passwords do not match.' });
+      return;
+    }
+    if (currentPassword === newPassword) {
+      setPasswordChangeMessage({ type: 'error', text: 'New password must be different from current password.' });
+      return;
+    }
+
+    setPasswordChangeLoading(true);
+    try {
+      const token = localStorage.getItem('aixord_token');
+      const response = await fetch(`${API_BASE}/auth/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+        }),
+      });
+
+      const data = await response.json() as { success?: boolean; message?: string; error?: string };
+
+      if (response.ok && data.success) {
+        setPasswordChangeMessage({ type: 'success', text: 'Password changed successfully. Redirecting to login...' });
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        // All sessions invalidated server-side — redirect to login after brief delay
+        setTimeout(() => {
+          localStorage.removeItem('aixord_token');
+          localStorage.removeItem('aixord_user');
+          window.location.href = '/login';
+        }, 2000);
+      } else {
+        setPasswordChangeMessage({ type: 'error', text: data.error || 'Failed to change password.' });
+      }
+    } catch {
+      setPasswordChangeMessage({ type: 'error', text: 'Network error. Please try again.' });
+    } finally {
+      setPasswordChangeLoading(false);
+    }
+  };
+
   // Fetch usage data when authenticated
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -1033,6 +1098,80 @@ export function Settings() {
                   <label className="block text-sm text-gray-500 mb-1">User ID</label>
                   <p className="text-white font-mono text-sm">{user?.id || '—'}</p>
                 </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
+              <h2 className="text-lg font-semibold mb-4">Change Password</h2>
+
+              {passwordChangeMessage && (
+                <div className={`mb-4 p-3 rounded-lg border ${
+                  passwordChangeMessage.type === 'success'
+                    ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                    : 'bg-red-500/10 border-red-500/20 text-red-400'
+                }`}>
+                  <p className="text-sm">{passwordChangeMessage.text}</p>
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Current Password</label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none"
+                    placeholder="Enter your current password"
+                    autoComplete="current-password"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">New Password</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none"
+                    placeholder="Minimum 8 characters"
+                    autoComplete="new-password"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Confirm New Password</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-violet-500 focus:outline-none"
+                    placeholder="Re-enter your new password"
+                    autoComplete="new-password"
+                  />
+                </div>
+
+                <button
+                  onClick={handleChangePassword}
+                  disabled={passwordChangeLoading || !currentPassword || !newPassword || !confirmPassword}
+                  className="px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-violet-600/50 disabled:cursor-not-allowed rounded-lg text-sm font-medium text-white transition-colors flex items-center gap-2"
+                >
+                  {passwordChangeLoading ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      Changing...
+                    </>
+                  ) : (
+                    'Change Password'
+                  )}
+                </button>
+
+                <p className="text-xs text-gray-500">
+                  You will be logged out after changing your password.
+                </p>
               </div>
             </div>
 

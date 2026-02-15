@@ -10,6 +10,7 @@
  * - POST /api/v1/auth/resend-verification
  * - POST /api/v1/auth/forgot-password
  * - POST /api/v1/auth/reset-password
+ * - POST /api/v1/auth/change-password
  * - POST /api/v1/auth/recover-username
  */
 
@@ -700,6 +701,115 @@ auth.post('/reset-password', async (c) => {
   return c.json({
     success: true,
     message: 'Password reset successfully! Please log in with your new password.'
+  });
+});
+
+/**
+ * POST /api/v1/auth/change-password
+ * Authenticated password change (requires current password)
+ * Invalidates all sessions after successful change
+ */
+auth.post('/change-password', async (c) => {
+  // Require authentication
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
+
+  const token = authHeader.slice(7);
+  const tokenHash = await hashSHA256(token);
+
+  // Find session (hashed lookup first, legacy fallback)
+  let session = await c.env.DB.prepare(`
+    SELECT s.user_id FROM sessions s
+    WHERE s.token_hash = ? AND s.expires_at > datetime('now')
+  `).bind(tokenHash).first<{ user_id: string }>();
+
+  if (!session && Date.now() < LEGACY_TOKEN_DEADLINE) {
+    session = await c.env.DB.prepare(`
+      SELECT s.user_id FROM sessions s
+      WHERE s.token = ? AND s.expires_at > datetime('now')
+    `).bind(token).first<{ user_id: string }>();
+  }
+
+  if (!session) {
+    return c.json({ error: 'Invalid or expired session' }, 401);
+  }
+
+  const body = await c.req.json<{
+    current_password?: string;
+    new_password?: string;
+  }>();
+
+  const { current_password, new_password } = body;
+
+  if (!current_password || !new_password) {
+    return c.json({ error: 'Current password and new password are required' }, 400);
+  }
+
+  if (new_password.length < 8) {
+    return c.json({ error: 'New password must be at least 8 characters' }, 400);
+  }
+
+  if (current_password === new_password) {
+    return c.json({ error: 'New password must be different from current password' }, 400);
+  }
+
+  // Fetch user's current password hash
+  const user = await c.env.DB.prepare(
+    'SELECT id, email, password_hash, password_salt, hash_algorithm FROM users WHERE id = ?'
+  ).bind(session.user_id).first<{
+    id: string;
+    email: string;
+    password_hash: string;
+    password_salt: string | null;
+    hash_algorithm: string | null;
+  }>();
+
+  if (!user) {
+    return c.json({ error: 'User not found' }, 404);
+  }
+
+  // Verify current password
+  let passwordValid = false;
+  const algorithm = user.hash_algorithm || 'sha256';
+
+  if (algorithm === 'pbkdf2' && user.password_salt) {
+    passwordValid = await verifyPasswordPBKDF2(current_password, user.password_salt, user.password_hash);
+  } else {
+    // Legacy SHA-256
+    const globalSalt = c.env.AUTH_SALT || 'default-salt-change-in-production';
+    const legacyHash = await hashPasswordLegacy(current_password, globalSalt);
+    passwordValid = legacyHash === user.password_hash;
+  }
+
+  if (!passwordValid) {
+    return c.json({ error: 'Current password is incorrect' }, 401);
+  }
+
+  // Hash new password with PBKDF2
+  const pbkdf2Result = await hashPasswordPBKDF2(new_password);
+
+  // Update password
+  await c.env.DB.prepare(
+    'UPDATE users SET password_hash = ?, password_salt = ?, hash_algorithm = ?, updated_at = ? WHERE id = ?'
+  ).bind(pbkdf2Result.hash, pbkdf2Result.salt, 'pbkdf2', new Date().toISOString(), user.id).run();
+
+  // Invalidate ALL sessions for this user (security best practice)
+  await c.env.DB.prepare(
+    'DELETE FROM sessions WHERE user_id = ?'
+  ).bind(user.id).run();
+
+  // Audit log
+  console.log(JSON.stringify({
+    type: 'password_changed',
+    user_id: user.id.substring(0, 8) + '...',
+    timestamp: new Date().toISOString(),
+  }));
+
+  return c.json({
+    success: true,
+    message: 'Password changed successfully. Please log in with your new password.'
   });
 });
 
