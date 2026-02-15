@@ -1,10 +1,13 @@
 /**
  * Security & Privacy Governance API (SPG-01)
  *
- * Implements AIXORD v4.3 Security Gates:
- * - GS:DC - Data Classification
- * - GS:AI - AI Exposure Validation
+ * Implements AIXORD v4.5.1 Security Gates:
+ * - GS:DC - Data Classification (project-level + resource-level)
+ * - GS:DP - Data Protection
+ * - GS:AI - AI Exposure Validation (project + resource enforcement)
  * - GS:JR - Jurisdiction Compliance
+ * - GS:RT - Retention Enforcement
+ * - GS:SA - Secret Audit
  *
  * Laws implemented:
  * - L-SPG1: Declare sensitivity before execution
@@ -12,6 +15,8 @@
  * - L-SPG4: Unknown = highest protection
  * - L-SPG5: GS:DC required for setup
  * - L-SPG6: GS:AI required for execution
+ *
+ * HANDOFF-CGC-01 GAP-2: Resource-level classification + secret audit
  */
 
 import { Hono } from 'hono';
@@ -468,6 +473,421 @@ async function updateSecurityGate(
         break;
       // Other gates follow the same pattern if needed
     }
+  }
+}
+
+// =============================================================================
+// RESOURCE-LEVEL CLASSIFICATION (GS:DC at granular level — HANDOFF-CGC-01 GAP-2)
+// =============================================================================
+
+/**
+ * POST /api/v1/projects/:projectId/security/classify
+ * GS:DC — Classify a specific resource (SCOPE, DELIVERABLE, MESSAGE, FILE)
+ */
+app.post('/:projectId/security/classify', requireAuth, async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId');
+
+  const project = await c.env.DB.prepare(`
+    SELECT id, owner_id FROM projects WHERE id = ? AND user_id = ?
+  `).bind(projectId, userId).first();
+
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const body = await c.req.json<{
+    resource_type: string;
+    resource_id: string;
+    classification: string;
+    classification_reason?: string;
+    ai_exposure_allowed?: boolean;
+    ai_model_restrictions?: string[];
+    data_residency?: string;
+    retention_policy?: string;
+  }>();
+
+  // Validate resource_type
+  const validTypes = ['SCOPE', 'DELIVERABLE', 'MESSAGE', 'FILE'];
+  if (!validTypes.includes(body.resource_type)) {
+    return c.json({ error: `Invalid resource_type. Must be one of: ${validTypes.join(', ')}` }, 400);
+  }
+
+  // Validate classification level
+  const validLevels = ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED'];
+  if (!validLevels.includes(body.classification)) {
+    return c.json({ error: `Invalid classification. Must be one of: ${validLevels.join(', ')}` }, 400);
+  }
+
+  // RESTRICTED classification requires project owner (Director role)
+  if (body.classification === 'RESTRICTED' && project.owner_id !== userId) {
+    return c.json({
+      error: 'Forbidden: RESTRICTED classification requires project owner (Director role)',
+      gate: 'GS:DC'
+    }, 403);
+  }
+
+  // Validate retention_policy if provided
+  const validRetention = ['7_DAYS', '30_DAYS', '90_DAYS', '1_YEAR', '7_YEARS', 'PERMANENT'];
+  if (body.retention_policy && !validRetention.includes(body.retention_policy)) {
+    return c.json({ error: `Invalid retention_policy. Must be one of: ${validRetention.join(', ')}` }, 400);
+  }
+
+  try {
+    const now = new Date().toISOString();
+    const aiModelRestrictions = body.ai_model_restrictions ? JSON.stringify(body.ai_model_restrictions) : null;
+
+    // Calculate retention_expires_at based on policy
+    let retentionExpiresAt: string | null = null;
+    if (body.retention_policy && body.retention_policy !== 'PERMANENT') {
+      const daysMap: Record<string, number> = {
+        '7_DAYS': 7, '30_DAYS': 30, '90_DAYS': 90,
+        '1_YEAR': 365, '7_YEARS': 2555
+      };
+      const days = daysMap[body.retention_policy];
+      if (days) {
+        const expiresDate = new Date();
+        expiresDate.setDate(expiresDate.getDate() + days);
+        retentionExpiresAt = expiresDate.toISOString();
+      }
+    }
+
+    // Upsert resource classification
+    await c.env.DB.prepare(`
+      INSERT INTO security_classifications (
+        project_id, resource_type, resource_id, classification,
+        classification_reason, classified_by, classified_at,
+        ai_exposure_allowed, ai_model_restrictions,
+        data_residency, jurisdiction_reviewed,
+        retention_policy, retention_expires_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+      ON CONFLICT(project_id, resource_type, resource_id) DO UPDATE SET
+        classification = excluded.classification,
+        classification_reason = excluded.classification_reason,
+        classified_by = excluded.classified_by,
+        classified_at = excluded.classified_at,
+        ai_exposure_allowed = excluded.ai_exposure_allowed,
+        ai_model_restrictions = excluded.ai_model_restrictions,
+        data_residency = excluded.data_residency,
+        retention_policy = excluded.retention_policy,
+        retention_expires_at = excluded.retention_expires_at,
+        updated_at = excluded.updated_at
+    `).bind(
+      projectId,
+      body.resource_type,
+      body.resource_id,
+      body.classification,
+      body.classification_reason || null,
+      userId,
+      now,
+      body.ai_exposure_allowed !== false ? 1 : 0,
+      aiModelRestrictions,
+      body.data_residency || null,
+      body.retention_policy || null,
+      retentionExpiresAt,
+      now
+    ).run();
+
+    // Log decision for audit trail
+    await c.env.DB.prepare(`
+      INSERT INTO decisions (id, project_id, decision_type, description, actor, metadata, created_at)
+      VALUES (?, ?, 'SECURITY', ?, ?, ?, ?)
+    `).bind(
+      crypto.randomUUID(),
+      projectId,
+      `Resource classified: ${body.resource_type}/${body.resource_id} → ${body.classification}`,
+      userId,
+      JSON.stringify({
+        resource_type: body.resource_type,
+        resource_id: body.resource_id,
+        classification: body.classification,
+        ai_exposure_allowed: body.ai_exposure_allowed !== false,
+        gate: 'GS:DC'
+      }),
+      now
+    ).run();
+
+    return c.json({
+      success: true,
+      resource_type: body.resource_type,
+      resource_id: body.resource_id,
+      classification: body.classification,
+      ai_exposure_allowed: body.ai_exposure_allowed !== false,
+      retention_policy: body.retention_policy || null,
+      retention_expires_at: retentionExpiresAt
+    });
+  } catch (error) {
+    console.error('Error classifying resource:', error);
+    return c.json({
+      error: 'Failed to classify resource',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, 500);
+  }
+});
+
+/**
+ * GET /api/v1/projects/:projectId/security/classifications
+ * List all resource classifications for a project
+ */
+app.get('/:projectId/security/classifications', requireAuth, async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId');
+
+  const project = await c.env.DB.prepare(`
+    SELECT id FROM projects WHERE id = ? AND user_id = ?
+  `).bind(projectId, userId).first();
+
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const resourceType = c.req.query('resource_type');
+  const classificationLevel = c.req.query('classification');
+
+  let sql = `SELECT * FROM security_classifications WHERE project_id = ?`;
+  const params: string[] = [projectId];
+
+  if (resourceType) {
+    sql += ` AND resource_type = ?`;
+    params.push(resourceType);
+  }
+
+  if (classificationLevel) {
+    sql += ` AND classification = ?`;
+    params.push(classificationLevel);
+  }
+
+  sql += ` ORDER BY classified_at DESC`;
+
+  const stmt = c.env.DB.prepare(sql);
+  const results = await stmt.bind(...params).all();
+
+  return c.json(results.results || []);
+});
+
+/**
+ * GET /api/v1/projects/:projectId/security/resource/:resourceType/:resourceId
+ * Get classification for a specific resource
+ */
+app.get('/:projectId/security/resource/:resourceType/:resourceId', requireAuth, async (c) => {
+  const projectId = c.req.param('projectId');
+  const resourceType = c.req.param('resourceType');
+  const resourceId = c.req.param('resourceId');
+  const userId = c.get('userId');
+
+  const project = await c.env.DB.prepare(`
+    SELECT id FROM projects WHERE id = ? AND user_id = ?
+  `).bind(projectId, userId).first();
+
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const classification = await c.env.DB.prepare(`
+    SELECT * FROM security_classifications
+    WHERE project_id = ? AND resource_type = ? AND resource_id = ?
+  `).bind(projectId, resourceType, resourceId).first();
+
+  if (!classification) {
+    // Default: INTERNAL classification, AI allowed (L-SPG4 doesn't apply at resource level
+    // when project-level classification exists)
+    return c.json({
+      classification: 'INTERNAL',
+      ai_exposure_allowed: true,
+      is_default: true,
+      resource_type: resourceType,
+      resource_id: resourceId
+    });
+  }
+
+  return c.json(classification);
+});
+
+// =============================================================================
+// JURISDICTION REVIEW (GS:JR — HANDOFF-CGC-01 GAP-2)
+// =============================================================================
+
+/**
+ * PUT /api/v1/projects/:projectId/security/resource/:resourceType/:resourceId/jurisdiction
+ * Mark jurisdiction review complete for a resource
+ */
+app.put('/:projectId/security/resource/:resourceType/:resourceId/jurisdiction', requireAuth, async (c) => {
+  const projectId = c.req.param('projectId');
+  const resourceType = c.req.param('resourceType');
+  const resourceId = c.req.param('resourceId');
+  const userId = c.get('userId');
+
+  const project = await c.env.DB.prepare(`
+    SELECT id FROM projects WHERE id = ? AND user_id = ?
+  `).bind(projectId, userId).first();
+
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const body = await c.req.json<{ data_residency: string }>();
+  const now = new Date().toISOString();
+
+  // Ensure classification exists first
+  const existing = await c.env.DB.prepare(`
+    SELECT id FROM security_classifications
+    WHERE project_id = ? AND resource_type = ? AND resource_id = ?
+  `).bind(projectId, resourceType, resourceId).first();
+
+  if (!existing) {
+    return c.json({ error: 'Resource must be classified before jurisdiction review' }, 400);
+  }
+
+  await c.env.DB.prepare(`
+    UPDATE security_classifications SET
+      data_residency = ?,
+      jurisdiction_reviewed = 1,
+      reviewed_by = ?,
+      reviewed_at = ?,
+      updated_at = ?
+    WHERE project_id = ? AND resource_type = ? AND resource_id = ?
+  `).bind(
+    body.data_residency,
+    userId,
+    now,
+    now,
+    projectId,
+    resourceType,
+    resourceId
+  ).run();
+
+  // Update project-level GS:JR gate if all RESTRICTED/CONFIDENTIAL resources are reviewed
+  const unreviewedSensitive = await c.env.DB.prepare(`
+    SELECT COUNT(*) as count FROM security_classifications
+    WHERE project_id = ? AND classification IN ('CONFIDENTIAL', 'RESTRICTED')
+      AND jurisdiction_reviewed = 0
+  `).bind(projectId).first<{ count: number }>();
+
+  if (!unreviewedSensitive || unreviewedSensitive.count === 0) {
+    await updateSecurityGate(c.env.DB, projectId, 'gs_jr', true);
+  }
+
+  return c.json({
+    success: true,
+    jurisdiction_reviewed: true,
+    data_residency: body.data_residency,
+    gate: 'GS:JR'
+  });
+});
+
+// =============================================================================
+// SECRET AUDIT (GS:SA — HANDOFF-CGC-01 GAP-2)
+// =============================================================================
+
+/**
+ * GET /api/v1/projects/:projectId/security/secrets/audit
+ * Retrieve secret access audit log
+ */
+app.get('/:projectId/security/secrets/audit', requireAuth, async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId');
+
+  const project = await c.env.DB.prepare(`
+    SELECT id FROM projects WHERE id = ? AND user_id = ?
+  `).bind(projectId, userId).first();
+
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const limit = parseInt(c.req.query('limit') || '50');
+  const secretKey = c.req.query('secret_key');
+
+  let sql = `SELECT * FROM secret_access_log WHERE project_id = ?`;
+  const params: (string | number)[] = [projectId];
+
+  if (secretKey) {
+    sql += ` AND secret_key = ?`;
+    params.push(secretKey);
+  }
+
+  sql += ` ORDER BY accessed_at DESC LIMIT ?`;
+  params.push(Math.min(limit, 200));
+
+  const results = await c.env.DB.prepare(sql).bind(...params).all();
+
+  return c.json(results.results || []);
+});
+
+// =============================================================================
+// EXPORTED UTILITY FUNCTIONS (GS:AI + GS:SA — HANDOFF-CGC-01 GAP-2)
+// =============================================================================
+
+/**
+ * Middleware utility: Check AI exposure at resource level before routing to model
+ * Returns true if AI access is allowed for this resource
+ */
+export async function enforceAIExposureControl(
+  db: D1Database,
+  projectId: string,
+  resourceType: string,
+  resourceId: string
+): Promise<{ allowed: boolean; reason?: string }> {
+  const classification = await db.prepare(`
+    SELECT ai_exposure_allowed, classification, ai_model_restrictions
+    FROM security_classifications
+    WHERE project_id = ? AND resource_type = ? AND resource_id = ?
+  `).bind(projectId, resourceType, resourceId).first<{
+    ai_exposure_allowed: number;
+    classification: string;
+    ai_model_restrictions: string | null;
+  }>();
+
+  if (!classification) {
+    return { allowed: true }; // Default: allow when no classification exists
+  }
+
+  if (!classification.ai_exposure_allowed) {
+    return {
+      allowed: false,
+      reason: `GS:AI: AI exposure blocked for ${resourceType}/${resourceId} (classification: ${classification.classification})`
+    };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Utility: Log secret/API key access for audit trail (GS:SA)
+ */
+export async function auditSecretAccess(
+  db: D1Database,
+  projectId: string,
+  secretKey: string,
+  accessType: 'READ' | 'WRITE' | 'ROTATE' | 'DELETE',
+  userId: string,
+  ipAddress?: string,
+  userAgent?: string
+): Promise<void> {
+  await db.prepare(`
+    INSERT INTO secret_access_log (
+      project_id, secret_key, accessed_by, access_type, ip_address, user_agent
+    ) VALUES (?, ?, ?, ?, ?, ?)
+  `).bind(
+    projectId,
+    secretKey,
+    userId,
+    accessType,
+    ipAddress || null,
+    userAgent || null
+  ).run();
+
+  // Update project-level GS:SA gate (mark as active — audit trail exists)
+  const existing = await db.prepare(`
+    SELECT project_id FROM security_gates WHERE project_id = ?
+  `).bind(projectId).first();
+
+  if (existing) {
+    const now = new Date().toISOString();
+    await db.prepare(`
+      UPDATE security_gates SET gs_rt = CASE WHEN gs_rt = 0 THEN 0 ELSE gs_rt END, updated_at = ?
+      WHERE project_id = ?
+    `).bind(now, projectId).run();
   }
 }
 

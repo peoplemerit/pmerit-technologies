@@ -22,6 +22,7 @@ import {
   transferWorkUnits,
   computeReconciliation,
 } from '../services/readinessEngine';
+import { validatePhaseTransition } from '../governance/phaseContracts';
 
 const state = new Hono<{ Bindings: Env }>();
 
@@ -668,9 +669,26 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
     ? exitReq.gates.filter(g => !gates[g])
     : [];
 
+  // 3b. Phase contract validation (L-BRN, L-PLN, L-BPX, L-IVL — HANDOFF-CGC-01 GAP-3)
+  const nextPhaseOrder = PHASE_ORDER[currentPhase] !== undefined ? PHASE_ORDER[currentPhase] + 1 : -1;
+  const nextPhaseName = Object.entries(PHASE_ORDER).find(([_, v]) => v === nextPhaseOrder)?.[0] || 'LOCK';
+  const contractValidation = await validatePhaseTransition(
+    c.env.DB, projectId, currentPhase, nextPhaseName
+  );
+  const contractViolations = contractValidation.violations;
+
   // 4. Artifact validation — phase-specific checks
   const artifactChecks: Array<{ check: string; passed: boolean; detail: string }> = [];
   const warnChecks: Array<{ check: string; passed: boolean; detail: string }> = [];
+
+  // Add contract violations as artifact checks
+  for (const v of contractViolations) {
+    if (v.severity === 'BLOCKING') {
+      artifactChecks.push({ check: `contract_${v.law}`, passed: false, detail: v.description });
+    } else {
+      warnChecks.push({ check: `contract_${v.law}`, passed: false, detail: v.description });
+    }
+  }
 
   if (currentPhase === 'BRAINSTORM') {
     // B0: Must have a defined objective

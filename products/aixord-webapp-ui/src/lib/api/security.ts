@@ -694,6 +694,176 @@ export const securityApi = {
     };
   },
 
+  // ==========================================================================
+  // Resource-Level Classification (HANDOFF-CGC-01 GAP-2)
+  // ==========================================================================
+
+  /**
+   * Classify a resource (SCOPE, DELIVERABLE, MESSAGE, FILE)
+   */
+  async classifyResource(
+    projectId: string,
+    data: {
+      resourceType: string;
+      resourceId: string;
+      classification: string;
+      classificationReason?: string;
+      aiExposureAllowed?: boolean;
+      dataResidency?: string;
+      retentionPolicy?: string;
+    },
+    token: string
+  ): Promise<{
+    success: boolean;
+    resourceType: string;
+    resourceId: string;
+    classification: string;
+    aiExposureAllowed: boolean;
+    retentionPolicy: string | null;
+    retentionExpiresAt: string | null;
+  }> {
+    const response = await request<{
+      success: boolean;
+      resource_type: string;
+      resource_id: string;
+      classification: string;
+      ai_exposure_allowed: boolean;
+      retention_policy: string | null;
+      retention_expires_at: string | null;
+    }>(
+      `/projects/${projectId}/security/classify`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          resource_type: data.resourceType,
+          resource_id: data.resourceId,
+          classification: data.classification,
+          classification_reason: data.classificationReason,
+          ai_exposure_allowed: data.aiExposureAllowed,
+          data_residency: data.dataResidency,
+          retention_policy: data.retentionPolicy,
+        }),
+      },
+      token
+    );
+    return {
+      success: response.success,
+      resourceType: response.resource_type,
+      resourceId: response.resource_id,
+      classification: response.classification,
+      aiExposureAllowed: response.ai_exposure_allowed,
+      retentionPolicy: response.retention_policy,
+      retentionExpiresAt: response.retention_expires_at,
+    };
+  },
+
+  /**
+   * List all resource classifications for a project
+   */
+  async getResourceClassifications(
+    projectId: string,
+    token: string,
+    filters?: { resourceType?: string; classification?: string }
+  ): Promise<Array<{
+    id: string;
+    resourceType: string;
+    resourceId: string;
+    classification: string;
+    classificationReason: string | null;
+    aiExposureAllowed: boolean;
+    dataResidency: string | null;
+    jurisdictionReviewed: boolean;
+    retentionPolicy: string | null;
+    retentionExpiresAt: string | null;
+    classifiedBy: string;
+    classifiedAt: string;
+  }>> {
+    const params = new URLSearchParams();
+    if (filters?.resourceType) params.set('resource_type', filters.resourceType);
+    if (filters?.classification) params.set('classification', filters.classification);
+    const query = params.toString() ? `?${params.toString()}` : '';
+
+    const response = await request<Array<{
+      id: string;
+      resource_type: string;
+      resource_id: string;
+      classification: string;
+      classification_reason: string | null;
+      ai_exposure_allowed: number;
+      data_residency: string | null;
+      jurisdiction_reviewed: number;
+      retention_policy: string | null;
+      retention_expires_at: string | null;
+      classified_by: string;
+      classified_at: string;
+    }>>(
+      `/projects/${projectId}/security/classifications${query}`,
+      {},
+      token
+    );
+
+    return response.map(item => ({
+      id: item.id,
+      resourceType: item.resource_type,
+      resourceId: item.resource_id,
+      classification: item.classification,
+      classificationReason: item.classification_reason,
+      aiExposureAllowed: item.ai_exposure_allowed === 1,
+      dataResidency: item.data_residency,
+      jurisdictionReviewed: item.jurisdiction_reviewed === 1,
+      retentionPolicy: item.retention_policy,
+      retentionExpiresAt: item.retention_expires_at,
+      classifiedBy: item.classified_by,
+      classifiedAt: item.classified_at,
+    }));
+  },
+
+  /**
+   * Get secret access audit log
+   */
+  async getSecretAuditLog(
+    projectId: string,
+    token: string,
+    options?: { limit?: number; secretKey?: string }
+  ): Promise<Array<{
+    id: number;
+    secretKey: string;
+    accessedBy: string;
+    accessedAt: string;
+    accessType: string;
+    ipAddress: string | null;
+    userAgent: string | null;
+  }>> {
+    const params = new URLSearchParams();
+    if (options?.limit) params.set('limit', String(options.limit));
+    if (options?.secretKey) params.set('secret_key', options.secretKey);
+    const query = params.toString() ? `?${params.toString()}` : '';
+
+    const response = await request<Array<{
+      id: number;
+      secret_key: string;
+      accessed_by: string;
+      accessed_at: string;
+      access_type: string;
+      ip_address: string | null;
+      user_agent: string | null;
+    }>>(
+      `/projects/${projectId}/security/secrets/audit${query}`,
+      {},
+      token
+    );
+
+    return response.map(item => ({
+      id: item.id,
+      secretKey: item.secret_key,
+      accessedBy: item.accessed_by,
+      accessedAt: item.accessed_at,
+      accessType: item.access_type,
+      ipAddress: item.ip_address,
+      userAgent: item.user_agent,
+    }));
+  },
+
   /**
    * Validate AI exposure before sending to model
    */
