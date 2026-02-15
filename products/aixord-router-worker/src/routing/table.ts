@@ -22,17 +22,18 @@ export const ROUTING_TABLE: Record<ModelClass, ProviderModel[]> = {
   FAST_ECONOMY: [
     { provider: 'google', model: 'gemini-2.0-flash' },
     { provider: 'openai', model: 'gpt-4o-mini' },
-    { provider: 'anthropic', model: 'claude-haiku-4-5-20251001' }
+    { provider: 'anthropic', model: 'claude-3-5-haiku-20241022' }
   ],
 
   HIGH_QUALITY: [
-    { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929' },
+    { provider: 'anthropic', model: 'claude-3-5-sonnet-20241022' },
     { provider: 'openai', model: 'gpt-4o' },
-    { provider: 'google', model: 'gemini-2.0-pro' }
+    { provider: 'google', model: 'gemini-2.0-pro' },
+    { provider: 'deepseek', model: 'deepseek-chat' }
   ],
 
   FRONTIER: [
-    { provider: 'anthropic', model: 'claude-opus-4-5-20251101' },
+    { provider: 'anthropic', model: 'claude-3-opus-20240229' },
     { provider: 'openai', model: 'gpt-4.5-preview' },
     { provider: 'google', model: 'gemini-2.0-pro' }
   ],
