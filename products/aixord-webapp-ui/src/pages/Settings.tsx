@@ -11,7 +11,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useUserSettings, type SubscriptionTier, type ApiKeys, type AssistanceMode } from '../contexts/UserSettingsContext';
+import { useUserSettings, type SubscriptionTier, type ApiKeys, type AssistanceMode, type ApiKeyMeta } from '../contexts/UserSettingsContext';
 import { billingApi, api, type UsageData, API_BASE } from '../lib/api';
 import { UsageMeter } from '../components/UsageMeter';
 import { TrialBanner } from '../components/TrialBanner';
@@ -71,7 +71,7 @@ const TIER_INFO: Record<SubscriptionTier, { name: string; price: string; feature
 
 export function Settings() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { settings, billingInfo, updateSubscription, updateApiKey, removeApiKey, updatePreferences, refreshSubscription } = useUserSettings();
+  const { settings, billingInfo, apiKeyMetas, updateSubscription, updateApiKey, removeApiKey, updatePreferences, refreshSubscription, refreshApiKeys } = useUserSettings();
   const hasRedirected = useRef(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -118,6 +118,15 @@ export function Settings() {
   // Test API key state (P1.3)
   const [testingProvider, setTestingProvider] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { valid: boolean; message: string }>>({});
+
+  // Reveal key state (HANDOFF-SECURITY-CRITICAL-01)
+  const [revealedKey, setRevealedKey] = useState<{
+    id: string;
+    key: string;
+    provider: string;
+  } | null>(null);
+  // Track which providers are in "edit mode" (user wants to enter new key)
+  const [editingProviders, setEditingProviders] = useState<Set<string>>(new Set());
 
   // Fetch usage data when authenticated
   useEffect(() => {
@@ -180,12 +189,17 @@ export function Settings() {
       }
 
       // Validate all keys before saving
+      // HANDOFF-SECURITY-CRITICAL-01: Skip validation for saved-but-unchanged keys
       const validationErrors: string[] = [];
       const providers: (keyof ApiKeys)[] = ['anthropic', 'openai', 'google', 'deepseek'];
-      
+
       for (const provider of providers) {
         const key = settings.apiKeys[provider];
-        if (key && key.trim() !== '') {
+        const meta = getKeyMeta(provider);
+        const isSavedPreview = meta && key === meta.key_preview;
+
+        // Only validate new/changed keys, not masked previews
+        if (key && key.trim() !== '' && !isSavedPreview) {
           const validation = validateApiKey(provider, key);
           if (!validation.valid) {
             validationErrors.push(`${provider}: ${validation.error}`);
@@ -203,10 +217,19 @@ export function Settings() {
       }
 
       // Save API keys to backend for BYOK users
+      // HANDOFF-SECURITY-CRITICAL-01: Skip providers with unchanged saved keys
       const savePromises = providers.map(async (provider) => {
         const key = settings.apiKeys[provider];
+        const meta = getKeyMeta(provider);
+        const isEditing = editingProviders.has(provider);
+        const isSavedPreview = meta && key === meta.key_preview;
 
-        // CASE 1: Empty key → DELETE
+        // Skip if provider has saved key and user hasn't changed it
+        if (meta && !isEditing && isSavedPreview) {
+          return; // No change needed
+        }
+
+        // CASE 1: Empty key or editing with empty → DELETE
         if (!key || key.trim() === '') {
           const response = await fetch(`${API_BASE}/api-keys/${provider}`, {
             method: 'DELETE',
@@ -220,8 +243,8 @@ export function Settings() {
             throw new Error(error.error || `Failed to delete ${provider} key`);
           }
         }
-        // CASE 2: Non-empty key → CREATE/UPDATE
-        else {
+        // CASE 2: Non-empty new key → CREATE/UPDATE
+        else if (!isSavedPreview) {
           const response = await fetch(`${API_BASE}/api-keys`, {
             method: 'POST',
             headers: {
@@ -243,10 +266,13 @@ export function Settings() {
       });
 
       await Promise.all(savePromises);
-      
+
+      // Clear editing state and refresh key metadata
+      setEditingProviders(new Set());
+
       // Dispatch event to trigger cache invalidation and state refresh
       window.dispatchEvent(new Event('api-keys-updated'));
-      
+
       setSaveMessage({ type: 'success', text: 'Settings saved successfully. Keys are now active!' });
     } catch (error) {
       console.error('Save error:', error);
@@ -324,6 +350,58 @@ export function Settings() {
     } finally {
       setTestingProvider(null);
     }
+  };
+
+  /**
+   * Reveal a saved API key with password re-authentication
+   * HANDOFF-SECURITY-CRITICAL-01
+   */
+  const handleRevealKey = async (keyId: string) => {
+    const password = prompt('Enter your password to view this API key:');
+    if (!password) return;
+
+    try {
+      const token = localStorage.getItem('aixord_token');
+      const response = await fetch(`${API_BASE}/api-keys/${keyId}/reveal`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.error || 'Failed to reveal API key');
+        return;
+      }
+
+      const data = await response.json();
+      setRevealedKey({
+        id: keyId,
+        key: data.api_key,
+        provider: data.provider,
+      });
+
+      // Auto-hide after 30 seconds
+      setTimeout(() => {
+        setRevealedKey(null);
+      }, 30000);
+    } catch (error) {
+      console.error('Reveal key error:', error);
+      alert('Failed to reveal API key');
+    }
+  };
+
+  /** Helper: get the key meta for a provider */
+  const getKeyMeta = (provider: string): ApiKeyMeta | undefined => {
+    return apiKeyMetas.find(m => m.provider === provider);
+  };
+
+  /** Check if a provider has a saved key on the backend */
+  const hasSavedKey = (provider: string): boolean => {
+    return apiKeyMetas.some(m => m.provider === provider);
   };
 
   const handlePreferenceChange = <K extends keyof typeof settings.preferences>(
@@ -710,121 +788,94 @@ export function Settings() {
               </p>
 
               <div className="space-y-4">
-                {/* Anthropic */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Anthropic API Key
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      value={settings.apiKeys.anthropic || ''}
-                      onChange={(e) => handleApiKeyChange('anthropic', e.target.value)}
-                      placeholder="sk-ant-..."
-                      className="flex-1 px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-                    />
-                    <button
-                      onClick={() => handleTestKey('anthropic')}
-                      disabled={testingProvider === 'anthropic' || !settings.apiKeys.anthropic}
-                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
-                    >
-                      {testingProvider === 'anthropic' ? 'Testing...' : 'Test'}
-                    </button>
-                  </div>
-                  {testResults['anthropic'] && (
-                    <div className={`mt-2 p-2 rounded-lg text-sm ${testResults['anthropic'].valid ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
-                      {testResults['anthropic'].valid ? '✅' : '❌'} {testResults['anthropic'].message}
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">For Claude models (Opus, Sonnet, Haiku)</p>
-                </div>
+                {/* HANDOFF-SECURITY-CRITICAL-01: Data-driven provider key sections */}
+                {([
+                  { provider: 'anthropic' as keyof ApiKeys, label: 'Anthropic API Key', placeholder: 'sk-ant-...', description: 'For Claude models (Opus, Sonnet, Haiku)' },
+                  { provider: 'openai' as keyof ApiKeys, label: 'OpenAI API Key', placeholder: 'sk-...', description: 'For GPT-4o, GPT-4.5 models' },
+                  { provider: 'google' as keyof ApiKeys, label: 'Google AI API Key', placeholder: 'AIza...', description: 'For Gemini models' },
+                  { provider: 'deepseek' as keyof ApiKeys, label: 'DeepSeek API Key', placeholder: 'sk-...', description: 'For DeepSeek models (ultra-cheap option)' },
+                ]).map(({ provider, label, placeholder, description }) => {
+                  const meta = getKeyMeta(provider);
+                  const saved = hasSavedKey(provider);
+                  const isEditing = editingProviders.has(provider);
 
-                {/* OpenAI */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    OpenAI API Key
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      value={settings.apiKeys.openai || ''}
-                      onChange={(e) => handleApiKeyChange('openai', e.target.value)}
-                      placeholder="sk-..."
-                      className="flex-1 px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-                    />
-                    <button
-                      onClick={() => handleTestKey('openai')}
-                      disabled={testingProvider === 'openai' || !settings.apiKeys.openai}
-                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
-                    >
-                      {testingProvider === 'openai' ? 'Testing...' : 'Test'}
-                    </button>
-                  </div>
-                  {testResults['openai'] && (
-                    <div className={`mt-2 p-2 rounded-lg text-sm ${testResults['openai'].valid ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
-                      {testResults['openai'].valid ? '✅' : '❌'} {testResults['openai'].message}
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">For GPT-4o, GPT-4.5 models</p>
-                </div>
+                  return (
+                    <div key={provider}>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">
+                        {label}
+                      </label>
 
-                {/* Google */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Google AI API Key
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      value={settings.apiKeys.google || ''}
-                      onChange={(e) => handleApiKeyChange('google', e.target.value)}
-                      placeholder="AIza..."
-                      className="flex-1 px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-                    />
-                    <button
-                      onClick={() => handleTestKey('google')}
-                      disabled={testingProvider === 'google' || !settings.apiKeys.google}
-                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
-                    >
-                      {testingProvider === 'google' ? 'Testing...' : 'Test'}
-                    </button>
-                  </div>
-                  {testResults['google'] && (
-                    <div className={`mt-2 p-2 rounded-lg text-sm ${testResults['google'].valid ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
-                      {testResults['google'].valid ? '✅' : '❌'} {testResults['google'].message}
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">For Gemini models</p>
-                </div>
+                      {/* Saved key: show masked preview (SECURITY) */}
+                      {saved && !isEditing ? (
+                        <div className="flex gap-2 items-center">
+                          <div className="flex-1 px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg">
+                            <code className="text-sm text-gray-400 font-mono">
+                              {meta?.key_preview || '***'}
+                            </code>
+                          </div>
+                          <button
+                            onClick={() => meta && handleRevealKey(meta.id)}
+                            className="px-3 py-2 text-xs text-violet-400 hover:text-violet-300 border border-violet-500/30 rounded-lg hover:bg-violet-500/10 transition-colors"
+                          >
+                            View
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingProviders(prev => new Set([...prev, provider]));
+                              updateApiKey(provider, '');
+                            }}
+                            className="px-3 py-2 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg hover:bg-gray-700/50 transition-colors"
+                          >
+                            Change
+                          </button>
+                        </div>
+                      ) : (
+                        /* No saved key or editing: show input */
+                        <div className="flex gap-2">
+                          <input
+                            type="password"
+                            value={isEditing ? (settings.apiKeys[provider] || '') : (settings.apiKeys[provider] || '')}
+                            onChange={(e) => handleApiKeyChange(provider, e.target.value)}
+                            placeholder={placeholder}
+                            className="flex-1 px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
+                          />
+                          <button
+                            onClick={() => handleTestKey(provider)}
+                            disabled={testingProvider === provider || !settings.apiKeys[provider]}
+                            className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                          >
+                            {testingProvider === provider ? 'Testing...' : 'Test'}
+                          </button>
+                          {isEditing && (
+                            <button
+                              onClick={() => {
+                                setEditingProviders(prev => {
+                                  const next = new Set(prev);
+                                  next.delete(provider);
+                                  return next;
+                                });
+                                // Restore preview value
+                                if (meta) {
+                                  updateApiKey(provider, meta.key_preview);
+                                }
+                              }}
+                              className="px-3 py-2 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg hover:bg-gray-700/50 transition-colors"
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      )}
 
-                {/* DeepSeek */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    DeepSeek API Key
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="password"
-                      value={settings.apiKeys.deepseek || ''}
-                      onChange={(e) => handleApiKeyChange('deepseek', e.target.value)}
-                      placeholder="sk-..."
-                      className="flex-1 px-4 py-2 bg-gray-900/50 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-violet-500"
-                    />
-                    <button
-                      onClick={() => handleTestKey('deepseek')}
-                      disabled={testingProvider === 'deepseek' || !settings.apiKeys.deepseek}
-                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
-                    >
-                      {testingProvider === 'deepseek' ? 'Testing...' : 'Test'}
-                    </button>
-                  </div>
-                  {testResults['deepseek'] && (
-                    <div className={`mt-2 p-2 rounded-lg text-sm ${testResults['deepseek'].valid ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
-                      {testResults['deepseek'].valid ? '✅' : '❌'} {testResults['deepseek'].message}
+                      {testResults[provider] && (
+                        <div className={`mt-2 p-2 rounded-lg text-sm ${testResults[provider].valid ? 'bg-green-500/10 text-green-400 border border-green-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
+                          {testResults[provider].valid ? '✅' : '❌'} {testResults[provider].message}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">{description}</p>
                     </div>
-                  )}
-                  <p className="text-xs text-gray-500 mt-1">For DeepSeek models (ultra-cheap option)</p>
-                </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1119,6 +1170,60 @@ export function Settings() {
               >
                 {isProcessing ? 'Processing...' : 'Continue to Checkout'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reveal Key Modal (HANDOFF-SECURITY-CRITICAL-01) */}
+      {revealedKey && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-xl border border-gray-700 max-w-lg w-full p-6">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-lg font-semibold text-white">
+                API Key Revealed
+              </h3>
+              <button
+                onClick={() => setRevealedKey(null)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <div className="text-sm text-gray-400 mb-2">
+                Provider: <span className="text-white capitalize">{revealedKey.provider}</span>
+              </div>
+              <div className="bg-gray-900 rounded-lg p-3 break-all border border-gray-700">
+                <code className="text-sm text-green-400 font-mono">
+                  {revealedKey.key}
+                </code>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(revealedKey.key);
+                  alert('API key copied to clipboard');
+                }}
+                className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-500 text-sm font-medium transition-colors"
+              >
+                Copy to Clipboard
+              </button>
+              <button
+                onClick={() => setRevealedKey(null)}
+                className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm font-medium transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4 text-xs text-gray-500">
+              This key will auto-hide in 30 seconds. Copy it now if needed.
             </div>
           </div>
         </div>

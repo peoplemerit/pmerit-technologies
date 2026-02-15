@@ -192,3 +192,47 @@ export async function verifyPasswordPBKDF2(
   const result = await hashPasswordPBKDF2(password, salt, iterations);
   return result.hash === storedHash;
 }
+
+// =============================================================================
+// API KEY MASKING (HANDOFF-SECURITY-CRITICAL-01)
+// =============================================================================
+
+/**
+ * Safely mask an API key for display in UI.
+ *
+ * Format: "sk-ant-...xyz" (first 7 chars + last 3 chars)
+ *
+ * @param encryptedKey - AES-256-GCM encrypted key from database
+ * @param encryptionKey - Encryption key from environment
+ * @returns Masked key preview safe for client display
+ */
+export async function maskApiKey(encryptedKey: string, encryptionKey: string | undefined): Promise<string> {
+  try {
+    // Decrypt temporarily ONLY to generate preview
+    let plaintext: string;
+    if (!encryptionKey) {
+      plaintext = encryptedKey; // No encryption key = plaintext legacy key
+    } else {
+      try {
+        plaintext = await decryptAESGCM(encryptedKey, encryptionKey);
+      } catch {
+        // Not encrypted (plaintext legacy key) — use as-is
+        plaintext = encryptedKey;
+      }
+    }
+
+    // Handle edge cases
+    if (!plaintext || plaintext.length < 10) {
+      return '***'; // Too short to safely preview
+    }
+
+    // Return first 7 + last 3 characters
+    const prefix = plaintext.substring(0, 7);
+    const suffix = plaintext.substring(plaintext.length - 3);
+
+    return `${prefix}...${suffix}`;
+  } catch (error) {
+    console.error('Error masking API key:', error);
+    return '***'; // Fail safe
+  }
+}

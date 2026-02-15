@@ -8,7 +8,7 @@ import type { Env, Provider } from '../types';
 import { nanoid } from 'nanoid';
 import { requireAuth } from '../middleware/requireAuth';
 import { invalidateKeyCache } from '../routing/key-resolver';
-import { encryptAESGCM, decryptAESGCM } from '../utils/crypto';
+import { encryptAESGCM, decryptAESGCM, maskApiKey, verifyPasswordPBKDF2 } from '../utils/crypto';
 
 /**
  * Decrypt an API key, with transparent migration for plaintext keys.
@@ -75,6 +75,11 @@ function validateApiKey(provider: string, apiKey: string): { valid: boolean; err
 /**
  * GET /api-keys
  * List all configured API keys for the current user
+ *
+ * SECURITY (HANDOFF-SECURITY-CRITICAL-01):
+ * Returns only masked key previews (e.g. "sk-ant-...xyz").
+ * Full plaintext keys are NEVER returned in GET responses.
+ * Use POST /api-keys/:id/reveal with password re-auth to view full key.
  */
 app.get('/', async (c) => {
   const userId = c.get('userId') as string | undefined;
@@ -89,19 +94,132 @@ app.get('/', async (c) => {
     ORDER BY provider
   `).bind(userId).all();
 
-  // Decrypt API keys for response (HANDOFF-COPILOT-AUDIT-01)
+  // Return only safe metadata with masked preview (HANDOFF-SECURITY-CRITICAL-01)
   const encKey = c.env.API_KEY_ENCRYPTION_KEY;
-  const decryptedKeys = await Promise.all(
+  const safeKeys = await Promise.all(
     (keys.results || []).map(async (row: any) => ({
-      ...row,
-      api_key: await decryptApiKey(row.api_key, encKey),
+      id: row.id,
+      provider: row.provider,
+      key_preview: await maskApiKey(row.api_key, encKey),
+      label: row.label,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      // SECURITY: NEVER include api_key, encrypted_key, or decrypted value
     }))
   );
 
   return c.json({
     success: true,
-    keys: decryptedKeys,
-    count: decryptedKeys.length
+    keys: safeKeys,
+    count: safeKeys.length
+  });
+});
+
+/**
+ * POST /api-keys/:id/reveal
+ *
+ * Reveal full API key with password re-authentication.
+ * Returns plaintext key for one-time viewing (30-second frontend timeout).
+ *
+ * SECURITY (HANDOFF-SECURITY-CRITICAL-01):
+ * - Requires password re-authentication (no token reuse)
+ * - Verifies key ownership (user_id match)
+ * - Logs both success and failure attempts
+ * - Single-use response (not cached)
+ */
+app.post('/:id/reveal', async (c) => {
+  const userId = c.get('userId') as string | undefined;
+  if (!userId) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const { id } = c.req.param();
+  let body: { password?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ success: false, error: 'Invalid request body' }, 400);
+  }
+
+  // Require password re-authentication
+  if (!body.password) {
+    return c.json({
+      success: false,
+      error: 'Password required to reveal API key'
+    }, 401);
+  }
+
+  // Verify password
+  const user = await c.env.DB.prepare(`
+    SELECT password_hash, password_salt, hash_algorithm FROM users WHERE id = ?
+  `).bind(userId).first<{
+    password_hash: string;
+    password_salt: string | null;
+    hash_algorithm: string | null;
+  }>();
+
+  if (!user) {
+    return c.json({ success: false, error: 'User not found' }, 404);
+  }
+
+  // Only support PBKDF2 for reveal (legacy SHA-256 users must login first to upgrade)
+  if (!user.password_salt || user.hash_algorithm !== 'pbkdf2') {
+    return c.json({
+      success: false,
+      error: 'Please log out and log back in before using this feature'
+    }, 400);
+  }
+
+  const isValidPassword = await verifyPasswordPBKDF2(
+    body.password,
+    user.password_salt,
+    user.password_hash
+  );
+
+  if (!isValidPassword) {
+    // Log failed reveal attempt
+    console.log(JSON.stringify({
+      type: 'API_KEY_REVEAL_FAILED',
+      user_id: userId.substring(0, 8) + '...',
+      key_id: id,
+      reason: 'invalid_password',
+      timestamp: new Date().toISOString()
+    }));
+
+    return c.json({ success: false, error: 'Invalid password' }, 401);
+  }
+
+  // Verify key ownership
+  const keyRecord = await c.env.DB.prepare(`
+    SELECT api_key, provider
+    FROM user_api_keys
+    WHERE id = ? AND user_id = ?
+  `).bind(id, userId).first<{
+    api_key: string;
+    provider: string;
+  }>();
+
+  if (!keyRecord) {
+    return c.json({ success: false, error: 'API key not found' }, 404);
+  }
+
+  // Decrypt and return
+  const plaintextKey = await decryptApiKey(keyRecord.api_key, c.env.API_KEY_ENCRYPTION_KEY);
+
+  // Log successful reveal
+  console.log(JSON.stringify({
+    type: 'API_KEY_REVEALED',
+    user_id: userId.substring(0, 8) + '...',
+    key_id: id,
+    provider: keyRecord.provider,
+    timestamp: new Date().toISOString()
+  }));
+
+  return c.json({
+    success: true,
+    api_key: plaintextKey,
+    provider: keyRecord.provider,
+    expires_in_seconds: 30 // Frontend auto-hide hint
   });
 });
 

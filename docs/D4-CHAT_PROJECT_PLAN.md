@@ -126,10 +126,11 @@ The webapp UI (`products/aixord-webapp-ui/docs/`) no longer maintains a duplicat
 | HANDOFF-COPILOT-AUDIT-03 | 13 triaged | `products/aixord-router-worker/docs/THIRD_AUDIT_DECISIONS.md` |
 | HANDOFF-COPILOT-AUDIT-04 | 13 triaged | `products/aixord-router-worker/docs/FOURTH_AUDIT_DECISIONS.md` |
 | HANDOFF-COPILOT-AUDIT-05 | 9 triaged | `products/aixord-router-worker/docs/FIFTH_AUDIT_DECISIONS.md` |
+| HANDOFF-SECURITY-CRITICAL-01 | P0 fix: API key exposure | `sandbox/HANDOFF-SECURITY-CRITICAL-01.md` |
 
 ---
 
-*MOSA Documentation Architecture — Session 55*
-*D4-CHAT Project Plan Manifest v18.1*
+*MOSA Documentation Architecture — Session 56*
+*D4-CHAT Project Plan Manifest v18.2*
 *AIXORD v4.6 — MOSA Baseline Formalized*
 *PMERIT Technologies LLC*

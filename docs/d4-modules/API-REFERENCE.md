@@ -1,9 +1,9 @@
 # D4-CHAT: API Reference
 
-**Module:** Complete endpoint matrix (200+ endpoints across 24 modules), router execute contract (§10)
+**Module:** Complete endpoint matrix (200+ endpoints across 25 modules), router execute contract (§10)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** SLOW-GROWTH
-**Last Updated:** 2026-02-15 (Session 55)
+**Last Updated:** 2026-02-15 (Session 56)
 
 ---
 
@@ -137,6 +137,11 @@
 | **Audit Gate (3)** | /api/v1/projects/:id/gates/ga-aud | GET | ✅ | agents.ts |
 | | /api/v1/projects/:id/agents/diminishing-returns | GET | ✅ | agents.ts |
 | | /api/v1/projects/:id/agents/audit-incremental | POST | ✅ | agents.ts |
+| **API Keys (5)** | /api/v1/api-keys | GET | ✅ | api-keys.ts |
+| | /api/v1/api-keys | POST | ✅ | api-keys.ts |
+| | /api/v1/api-keys/:id/reveal | POST | ✅ | api-keys.ts |
+| | /api/v1/api-keys/:provider | DELETE | ✅ | api-keys.ts |
+| | /api/v1/api-keys/test | POST | ✅ | api-keys.ts |
 
 ### 10.2 Router Execute Contract
 

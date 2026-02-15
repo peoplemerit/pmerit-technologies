@@ -37,6 +37,13 @@ export interface ApiKeys {
   deepseek?: string;
 }
 
+/** Masked key previews and IDs from backend (HANDOFF-SECURITY-CRITICAL-01) */
+export interface ApiKeyMeta {
+  id: string;
+  provider: string;
+  key_preview: string;
+}
+
 export interface BillingInfo {
   periodEnd: string | null;
   stripeCustomerId: string | null;
@@ -60,6 +67,7 @@ export interface UserSettings {
 interface UserSettingsContextType {
   settings: UserSettings;
   billingInfo: BillingInfo;
+  apiKeyMetas: ApiKeyMeta[];  // HANDOFF-SECURITY-CRITICAL-01: masked previews
   updateSubscription: (tier: SubscriptionTier, keyMode: KeyMode) => void;
   updateApiKey: (provider: keyof ApiKeys, key: string) => void;
   removeApiKey: (provider: keyof ApiKeys) => void;
@@ -67,6 +75,7 @@ interface UserSettingsContextType {
   hasApiKey: (provider: keyof ApiKeys) => boolean;
   getActiveApiKey: () => { provider: string; key: string } | null;
   refreshSubscription: () => Promise<void>;
+  refreshApiKeys: () => Promise<void>;  // HANDOFF-SECURITY-CRITICAL-01
   isLoading: boolean;
 }
 
@@ -134,11 +143,17 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, token } = useAuth();
   const [settings, setSettings] = useState<UserSettings>(defaultSettings);
   const [billingInfo, setBillingInfo] = useState<BillingInfo>(defaultBillingInfo);
+  const [apiKeyMetas, setApiKeyMetas] = useState<ApiKeyMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Fetch API keys from backend
-  const fetchApiKeysFromBackend = async (): Promise<ApiKeys> => {
-    if (!token) return {};
+  /**
+   * Fetch API keys from backend.
+   * SECURITY (HANDOFF-SECURITY-CRITICAL-01):
+   * Backend now returns masked key_preview instead of plaintext api_key.
+   * We store both the preview metadata and a flag per provider indicating a key exists.
+   */
+  const fetchApiKeysFromBackend = async (): Promise<{ keys: ApiKeys; metas: ApiKeyMeta[] }> => {
+    if (!token) return { keys: {}, metas: [] };
 
     try {
       // Session 6: Use unified API_BASE from config
@@ -150,21 +165,28 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) {
         console.warn('[SETTINGS] Failed to fetch API keys from backend');
-        return {};
+        return { keys: {}, metas: [] };
       }
 
       const data = await response.json();
       const keys: ApiKeys = {};
-      
+      const metas: ApiKeyMeta[] = [];
+
       for (const record of data.keys || []) {
-        keys[record.provider as keyof ApiKeys] = record.api_key;
+        // Store the masked preview as a placeholder (indicates key exists)
+        keys[record.provider as keyof ApiKeys] = record.key_preview || '***';
+        metas.push({
+          id: record.id,
+          provider: record.provider,
+          key_preview: record.key_preview || '***',
+        });
       }
 
       console.log('[SETTINGS] Fetched API keys from backend:', Object.keys(keys));
-      return keys;
+      return { keys, metas };
     } catch (error) {
       console.error('[SETTINGS] Error fetching API keys:', error);
-      return {};
+      return { keys: {}, metas: [] };
     }
   };
 
@@ -207,13 +229,14 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
       if (token) {
         refreshSubscription();
         
-        // Sync API keys from backend
-        fetchApiKeysFromBackend().then(backendKeys => {
+        // Sync API keys from backend (HANDOFF-SECURITY-CRITICAL-01: masked previews)
+        fetchApiKeysFromBackend().then(({ keys: backendKeys, metas }) => {
           if (Object.keys(backendKeys).length > 0) {
             setSettings(prev => ({
               ...prev,
               apiKeys: { ...prev.apiKeys, ...backendKeys }
             }));
+            setApiKeyMetas(metas);
             console.log('[SETTINGS] Synced API keys with backend');
           }
         });
@@ -229,11 +252,12 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleKeysUpdated = async () => {
       console.log('[SETTINGS] Keys updated event received, resyncing...');
-      const backendKeys = await fetchApiKeysFromBackend();
+      const { keys: backendKeys, metas } = await fetchApiKeysFromBackend();
       setSettings(prev => ({
         ...prev,
         apiKeys: backendKeys
       }));
+      setApiKeyMetas(metas);
     };
 
     window.addEventListener('api-keys-updated', handleKeysUpdated);
@@ -305,11 +329,22 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
     return null;
   };
 
+  // HANDOFF-SECURITY-CRITICAL-01: Refresh API key metadata from backend
+  const refreshApiKeys = async () => {
+    const { keys: backendKeys, metas } = await fetchApiKeysFromBackend();
+    setSettings(prev => ({
+      ...prev,
+      apiKeys: backendKeys
+    }));
+    setApiKeyMetas(metas);
+  };
+
   return (
     <UserSettingsContext.Provider
       value={{
         settings,
         billingInfo,
+        apiKeyMetas,
         updateSubscription,
         updateApiKey,
         removeApiKey,
@@ -317,6 +352,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
         hasApiKey,
         getActiveApiKey,
         refreshSubscription,
+        refreshApiKeys,
         isLoading,
       }}
     >
