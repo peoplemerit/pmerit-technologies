@@ -1,12 +1,26 @@
 # D4-CHAT PROJECT PLAN — Manifest
 
 **Document Type:** Module Manifest (MOSA Architecture)
-**Version:** 17.0 (Session 53 — Modular Documentation Architecture)
+**Version:** 18.0 (Session 54 — MOSA Baseline Formalization)
 **Entity:** PMERIT Technologies LLC
-**Governance:** AIXORD v4.5.6
-**Last Updated:** 2026-02-15 (Session 53)
+**Governance:** AIXORD v4.6
+**Last Updated:** 2026-02-15 (Session 54)
 
 > **This file is a manifest.** The full project plan has been decomposed into 13 independently-loadable modules using MOSA (Modular Open Systems Approach) to optimize AI context window usage. Load modules ON DEMAND based on the task at hand.
+
+---
+
+## MOSA COMPLIANCE ATTESTATION
+
+**AIXORD v4.6 Requirement:** This project implements MOSA (L-MOSA1–L-MOSA5)
+
+| Metric | Target | Actual | Status |
+|--------|--------|--------|--------|
+| Manifest size | ≤150 lines | 135 lines | PASS |
+| Startup context | ≤500 lines | ~322 lines | PASS |
+| Module count | N/A | 13 modules | PASS |
+| Dual-copy elimination | Required | Implemented | PASS |
+| Growth classes defined | Required | All 13 classified | PASS |
 
 ---
 
@@ -46,7 +60,7 @@
 
 ### AIXORD Baseline Modules (`docs/abl-modules/`) — *Planned for Commit 2*
 
-The AIXORD Official Acceptable Baseline v4.5 (6,269 lines) will be decomposed into 14 part-specific modules. The canonical file `AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_5.md` is retained for human reading.
+The AIXORD Official Acceptable Baseline v4.6 (6,534 lines) will be decomposed into 15 part-specific modules. The canonical file `AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md` is retained for human reading.
 
 ---
 
@@ -90,6 +104,10 @@ npx vite dev                      # Dev server (port 5173)
 # Deployment
 npx wrangler deploy               # Worker to Cloudflare
 npx wrangler pages deploy dist    # Frontend to Pages
+
+# Governance baseline
+# AIXORD v4.6 — docs/AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md (6,534 lines, 15 parts)
+# Compact Core — docs/AIXORD_v4_6_COMPACT_CORE.md
 ```
 
 ---
@@ -111,6 +129,7 @@ The webapp UI (`products/aixord-webapp-ui/docs/`) no longer maintains a duplicat
 
 ---
 
-*MOSA Documentation Architecture — Session 53*
-*D4-CHAT Project Plan Manifest v17.0*
+*MOSA Documentation Architecture — Session 54*
+*D4-CHAT Project Plan Manifest v18.0*
+*AIXORD v4.6 — MOSA Baseline Formalized*
 *PMERIT Technologies LLC*

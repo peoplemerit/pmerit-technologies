@@ -1,8 +1,8 @@
-# AIXORD v4.5 COMPACT CORE
+# AIXORD v4.6 COMPACT CORE
 
-Version: 4.5-C | Portable Governance | <20000 chars
-Source: AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_5 (canonical)
-Patches: PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PATCH-GCP-01, PATCH-GKDL-01, PATCH-SPG-01, **PATCH-CCS-01**, **ENH-4/5/6 (v4.4.1)**, **PATCH-LEM-01 (v4.4.2)**, **HO-BRAINSTORM-VALUE-01 (v4.4.2)**, **HO-PLAN-BLUEPRINT-01 (v4.4.2)**, **HO-BLUEPRINT-EXECUTE-01 (v4.4.2)**, **HO-INTEGRITY-EXECUTE-01 (v4.4.2)**, **HO-DOCTRINE-VALUE-01 (v4.4.2)**, **HO-DISCOVER-BRAINSTORM-TOKEN-01 (v4.4.2)**, **HO-INTEGRITY-AVL-01 (v4.4.2)**, **HO-SECURITY-ROTATION-01 (v4.4.2)**, **PATCH-SCOPE-CLARIFY-01 (v4.4.3)**, **PATCH-COMPACT-CONTRACTS-01 (v4.4.3)**, **PATCH-NUMBERING-01 (v4.4.3)**, **PATCH-ENG-01 (v4.5)**
+Version: 4.6-C | Portable Governance | <25000 chars
+Source: AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6 (canonical)
+Patches: PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PATCH-GCP-01, PATCH-GKDL-01, PATCH-SPG-01, **PATCH-CCS-01**, **ENH-4/5/6 (v4.4.1)**, **PATCH-LEM-01 (v4.4.2)**, **HO-BRAINSTORM-VALUE-01 (v4.4.2)**, **HO-PLAN-BLUEPRINT-01 (v4.4.2)**, **HO-BLUEPRINT-EXECUTE-01 (v4.4.2)**, **HO-INTEGRITY-EXECUTE-01 (v4.4.2)**, **HO-DOCTRINE-VALUE-01 (v4.4.2)**, **HO-DISCOVER-BRAINSTORM-TOKEN-01 (v4.4.2)**, **HO-INTEGRITY-AVL-01 (v4.4.2)**, **HO-SECURITY-ROTATION-01 (v4.4.2)**, **PATCH-SCOPE-CLARIFY-01 (v4.4.3)**, **PATCH-COMPACT-CONTRACTS-01 (v4.4.3)**, **PATCH-NUMBERING-01 (v4.4.3)**, **PATCH-ENG-01 (v4.5)**, **PATCH-MOSA-01 (v4.6)**
 
 ---
 
@@ -22,6 +22,8 @@ Patches: PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PA
 **Total Gates:** 29
 **Enhancement:** ENH:FS=FileSystem | ENH:HR=HallucinationReliability | ENH:OA=OutputAwareness | ENH:2M=TwoModel | ENH:IE=ImageEvidence | ENH:PD=ProgressiveDisclosure | ENH:UM=UsageMetrics
 **Execution Doctrine:** EX:LEM=LayeredExecutionMode (non-gate, inside EXECUTE)
+**Documentation:** MOSA=ModularOptimizedSessionArchitecture | MAN=Manifest | MOD=Module | CTX=ContextBudget
+**Growth Classes:** STATIC | SEMI-STATIC | SLOW-GROWTH | CAPPED | ROLLING-WINDOW | ARCHIVAL
 **Session:** SSC:SEQ=SequenceNumber | SSC:PREV=PreviousFile | SSC:DRIFT=DriftDetected
 **Reconciliation:** REC:PL=Planned | REC:CL=Claimed | REC:VE=Verified | REC:DIV=Divergence
 **Data Classification:** DC:PII | DC:PHI | DC:FIN | DC:LEG | DC:MIN
@@ -523,7 +525,65 @@ All 10 complete → DECISION phase authorized.
 
 ---
 
-## 9. ARTIFACT TYPES
+## 9. DOCUMENTATION ARCHITECTURE (L-MOSA) — NEW v4.6
+
+### Normative Laws
+```
+L-MOSA1: IF monolithic_docs > 1500 lines → HALT; require modularization
+L-MOSA2: Manifest pattern mandatory: index file ≤150 lines + module directory
+L-MOSA3: Session startup context ≤500 lines (manifest + critical modules only)
+L-MOSA4: Each module MUST declare: scope, growth class, when-to-read
+L-MOSA5: Dual-copy elimination mandatory; canonical location + pointer pattern only
+```
+
+### Module Structure
+```
+Module Header: [Name] | Scope | Growth Class | Dependencies | When To Read | Last Updated
+Content Rules: Single domain/concern, 100-400 lines target, max 800 (HALT if exceeded), no cross-module duplication
+```
+
+### Growth Class Taxonomy
+| Class | Definition | Management |
+|-------|------------|------------|
+| **STATIC** | Never changes | Read once, cache |
+| **SEMI-STATIC** | Rare updates (<10 lines/year) | Read on major changes |
+| **SLOW-GROWTH** | Periodic additions (10-50 lines/year) | Read on demand |
+| **CAPPED** | Bounded growth (max N items) | Read when editing |
+| **ROLLING-WINDOW** | Fixed window, archive old | Auto-archive, never exceed window |
+| **ARCHIVAL** | Unbounded sink | NEVER load at startup; reference only |
+
+### Context Budget
+```
+Startup_Context = MANIFEST + Σ(CRITICAL_MODULES)  where CRITICAL = {STATUS, ROADMAP, RECOVERY}
+Target: ≤500 lines | Warning: >400 | Critical: >500 → HALT
+Task_Context = Startup_Context + Σ(TASK_MODULES)  from Module Map "When To Read"
+```
+
+### Manifest Requirements (5 mandatory sections, ≤150 lines total)
+1. MOSA Compliance Attestation (5-10 rows)
+2. Quick Status (critical metrics, <10 rows)
+3. Module Map (all modules + growth class + when-to-read, <50 rows)
+4. Context Budget (startup vs on-demand, 3-5 rows)
+5. Recovery Commands (session continuity, <10 rows)
+
+### Dual-Copy Elimination (L-MOSA5)
+- ONE canonical location (e.g., `docs/`)
+- Pointer files only in other locations (README.md with link)
+- NEVER manual sync of full duplicates
+
+### Gate Integration — GA:DC Enhancement
+GA:DC requires: manifest ≤150 lines, startup ≤500 lines, all modules classified, no dual-copies, acyclic dependencies, all cross-refs resolve (L-MOSA)
+
+### HALT Conditions (L-MOSA)
+- **Monolithic docs >1500 lines without modularization** — NEW v4.6
+- **Manifest >150 lines** — NEW v4.6
+- **Startup context >500 lines** — NEW v4.6
+- **Module >800 lines without partition plan** — NEW v4.6
+- **Dual-copy detected** — NEW v4.6
+
+---
+
+## 10. ARTIFACT TYPES
 
 ### Core Artifacts
 | Artifact | Purpose |
@@ -589,7 +649,7 @@ All 10 complete → DECISION phase authorized.
 
 ---
 
-## 10. MINIMUM VIABLE STATE
+## 11. MINIMUM VIABLE STATE
 
 ```json
 {"_note":"STATE is non-authoritative; artifacts override on conflict",
@@ -611,7 +671,7 @@ All 10 complete → DECISION phase authorized.
 
 ---
 
-## 11. MINIMUM VIABLE HANDOFF
+## 12. MINIMUM VIABLE HANDOFF
 
 ```
 ---
@@ -634,7 +694,7 @@ rebind_required: true
 
 ---
 
-## 12. RECONCILIATION TRIAD (GCP-01)
+## 13. RECONCILIATION TRIAD (GCP-01)
 
 Before LOCK:
 1. List all PLANNED deliverables and acceptance criteria
@@ -649,7 +709,7 @@ NO LOCK WITHOUT RECONCILIATION.
 
 ---
 
-## 13. AI EXPOSURE CLASSIFICATION (SPG-01)
+## 14. AI EXPOSURE CLASSIFICATION (SPG-01)
 
 | Classification | AI Exposure |
 |----------------|-------------|
@@ -663,7 +723,7 @@ NO LOCK WITHOUT RECONCILIATION.
 
 ---
 
-## 14. SECURITY GATES QUICK REFERENCE
+## 15. SECURITY GATES QUICK REFERENCE
 
 | Gate | Phase | Purpose |
 |------|-------|---------|
@@ -676,7 +736,7 @@ NO LOCK WITHOUT RECONCILIATION.
 
 ---
 
-## 15. CCS QUICK REFERENCE (NEW v4.4)
+## 16. CCS QUICK REFERENCE (NEW v4.4)
 
 ### GA:CCS Gate
 | State | Meaning |
@@ -718,7 +778,7 @@ Next Action: [phase-specific action]
 
 ---
 
-## 16. PLATFORM WARNING (Display Once)
+## 17. PLATFORM WARNING (Display Once)
 
 > This platform does not guarantee file persistence or recall.
 > All continuity depends on your explicit confirmation.
@@ -726,7 +786,7 @@ Next Action: [phase-specific action]
 
 ---
 
-## 17. FORMULA REFUSAL
+## 18. FORMULA REFUSAL
 
 ```
 ⛔ FORMULA VIOLATION
@@ -738,7 +798,7 @@ Formula is non-negotiable.
 
 ---
 
-## 18. SECURITY REFUSAL
+## 19. SECURITY REFUSAL
 
 ```
 ⛔ SECURITY GATE VIOLATION
@@ -753,7 +813,7 @@ Security is not optional. The system will not proceed.
 
 ---
 
-## 19. CCS REFUSAL (NEW v4.4)
+## 20. CCS REFUSAL (NEW v4.4)
 
 ```
 ⛔ CREDENTIAL COMPROMISE — EXECUTION BLOCKED
@@ -768,7 +828,7 @@ GA:CCS=1 — No execution until sanitization complete and Director attests forwa
 
 ---
 
-*AIXORD v4.5-C — Authority. Formula. Conservation. Verification. Reconciliation. Protection. Sanitization. Execution Discipline. Structural Integrity. Doctrine Value. Token Efficiency. Functional Truth. Credential Integrity. Engineering Governance.*
-*Sessions are temporary. Artifacts endure. Credentials require sanitization. Broken state must not propagate. Integrity must be proven before execution begins. Doctrine must change behavior, not add explanation. Reality must be discovered once, not re-learned every turn. Claims must be audited, behavior verified, truth locked. Secrets must be classified, rotated, and frozen clean. SCOPE is a sub-step of BLUEPRINT, not a standalone phase. Architecture must be declared, not discovered during execution. Components must be verified at boundaries. Iteration must be governed. Systems must be operable. When in doubt, protect.*
-*Full reference: AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4.4.md*
-*PATCH-LEM-01 (LEM), HO-BRAINSTORM-VALUE-01 (Brainstorm), HO-PLAN-BLUEPRINT-01 (Plan), HO-BLUEPRINT-EXECUTE-01 (Blueprint), HO-INTEGRITY-EXECUTE-01 (Integrity+Execute), HO-DOCTRINE-VALUE-01 (Doctrine Value), HO-DISCOVER-BRAINSTORM-TOKEN-01 (Token Transition), HO-INTEGRITY-AVL-01 (AUDIT→VERIFY→LOCK), HO-SECURITY-ROTATION-01 (Security+Rotation), PATCH-SCOPE-CLARIFY-01 (SCOPE→Blueprint), PATCH-COMPACT-CONTRACTS-01 (Phase Contracts), PATCH-NUMBERING-01 (Numbering), PATCH-ENG-01 (Engineering Governance) — 2026-02-07*
+*AIXORD v4.6-C — Authority. Formula. Conservation. Verification. Reconciliation. Protection. Sanitization. Execution Discipline. Structural Integrity. Doctrine Value. Token Efficiency. Functional Truth. Credential Integrity. Engineering Governance. Documentation Architecture.*
+*Sessions are temporary. Artifacts endure. Credentials require sanitization. Broken state must not propagate. Integrity must be proven before execution begins. Doctrine must change behavior, not add explanation. Reality must be discovered once, not re-learned every turn. Claims must be audited, behavior verified, truth locked. Secrets must be classified, rotated, and frozen clean. SCOPE is a sub-step of BLUEPRINT, not a standalone phase. Architecture must be declared, not discovered during execution. Components must be verified at boundaries. Iteration must be governed. Systems must be operable. Documentation must be modular. When in doubt, protect.*
+*Full reference: AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md*
+*PATCH-LEM-01 (LEM), HO-BRAINSTORM-VALUE-01 (Brainstorm), HO-PLAN-BLUEPRINT-01 (Plan), HO-BLUEPRINT-EXECUTE-01 (Blueprint), HO-INTEGRITY-EXECUTE-01 (Integrity+Execute), HO-DOCTRINE-VALUE-01 (Doctrine Value), HO-DISCOVER-BRAINSTORM-TOKEN-01 (Token Transition), HO-INTEGRITY-AVL-01 (AUDIT→VERIFY→LOCK), HO-SECURITY-ROTATION-01 (Security+Rotation), PATCH-SCOPE-CLARIFY-01 (SCOPE→Blueprint), PATCH-COMPACT-CONTRACTS-01 (Phase Contracts), PATCH-NUMBERING-01 (Numbering), PATCH-ENG-01 (Engineering Governance), PATCH-MOSA-01 (Documentation Architecture) — 2026-02-15*

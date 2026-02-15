@@ -1,16 +1,16 @@
-# AIXORD OFFICIAL ACCEPTABLE BASELINE v4.5
+# AIXORD OFFICIAL ACCEPTABLE BASELINE v4.6
 
 ## Formula & Engine Edition — Security, Privacy & Credential Governance
 
 | Property | Value |
 |----------|-------|
-| **Version** | 4.5 |
+| **Version** | 4.6 |
 | **Status** | RELEASE-READY |
 | **Baseline Class** | Universal (Human-Readable) |
 | **Applies To** | All AI chat systems operating under AIXORD Governance |
-| **Supersedes** | v4.4.3, v4.4.2, v4.4.1, v4.4, v4.3, v4.2.1, v4.2, v4.1, v4.0-FINAL, all prior versions |
-| **Patch Sources** | PATCH-APX-01 (Artifact Binding), PATCH-FML-01 (Formula Engine), PATCH-RA-01 (Reality Absorption), PATCH-ENH-01 (Enhancement Track), PATCH-SSC-01 (Session Sequencing), **PATCH-GCP-01 (Governance Completion)**, **PATCH-GKDL-01 (Knowledge Derivation)**, **PATCH-SPG-01 (Security & Privacy)**, **PATCH-CCS-01 (Credential Compromise & Sanitization)**, **ENH-4/5/6 Extension (Image Evidence, Progressive Disclosure, Usage Metrics)**, **PATCH-LEM-01 (Layered Execution Mode)**, **HO-BRAINSTORM-VALUE-01 (Brainstorm Output Contract)**, **HO-PLAN-BLUEPRINT-01 (Plan Solid Input Contract)**, **HO-BLUEPRINT-EXECUTE-01 (Blueprint Execution-Ready Contract)**, **HO-INTEGRITY-EXECUTE-01 (Blueprint Integrity Validation + Execute Contract)**, **HO-DOCTRINE-VALUE-01 (Doctrine Value Integration)**, **HO-DISCOVER-BRAINSTORM-TOKEN-01 (DISCOVER â†' BRAINSTORM Token-Efficient Transition)**, **HO-INTEGRITY-AVL-01 (AUDIT â†' VERIFY â†' LOCK Functional Integrity)**, **HO-SECURITY-ROTATION-01 (Security & Credential Integrity)**, **PATCH-SCOPE-CLARIFY-01 (SCOPE Phase Clarification)**, **PATCH-COMPACT-CONTRACTS-01 (Phase Contract Summaries)**, **PATCH-NUMBERING-01 (Section Numbering Correction)**, **PATCH-ENG-01 (Engineering Governance)** |
-| **Date** | 2026-02-07 |
+| **Supersedes** | v4.5, v4.4.3, v4.4.2, v4.4.1, v4.4, v4.3, v4.2.1, v4.2, v4.1, v4.0-FINAL, all prior versions |
+| **Patch Sources** | PATCH-APX-01 (Artifact Binding), PATCH-FML-01 (Formula Engine), PATCH-RA-01 (Reality Absorption), PATCH-ENH-01 (Enhancement Track), PATCH-SSC-01 (Session Sequencing), **PATCH-GCP-01 (Governance Completion)**, **PATCH-GKDL-01 (Knowledge Derivation)**, **PATCH-SPG-01 (Security & Privacy)**, **PATCH-CCS-01 (Credential Compromise & Sanitization)**, **ENH-4/5/6 Extension (Image Evidence, Progressive Disclosure, Usage Metrics)**, **PATCH-LEM-01 (Layered Execution Mode)**, **HO-BRAINSTORM-VALUE-01 (Brainstorm Output Contract)**, **HO-PLAN-BLUEPRINT-01 (Plan Solid Input Contract)**, **HO-BLUEPRINT-EXECUTE-01 (Blueprint Execution-Ready Contract)**, **HO-INTEGRITY-EXECUTE-01 (Blueprint Integrity Validation + Execute Contract)**, **HO-DOCTRINE-VALUE-01 (Doctrine Value Integration)**, **HO-DISCOVER-BRAINSTORM-TOKEN-01 (DISCOVER â†' BRAINSTORM Token-Efficient Transition)**, **HO-INTEGRITY-AVL-01 (AUDIT â†' VERIFY â†' LOCK Functional Integrity)**, **HO-SECURITY-ROTATION-01 (Security & Credential Integrity)**, **PATCH-SCOPE-CLARIFY-01 (SCOPE Phase Clarification)**, **PATCH-COMPACT-CONTRACTS-01 (Phase Contract Summaries)**, **PATCH-NUMBERING-01 (Section Numbering Correction)**, **PATCH-ENG-01 (Engineering Governance)**, **PATCH-MOSA-01 (Documentation Architecture)** |
+| **Date** | 2026-02-15 |
 
 ---
 
@@ -6257,13 +6257,278 @@ Part XIV is considered correctly integrated when:
 > **A governed system without iteration protocols fights reality instead of adapting to it.**
 > **A governed system without operational readiness is a successful project and a failed product.**
 
----
-
-**END OF BASELINE v4.5**
 
 ---
 
-*AIXORD v4.5 â€" Authority. Formula. Conservation. Verification. Reconciliation. Protection. Sanitization. Execution Discipline. Decision Preparation. Structural Integrity. Doctrine Value. Token Efficiency. Functional Truth. Credential Integrity. Engineering Governance.*
+# PART XV — DOCUMENTATION GOVERNANCE (PATCH-MOSA-01 — v4.6)
+
+## 70. MOSA DOCTRINE (Mandatory)
+
+### 70.1 The Context Crisis
+
+**Problem Statement:**
+AI models have finite context windows (~200K tokens for Claude, ~128K for GPT-4). Monolithic documentation creates three failure modes:
+
+1. **Context Exhaustion:** Documentation consumes 35-42% of context before task work begins
+2. **Information Overload:** AI must parse irrelevant content, increasing hallucination risk
+3. **Maintenance Burden:** Dual-copy synchronization creates drift and stale content
+
+### 70.2 MOSA Solution Pattern
+
+**Concept:** Mirror the codebase’s barrel-export pattern in documentation.
+
+```typescript
+// Codebase pattern (proven):
+// lib/api/index.ts → exports from ./auth, ./users, ./projects
+// Minimal index, modular implementation
+
+// Documentation pattern (MOSA):
+// docs/PROJECT_PLAN.md → manifest (≤150 lines)
+// docs/modules/ → domain-specific modules (100-400 lines each)
+```
+
+### 70.3 Normative Laws (L-MOSA)
+
+```
+L-MOSA1: IF monolithic_docs > 1500 lines → HALT; require modularization
+L-MOSA2: Manifest pattern mandatory: index file ≤ 150 lines + module directory
+L-MOSA3: Session startup context ≤ 500 lines (manifest + critical modules only)
+L-MOSA4: Each module MUST declare: scope, growth class, when-to-read
+L-MOSA5: Dual-copy elimination mandatory; canonical location + pointer pattern only
+```
+**Rationale (L-MOSA1):** 1500 lines ≈ threshold where context budget exceeds 30% of typical AI window. Below 1500, monolithic docs are acceptable. Above 1500, context risk is too high.
+
+**Enforcement:** GA:DC (Documentation Complete) gate HALTS if >1500 lines in single file. Director may waive for short-term (<1 sprint) with documented rationale.
+
+### 70.4 Module Structure Requirements
+
+**Module Header Template:**
+
+```markdown
+# [MODULE_NAME]
+
+**Module ID:** [NN-KEBAB-CASE]
+**Scope:** [Single-sentence domain description]
+**Growth Class:** [STATIC | SEMI-STATIC | SLOW-GROWTH | CAPPED | ROLLING-WINDOW | ARCHIVAL]
+**Dependencies:** [Other module IDs, or “None”]
+**When To Read:** [Task types requiring this module]
+**Last Updated:** [YYYY-MM-DD]
+```
+
+**Content Rules:**
+- **Single Responsibility:** One domain/concern per module
+- **Size:** Target 100-400 lines; max 800 lines
+- **Independence:** Readable without loading other modules (except declared dependencies)
+- **No Duplication:** DRY principle across modules
+
+**Size Violation Handling:**
+- IF module >800 lines → HALT
+- REQUIRE: Partition by sub-domain OR reclassify as ARCHIVAL with index-only manifest entry
+
+### 70.5 Growth Class Taxonomy
+
+| Class | Definition | Growth Rate | Example | Management |
+|-------|------------|-------------|---------|------------|
+| **STATIC** | Never changes after creation | 0 lines/year | Vision, Principles | Read once, cache |
+| **SEMI-STATIC** | Rare updates, architectural | <10 lines/year | Architecture, Tech Stack | Read on major changes |
+| **SLOW-GROWTH** | Periodic additions | 10-50 lines/year | Completion Status | Read on demand |
+| **CAPPED** | Bounded growth, known max | Up to max N items | Deliverables (max 100) | Enforce cap via validation |
+| **ROLLING-WINDOW** | Fixed window, archive old | Constant | Sessions (last 10 only) | Archive automatically |
+| **ARCHIVAL** | Unbounded sink | Unlimited | Implementation Log | NEVER load at startup |
+
+**Assignment Rules:**
+1. Default: SLOW-GROWTH (when uncertain)
+2. IF content set once → STATIC
+3. IF architectural/structural → SEMI-STATIC
+4. IF bounded by business rule → CAPPED
+5. IF history/timeline → ROLLING-WINDOW or ARCHIVAL
+### 70.6 Manifest Requirements
+
+**Mandatory Sections (in order, ≤150 lines total):**
+
+1. **MOSA Compliance Attestation** (5-10 rows)
+2. **Quick Status** (critical metrics only, <10 rows)
+3. **Module Map** (all modules + growth class + when-to-read, <50 rows)
+4. **Context Budget** (startup vs on-demand breakdown, 3-5 rows)
+5. **Recovery Commands** (session continuity pattern, <10 rows)
+
+### 70.7 Context Budget Calculation
+
+```
+Startup_Context = MANIFEST + Σ(CRITICAL_MODULES)
+where CRITICAL_MODULES = {STATUS, ROADMAP, RECOVERY-COMMANDS}
+
+Target: ≤500 lines
+Warning: >400 lines (80% threshold)
+Critical: >500 lines (100% threshold → HALT)
+```
+
+**On-Demand Loading:**
+```
+Task_Context = Startup_Context + Σ(TASK_MODULES)
+where TASK_MODULES = determined by Module Map “When To Read” column
+```
+
+### 70.8 Dual-Copy Elimination (L-MOSA5)
+
+**Pattern:**
+- **One canonical location** (e.g., `docs/`)
+- **Pointer files only** in other locations (README.md with link)
+- **NEVER manual sync** of full duplicates
+- **Build automation allowed** (copy during deployment only, not source control)
+
+**Allowed:** ✅ Build automation copies, ✅ Pointer files, ✅ Generated docs
+**Forbidden:** ❌ Manual sync of duplicates, ❌ Working copies in multiple locations, ❌ Divergent versions
+
+### 70.9 Gate Integration — GA:DC Enhancement
+
+**GA:DC (Documentation Complete) now requires:**
+
+- [ ] Manifest file exists and ≤150 lines
+- [ ] All modules classified by growth class
+- [ ] Startup context ≤500 lines (manifest + critical modules)
+- [ ] No dual-copy violations (verified via grep)
+- [ ] Module dependency graph is acyclic (no circular references)
+- [ ] All cross-references resolve (no broken links)
+- [ ] MOSA compliance attestation table shows all PASS
+
+**Violation Handling:**
+- Manifest >150 lines → Refactor Quick Status or move content to modules
+- Startup >500 lines → Split critical modules by sub-domain
+- Module >800 lines → Partition or reclassify as ARCHIVAL
+- Dual-copy detected → Delete duplicate, create pointer file
+- Circular dependencies → Refactor module boundaries
+- Broken links → Fix or remove dead references
+---
+
+## 71. SESSION CONTINUITY PATTERN
+
+### 71.1 Recovery Commands (Mandatory)
+
+**Every manifest MUST include Recovery Commands:**
+
+```
+# PROJECT CONTEXT
+Project: [Name]
+Entity: [PMERIT Foundation | PMERIT Technologies LLC]
+Last Session: [N]
+Last Updated: [YYYY-MM-DD]
+Governance: AIXORD v[X.Y.Z]
+Current Phase: [DISCOVER | BRAINSTORM | PLAN | BLUEPRINT | REALIZATION | VERIFY | LOCK]
+
+# CONTINUATION COMMAND
+[TECH CONTINUE | PMERIT CONTINUE]
+Session: [N+1]
+Load: MANIFEST + [CRITICAL_MODULES]
+Active Work: [Brief description]
+```
+
+### 71.2 Session History Module (ROLLING-WINDOW)
+
+- **Window Size:** Last 10 sessions only (configurable per project)
+- **Archive Target:** IMPLEMENTATION-LOG.md (Growth Class: ARCHIVAL)
+- **Archival Process:** When SESSION-HISTORY exceeds 10 entries, extract oldest, append to archive, remove from history
+
+---
+
+## 72. MODULE LOADING RULES
+
+### 72.1 Startup Behavior
+
+**On Project Continuation Command:**
+
+1. Load MANIFEST (full file, ≤150 lines)
+2. Parse Module Map → Identify CRITICAL_MODULES
+3. Load STATUS module (current state, blockers)
+4. Load ROADMAP module (next steps, priorities)
+5. HALT — Await task specification from Director
+6. On task specification → Load TASK_MODULES (from Module Map “When To Read”)
+
+### 72.2 Task-Based Module Resolution
+
+| Task Type | Load Modules | Rationale |
+|-----------|-------------|-----------|
+| Status inquiry | STATUS only | Quick state check |
+| Planning session | ROADMAP, DELIVERABLES, SESSION-HISTORY | Strategic decisions |
+| Architecture review | ARCHITECTURE, TECH-STACK, SECURITY | Structural analysis |
+| Implementation | ARCHITECTURE, TECH-STACK, DIRECTORY | Build context |
+| Debugging | DIRECTORY, SESSION-HISTORY, TECH-STACK | Find root cause |
+| Security audit | SECURITY, ARCHITECTURE, SESSION-HISTORY | Compliance review |
+| Recovery after break | MANIFEST, STATUS, ROADMAP, SESSION-HISTORY (last 1) | Full context refresh |
+
+### 72.3 CLAUDE.md Integration
+
+**Project-specific CLAUDE.md MUST include a MOSA Module Loading Rules section:**
+
+- On `TECH CONTINUE` or `PMERIT CONTINUE`: Load manifest + critical modules only
+- Context budget: Startup ≤500 lines, Task ≤1500 lines total
+- DO NOT load ARCHIVAL modules at startup
+- Module loading examples for common task types
+---
+
+## 73. MIGRATION GUIDE (Legacy → MOSA)
+
+### 73.1 Assessment
+
+1. Count lines in monolithic docs
+2. Identify duplicates across directories
+3. Estimate current context budget (all docs loaded at startup)
+
+### 73.2 Extraction
+
+1. Read monolithic document; identify major section boundaries (H1/H2 headers)
+2. Group related sections into domains; assign growth classes
+3. Create module directory; extract modules with standard headers
+4. Create manifest with 5 mandatory sections
+
+### 73.3 Verification
+
+1. Manifest ≤150 lines
+2. Startup context ≤500 lines
+3. All modules <800 lines
+4. No duplicate files (content hash comparison)
+5. All cross-references resolve
+
+### 73.4 Deployment
+
+1. Update CLAUDE.md with module loading rules
+2. Eliminate dual-copies (create pointer files)
+3. Commit with MOSA compliance note
+4. Monitor AI session efficiency in first week
+
+---
+
+## 74. HALT CONDITIONS (L-MOSA)
+
+- **Monolithic docs >1500 lines without modularization** — NEW v4.6
+- **Manifest >150 lines** — NEW v4.6
+- **Startup context >500 lines** — NEW v4.6
+- **Module >800 lines without partition plan** — NEW v4.6
+- **Dual-copy detected (L-MOSA5 violation)** — NEW v4.6
+- **Growth class missing on any module** — NEW v4.6
+- **GA:DC attempted without MOSA compliance attestation** — NEW v4.6
+
+---
+
+## 75. CANONICAL STATEMENT
+
+> **Governance ensures the work is authorized, structured, and verified.**
+> **Documentation governance ensures the AI can actually comprehend what it governs.**
+
+> **A governed system with monolithic docs is a system the AI cannot fully see.**
+> **A governed system with dual-copies is a system that contradicts itself.**
+> **A governed system with MOSA is a system optimized for both human and AI comprehension.**
+
+> **Documentation must be modular. Context must be budgeted. Copies must be eliminated.**
+> **When the AI cannot see the full picture, it invents one. MOSA prevents invention.**
+
+---
+
+**END OF BASELINE v4.6**
+
+---
+
+*AIXORD v4.6 â€" Authority. Formula. Conservation. Verification. Reconciliation. Protection. Sanitization. Execution Discipline. Decision Preparation. Structural Integrity. Doctrine Value. Token Efficiency. Functional Truth. Credential Integrity. Engineering Governance. Documentation Architecture.*
 *Security, Privacy, Credential Governance & Engineering Edition.*
 *Sessions are temporary. Artifacts endure. Credentials must rotate. Broken state must not propagate. Assumptions must be surfaced. Plans must resolve before design. Blueprints must guarantee execution without interpretation. Integrity must be proven before execution begins. Doctrine must change behavior, not add explanation. Reality must be discovered once, not re-learned every turn. Claims must be audited, behavior verified, and truth locked. Secrets must be classified, rotated, and frozen clean. Architecture must be declared, not discovered during execution. Components must be verified at boundaries, not just in isolation. Iteration must be governed, not ad-hoc. Systems must be operable, not just buildable.*
 *When in doubt, protect. When unclear, block. When exposed, rotate. When audited, prove. When executing, verify each layer. When brainstorming, surface uncertainty. When planning, resolve before blueprinting. When blueprinting, enable deterministic execution. When validating, prove structural soundness. When naming doctrine, prove behavioral value. When transitioning, spend tokens on thinking, not remembering. When completing, audit claims, verify function, lock truth. When locking, ensure secrets are clean and authority cannot be abused. When composing, verify boundaries. When iterating, govern re-entry. When deploying, prove readiness.*

@@ -13,8 +13,8 @@
 
 | Document | Version | Purpose |
 |----------|---------|---------|
-| AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_5.md | **v4.5** | Full governance rules (Parts I–XIV, 29 gates, 9 phases) |
-| AIXORD_v4_5_COMPACT_CORE.md | **v4.5-C** | Compact reference (~29 law blocks) |
+| AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md | **v4.6** | Full governance rules (Parts I–XIV + MOSA, 29 gates, 9 phases) |
+| AIXORD_v4_6_COMPACT_CORE.md | **v4.6-C** | Compact reference (~30 law blocks, includes L-MOSA) |
 | PATCH-ENG-01 | **Applied (v4.5)** | Part XIV Engineering Governance (§64–69) |
 | PATCH-SCOPE-CLARIFY-01 | Applied (v4.4.3) | SCOPE as Blueprint sub-step |
 | PATCH-LEM-01 | Applied (v4.4.2) | Layered Execution Mode |

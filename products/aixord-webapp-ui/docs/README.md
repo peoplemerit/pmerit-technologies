@@ -19,8 +19,8 @@ pmerit-technologies/docs/
 │   ├── IMPLEMENTATION-LOG.md        (§16.4+: detailed records)
 │   ├── DEPLOYMENT.md                (§17: recovery, URLs)
 │   └── RECONCILIATION.md            (§18: verification)
-├── AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_5.md
-├── AIXORD_v4_5_COMPACT_CORE.md
+├── AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md
+├── AIXORD_v4_6_COMPACT_CORE.md
 └── D4-CHAT-EXECUTION-ENGINE.md
 ```
 

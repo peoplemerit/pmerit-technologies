@@ -151,8 +151,8 @@ pmerit-technologies/                    <- PMERIT TECHNOLOGIES LLC
 +-- docs/                               <- CANONICAL documentation
 |   +-- D4-CHAT_PROJECT_PLAN.md         <- Module Manifest (start here)
 |   +-- d4-modules/                     <- 13 modular doc files
-|   +-- AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_5.md
-|   +-- AIXORD_v4_5_COMPACT_CORE.md
+|   +-- AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md
+|   +-- AIXORD_v4_6_COMPACT_CORE.md
 |
 +-- products/                           <- ALL product folders
 |   +-- aixord-router-worker/           <- D4-CHAT Backend (Workers + Hono + D1)
