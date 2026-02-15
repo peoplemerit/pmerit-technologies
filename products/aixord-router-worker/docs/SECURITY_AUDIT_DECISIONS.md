@@ -6,6 +6,7 @@
 **Disposition:** 8 Fixed, 7 Accepted, 1 Deferred
 
 > **See also:** `THIRD_AUDIT_DECISIONS.md` for HANDOFF-COPILOT-AUDIT-03 (13 findings, triaged 2026-02-15)
+> **See also:** `FOURTH_AUDIT_DECISIONS.md` for HANDOFF-COPILOT-AUDIT-04 (13 findings, triaged 2026-02-15)
 
 ---
 
