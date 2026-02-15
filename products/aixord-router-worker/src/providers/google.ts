@@ -135,11 +135,11 @@ export function estimateGoogleCost(
   inputTokens: number,
   outputTokens: number
 ): number {
-  // Pricing per 1M tokens
+  // Pricing per 1M tokens (updated 2026-02-15)
   const PRICING: Record<string, { input: number; output: number }> = {
-    'gemini-2.0-pro': { input: 1.25, output: 5.0 },
-    'gemini-2.0-flash': { input: 0.075, output: 0.3 },
-    'gemini-2.0-flash-lite': { input: 0.0375, output: 0.15 }
+    'gemini-2.5-pro': { input: 1.25, output: 5.0 },
+    'gemini-2.5-flash': { input: 0.075, output: 0.3 },
+    'gemini-2.5-flash-lite': { input: 0.0375, output: 0.15 },
   };
 
   const price = PRICING[model] || { input: 0.075, output: 0.3 }; // Default to Flash pricing

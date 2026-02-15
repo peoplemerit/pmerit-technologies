@@ -846,6 +846,15 @@ After presenting the Review Packet, include this tag at the END of your response
 - When the user approves, acknowledge warmly and guide them to Finalize in the Governance panel.
 - Produce concrete, project-specific output — never generic templates or "[TBD]" placeholders.`;
 
+  // FIX: Hard cap system prompt to prevent token explosion
+  // 60k chars ≈ 15k tokens — leaves room for conversation history + user message
+  // within most models' context windows (128k tokens for DeepSeek, 200k for Claude)
+  const MAX_SYSTEM_PROMPT_CHARS = 60000;
+  if (systemPrompt.length > MAX_SYSTEM_PROMPT_CHARS) {
+    console.warn(`[buildMessages] System prompt truncated: ${systemPrompt.length} -> ${MAX_SYSTEM_PROMPT_CHARS} chars`);
+    systemPrompt = systemPrompt.slice(0, MAX_SYSTEM_PROMPT_CHARS) + '\n\n[System prompt truncated for context window safety]';
+  }
+
   messages.push({ role: 'system', content: systemPrompt });
 
   // FIX-N3: Inject conversation history for multi-turn context

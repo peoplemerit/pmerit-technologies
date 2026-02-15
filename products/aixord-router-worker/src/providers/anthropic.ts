@@ -172,11 +172,13 @@ export function estimateAnthropicCost(
   cacheCreationTokens?: number,
   cacheReadTokens?: number
 ): number {
-  // Pricing per 1M tokens
+  // Pricing per 1M tokens (updated 2026-02-15)
   const PRICING: Record<string, { input: number; output: number; cacheWrite: number; cacheRead: number }> = {
+    'claude-opus-4-6': { input: 5.0, output: 25.0, cacheWrite: 6.25, cacheRead: 0.50 },
     'claude-opus-4-20250514': { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.50 },
+    'claude-sonnet-4-5-20250929': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.30 },
     'claude-sonnet-4-20250514': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.30 },
-    'claude-3-5-haiku-latest': { input: 0.25, output: 1.25, cacheWrite: 0.30, cacheRead: 0.025 }
+    'claude-haiku-4-5-20251001': { input: 1.0, output: 5.0, cacheWrite: 1.25, cacheRead: 0.10 },
   };
 
   const price = PRICING[model] || { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.30 };

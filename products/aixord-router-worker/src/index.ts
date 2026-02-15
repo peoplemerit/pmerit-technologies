@@ -692,8 +692,14 @@ app.post('/v1/router/execute', async (c) => {
                 tree: Array<{ path: string; type: string; size?: number }>;
               };
 
+              // FIX: Cap tree entries to prevent token explosion on large monorepos
+              // 100 entries ≈ 3k chars ≈ 750 tokens — safe for context budgets
+              const MAX_TREE_ENTRIES = 100;
+              const truncatedTree = treeData.tree.slice(0, MAX_TREE_ENTRIES);
+              const treeTruncated = treeData.tree.length > MAX_TREE_ENTRIES;
+
               // Build file tree string
-              const treeLines = treeData.tree
+              const treeLines = truncatedTree
                 .map(t => `${t.type === 'tree' ? '[DIR]' : '[FILE]'} ${t.path}${t.size ? ` (${t.size}b)` : ''}`)
                 .join('\n');
 
@@ -701,14 +707,18 @@ app.post('/v1/router/execute', async (c) => {
               if (!request.delta.workspace_context) {
                 request.delta.workspace_context = {};
               }
-              request.delta.workspace_context.file_tree = `GitHub: ${repoPath}\n${treeLines}`;
+              const treeHeader = `GitHub: ${repoPath}`;
+              const truncNote = treeTruncated ? `\n... (${treeData.tree.length - MAX_TREE_ENTRIES} more entries truncated)` : '';
+              // Hard cap the entire file_tree string to 4000 chars (~1000 tokens)
+              const fullTree = `${treeHeader}\n${treeLines}${truncNote}`;
+              request.delta.workspace_context.file_tree = fullTree.slice(0, 4000);
 
               // Fetch key files (README, package.json) — small, high-value context
               const KEY_FILES = ['README.md', 'package.json', 'wrangler.toml', 'wrangler.json', 'tsconfig.json'];
               const keyFiles: Array<{ path: string; content: string }> = [];
 
               for (const fname of KEY_FILES) {
-                const exists = treeData.tree.find(t => t.path === fname);
+                const exists = truncatedTree.find(t => t.path === fname);
                 if (exists && exists.type === 'blob' && (exists.size || 0) < 5000) {
                   try {
                     const fileResp = await fetch(
