@@ -1,12 +1,12 @@
 # D4-CHAT PROJECT PLAN
 
 **Document Type:** Comprehensive Project Plan
-**Version:** 10.0 (Session 49 — Infrastructure Sync + DB Migrations + SYS-02 E2E Tests)
-**Date:** 2026-02-12 (Updated: Sessions 34-49 — Full governance enforcement + TDL + PCC + PTX + BQL + GFB + DPF deployed + DB reconciled + E2E tested)
+**Version:** 11.0 (Session 51+ — HANDOFF-CGC-01 Consolidated Gap Closure)
+**Date:** 2026-02-15 (Updated: Sessions 34-51+ — Full governance enforcement + TDL + PCC + PTX + BQL + GFB + DPF + CGC-01 deployed)
 **Entity:** PMERIT Technologies LLC
-**Governance:** AIXORD v4.3 → v4.4.1 → v4.4 → v4.4.3 → **v4.5 (Engineering Governance)**
-**Source Files:** Audit Report v5.0, AIXORD Baseline v4.5, Compact Core v4.5-C, 40+ sandbox files
-**Last Updated By:** Commander — Session 49 (Copilot PR merge, DB migrations 026-029, SYS-02 execution layer E2E tests, Zod removal, 11 TS error fixes, Dependabot review)
+**Governance:** AIXORD v4.3 → v4.4.1 → v4.4 → v4.4.3 → v4.5 → **v4.5.1 (CGC-01 Gap Closure)**
+**Source Files:** Audit Report v5.0, AIXORD Baseline v4.5, Compact Core v4.5-C, 40+ sandbox files, HANDOFF-CGC-01_CONSOLIDATED_GAP_CLOSURE.md
+**Last Updated By:** Commander — Session 51+ (HANDOFF-CGC-01: Conservation law tests, phase contract validators, resource-level security, Worker-Auditor multi-agent architecture, 10 gaps across 3 phases)
 
 ---
 
@@ -94,15 +94,15 @@ EXECUTION_TOTAL = VERIFIED_REALITY + FORMULA_EXECUTION
 
 ## 2. AIXORD GOVERNANCE ALIGNMENT
 
-### 2.1 AIXORD v4.5 Governance Reference
+### 2.1 AIXORD v4.5.1 Governance Reference
 
 | Property | Value |
 |----------|-------|
-| **Version** | 4.5 |
+| **Version** | 4.5.1 |
 | **Status** | RELEASE-READY |
-| **Patch Sources** | PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PATCH-GCP-01, PATCH-GKDL-01, PATCH-SPG-01, PATCH-CCS-01, ENH-4/5/6 (v4.4.1), PATCH-LEM-01 (v4.4.2), HO-BRAINSTORM-VALUE-01, HO-PLAN-BLUEPRINT-01, HO-BLUEPRINT-EXECUTE-01, HO-INTEGRITY-EXECUTE-01, HO-DOCTRINE-VALUE-01, HO-DISCOVER-BRAINSTORM-TOKEN-01, HO-INTEGRITY-AVL-01, HO-SECURITY-ROTATION-01, PATCH-SCOPE-CLARIFY-01 (v4.4.3), PATCH-NUMBERING-01 (v4.4.3), **PATCH-ENG-01 (v4.5 — Engineering Governance)** |
+| **Patch Sources** | PATCH-APX-01, PATCH-FML-01, PATCH-RA-01, PATCH-ENH-01, PATCH-SSC-01, PATCH-GCP-01, PATCH-GKDL-01, PATCH-SPG-01, PATCH-CCS-01, ENH-4/5/6 (v4.4.1), PATCH-LEM-01 (v4.4.2), HO-BRAINSTORM-VALUE-01, HO-PLAN-BLUEPRINT-01, HO-BLUEPRINT-EXECUTE-01, HO-INTEGRITY-EXECUTE-01, HO-DOCTRINE-VALUE-01, HO-DISCOVER-BRAINSTORM-TOKEN-01, HO-INTEGRITY-AVL-01, HO-SECURITY-ROTATION-01, PATCH-SCOPE-CLARIFY-01 (v4.4.3), PATCH-NUMBERING-01 (v4.4.3), PATCH-ENG-01 (v4.5 — Engineering Governance), **PATCH-GATE-RECONCILIATION-01**, **HANDOFF-CGC-01 (v4.5.1 — Consolidated Gap Closure)** |
 | **Parts** | I–XIV (14 parts) |
-| **Gates** | 17 GA:\* gates + 6 GS:\* security gates + GA:CCS (conditional) |
+| **Gates** | 29 total: 10 Setup + 6 Security + 7 Execution + 6 Agent (PATCH-GATE-RECONCILIATION-01) |
 | **Phases** | SETUP → DISCOVER → BRAINSTORM → PLAN → BLUEPRINT (incl. SCOPE) → EXECUTE → AUDIT → VERIFY → LOCK |
 
 ### 2.2 Authority Model Implementation
@@ -144,16 +144,17 @@ D4-CHAT implements the AIXORD Authority Model:
 | VA | Validation | ⏳ E2E testing |
 | HO | Handoff Ready | ✅ State export |
 
-#### Security Gates (NEW in AIXORD v4.3 — SPG-01)
+#### Security Gates (AIXORD v4.3 SPG-01 → v4.5.1 CGC-01 Resource-Level)
 
 | Gate | Phase | Purpose | D4-CHAT Status |
 |------|-------|---------|----------------|
-| GS:DC | Setup | Data classification declared | ⏳ NEW |
-| GS:DP | Execute | Data protection requirements | ⏳ NEW |
+| GS:DC | Setup | Data classification declared | ✅ **Implemented** — Project-level + resource-level classification (CGC-01 GAP-2) |
+| GS:DP | Execute | Data protection requirements | ✅ **Implemented** — Retention policy calculation, data protection rules (CGC-01 GAP-2) |
 | GS:AC | Execute | Access controls appropriate | ✅ Auth system |
-| GS:AI | Execute | AI usage complies with classification | ⏳ NEW |
-| GS:JR | Execute | Jurisdiction compliance | ⏳ NEW |
-| GS:RT | Lock | Retention/deletion policy | ⏳ NEW |
+| GS:AI | Execute | AI usage complies with classification | ✅ **Implemented** — `enforceAIExposureControl()` utility + exposure log (CGC-01 GAP-2) |
+| GS:JR | Execute | Jurisdiction compliance | ✅ **Implemented** — Jurisdiction review endpoint, compliance tracking (CGC-01 GAP-2) |
+| GS:RT | Lock | Retention/deletion policy | ✅ **Implemented** — Retention calculation per classification level (CGC-01 GAP-2) |
+| GS:SA | Execute | Secret access audit | ✅ **Implemented** — `auditSecretAccess()` utility + audit log (CGC-01 GAP-2) |
 
 ### 2.4 AIXORD Law Compliance
 
@@ -194,16 +195,16 @@ D4-CHAT implements the AIXORD Authority Model:
 
 | Law | Requirement | D4-CHAT Status |
 |-----|-------------|----------------|
-| L-SPG1 | Declare sensitivity before execution | ⏳ Data classification UI |
-| L-SPG2 | Security = GATE CONDITIONS | ⏳ Gate enforcement |
-| L-SPG3 | No raw PII/PHI to AI without auth | ⏳ Redaction system |
+| L-SPG1 | Declare sensitivity before execution | ✅ Resource-level classification API (CGC-01 GAP-2) |
+| L-SPG2 | Security = GATE CONDITIONS | ✅ GS:DC/DP/AI/JR/RT/SA enforced (CGC-01) |
+| L-SPG3 | No raw PII/PHI to AI without auth | ✅ `enforceAIExposureControl()` utility (CGC-01) |
 | L-SPG4 | Unknown = highest protection | ✅ Default behavior |
-| L-SPG5 | GS:DC required for setup | ⏳ NEW gate |
-| L-SPG6 | GS:AI required for execution | ⏳ NEW gate |
-| L-SPG7 | Regulatory = CONSTRAINTS | ⏳ Compliance config |
+| L-SPG5 | GS:DC required for setup | ✅ Resource + project-level classification (CGC-01) |
+| L-SPG6 | GS:AI required for execution | ✅ AI exposure control enforcement (CGC-01) |
+| L-SPG7 | Regulatory = CONSTRAINTS | ✅ Jurisdiction review endpoint (CGC-01 GS:JR) |
 | L-SPG8 | User rights = CAPABILITIES | ⏳ Data subject rights |
 | L-SPG9 | When in doubt, PROTECT | ✅ Principle applied |
-| L-SPG10 | Cross-border compliance | ⏳ Jurisdiction check |
+| L-SPG10 | Cross-border compliance | ✅ GS:JR jurisdiction compliance (CGC-01) |
 
 #### Credential Compromise & Sanitization Laws (L-CCS — NEW v4.4)
 
@@ -230,11 +231,11 @@ D4-CHAT implements the AIXORD Authority Model:
 
 | Law | Requirement | D4-CHAT Status |
 |-----|-------------|----------------|
-| L-BRN1-7 | Brainstorm output contract (options, assumptions, kill conditions) | ⏳ SDK enforcement pending |
-| L-PLN1-8 | Plan solid input contract (assumption resolution, option selection) | ⏳ SDK enforcement pending |
-| L-BPX1-10 | Blueprint execution-ready contract (scopes, DAG, DoD, ADRs) | ⏳ SDK enforcement pending |
+| L-BRN1-7 | Brainstorm output contract (options, assumptions, kill conditions) | ✅ Validation engine + ≥3 brainstorm check (CGC-01 GAP-6/7) |
+| L-PLN1-8 | Plan solid input contract (assumption resolution, option selection) | ✅ DAG required validator (CGC-01 GAP-7) |
+| L-BPX1-10 | Blueprint execution-ready contract (scopes, DAG, DoD, ADRs) | ✅ Deliverables complete check (CGC-01 GAP-7) |
 | L-BPX11 | SCOPE is sub-step of BLUEPRINT (v4.4.3) | ✅ Aligned |
-| L-IVL1-11 | Integrity validation (5 checks before EXECUTE) | ⏳ SDK enforcement pending |
+| L-IVL1-11 | Integrity validation (5 checks before EXECUTE) | ✅ Tests pass check + integration test suite (CGC-01 GAP-7/8) |
 | L-AVL1-10 | AUDIT→VERIFY→LOCK functional integrity (DTL) | ⏳ Decision ledger partial |
 
 #### Engineering Governance Laws (L-ADG, L-IVR, L-ITR, L-OPS — NEW v4.5)
@@ -416,7 +417,7 @@ aggregation at session, project, and account levels.
 | **Code Written** | ~96% | ~98% | ~99% | ~99%+ | ~99.5% | ~99.8% | ~99.9% | **~100%** | +0.1% |
 | **Functional E2E** | ~96% | ~98% | ~99% | ~99%+ | ~99.5% | ~99.8% | ~99.9% | **~100%** | +0.1% |
 | **Deployed & Working** | ~96% | ~98% | ~99% | ~99%+ | ~99.5% | ~99.8% | ~99.9% | **~100%** | +0.1% |
-| **AIXORD v4.5 Compliance** | ~70% | ~90% | ~95% | ~97% | ~99% | ~97% | ~98% | **~99%** | +1% |
+| **AIXORD v4.5.1 Compliance** | ~70% | ~90% | ~95% | ~97% | ~99% | ~97% | ~98% | **~99.5%** | +0.5% |
 | **D3 SDK Integration** | N/A | 40% | **100%** | **100%** | **100%** | **100%** | **100%** | **100%** | — |
 | **Path C (Image/Evidence)** | N/A | N/A | 0% | **100%** | **100%** | **100%** | **100%** | **100%** | — |
 | **Path B (Proactive Debug)** | N/A | N/A | 0% | **33%** | **33%** | **33%** | **33%** | **50%** (Phase 1/3 + E2E tested) | +17% |
@@ -456,7 +457,12 @@ aggregation at session, project, and account levels.
 | **DB Schema Reconciliation (Migrations 026-029)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (FK cascades, conversations, rate_limits, users.name) | NEW |
 | **SYS-02 Execution Layer E2E Tests** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (59 tests: state machine, sequential enforcement, verification) | NEW |
 | **Zod Removal + Lightweight Validation** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (validateBody.ts + schemas/common.ts rewritten) | NEW |
-| **Copilot PR Integration** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (PRs #5, #6 merged — Project Plan v9.0 + manuscript fixes) | NEW |
+| **Copilot PR Integration** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (PRs #5, #6 merged — Project Plan v9.0 + manuscript fixes) | — |
+| **Conservation Law Tests (CGC-01 GAP-4)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (EXECUTION_TOTAL = VERIFIED_REALITY + FORMULA_EXECUTION) | NEW |
+| **Phase Contract Validators (CGC-01 GAP-5/6/7/8)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (L-BRN, L-PLN, L-BPX, L-IVL enforcement) | NEW |
+| **Resource-Level Security (CGC-01 GAP-2/3)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (GS:DC/DP/AI/JR/RT/SA + classify/audit endpoints + SecurityDashboard) | NEW |
+| **Worker-Auditor Architecture (CGC-01 GAP-1)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (5 agents, registry, executor loop, HITL, AgentDashboard + ApprovalGate) | NEW |
+| **Conservation Law Migration (CGC-01 GAP-9/10)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Migrations 030-037, numbering reconciliation) | NEW |
 
 ### 6.2 Deliverable Matrix
 
@@ -505,8 +511,22 @@ aggregation at session, project, and account levels.
 | D41 | SYS-02 Execution Layer E2E Test Suite | ✅ **COMPLETE** | **100%** |
 | D42 | Zod Removal + Lightweight Validation | ✅ **DEPLOYED** | **100%** |
 | D43 | Conversation Persistence (SYS-01) | ✅ **DEPLOYED** | **100%** |
+| D44 | Conservation Law Tests (HANDOFF-CGC-01 GAP-4) | ✅ **COMPLETE** | **100%** |
+| D45 | Phase Contract Validators — L-BRN (HANDOFF-CGC-01 GAP-5) | ✅ **COMPLETE** | **100%** |
+| D46 | Phase Contract Validators — L-PLN (HANDOFF-CGC-01 GAP-6) | ✅ **COMPLETE** | **100%** |
+| D47 | Phase Contract Validators — L-BPX (HANDOFF-CGC-01 GAP-7) | ✅ **COMPLETE** | **100%** |
+| D48 | Phase Contract Validators — L-IVL (HANDOFF-CGC-01 GAP-8) | ✅ **COMPLETE** | **100%** |
+| D49 | Migration Numbering Reconciliation (HANDOFF-CGC-01 GAP-9) | ✅ **DEPLOYED** | **100%** |
+| D50 | Resource-Level Security — Backend (HANDOFF-CGC-01 GAP-2/3) | ✅ **DEPLOYED** | **100%** |
+| D51 | Resource-Level Security — Frontend (HANDOFF-CGC-01 GAP-2) | ✅ **DEPLOYED** | **100%** |
+| D52 | Worker-Auditor Architecture — Backend (HANDOFF-CGC-01 GAP-1) | ✅ **DEPLOYED** | **100%** |
+| D53 | Worker-Auditor Architecture — Frontend (HANDOFF-CGC-01 GAP-1) | ✅ **DEPLOYED** | **100%** |
 
-### 6.3 API Endpoint Status (168+ Endpoints across 22 Modules)
+**Total Deliverables:** 53 (D1-D53)
+
+**Note (PATCH-CGC-01, GAP-9):** Session 23 sprint deliverables (§16.10) used internal numbering D7-D16 that maps to the main deliverable matrix as follows: Sprint-D10+D11 (Session Metrics) = main D10 (Usage Statistics). Sprint-D14+D15 (Prompt Caching) are implementation details within D1 (Model Router Worker). The main D1-D43 numbering is canonical.
+
+### 6.3 API Endpoint Status (190+ Endpoints across 24 Modules)
 
 ```
 ROUTER ENDPOINTS (4):          ALL ✅ VERIFIED (incl. hard gate enforcement before AI call)
@@ -520,7 +540,7 @@ GITHUB ENDPOINTS (5):          ALL ✅ DEPLOYED (connect, callback[D12:fixed], s
 EVIDENCE ENDPOINTS (3):        ALL ✅ DEPLOYED (sync, list, triad)
 KNOWLEDGE ENDPOINTS (7):       ALL ✅ DEPLOYED (CRUD, approve, generate-csr)
 CCS ENDPOINTS (11):            ALL ✅ DEPLOYED (incident lifecycle — v4.4)
-SECURITY ENDPOINTS (3):        ALL ✅ DEPLOYED (data classification — SPG-01)
+SECURITY ENDPOINTS (8):        ALL ✅ DEPLOYED (project-level SPG-01 + resource-level classify, classifications, resource, jurisdiction, secrets audit — CGC-01 GAP-2)
 USAGE ENDPOINTS (3):           ALL ✅ DEPLOYED (current, history, projects[D16] — H1/H2)
 IMAGE ENDPOINTS (5):           ALL ✅ DEPLOYED (Path C — upload, list, get, url, delete)
 LAYER ENDPOINTS (10):          ALL ✅ DEPLOYED (Path B — CRUD + start/complete/verify/fail/retry/evidence)
@@ -531,6 +551,7 @@ WORKSPACE ENDPOINTS (4):       ALL ✅ DEPLOYED (Unified GA:ENV — get, update,
 BRAINSTORM ENDPOINTS (5):      ALL ✅ DEPLOYED (HANDOFF-VD-CI-01 + BQL-01 — create/get artifact, validate, get validation, readiness)
 ASSIGNMENT ENDPOINTS (20):     ALL ✅ DEPLOYED (HANDOFF-TDL-01 — CRUD, lifecycle, escalation, standup, task board)
 CONTINUITY ENDPOINTS (7):      ALL ✅ DEPLOYED (HANDOFF-PCC-01 — capsule, session detail, decisions, artifacts, pins CRUD)
+AGENT ENDPOINTS (14):          ALL ✅ DEPLOYED (CGC-01 GAP-1 — agent CRUD, task CRUD, orchestrate, execute, approve, audit-log)
 ```
 
 See §10.1 for complete endpoint matrix with paths and methods.
@@ -543,7 +564,7 @@ See §10.1 for complete endpoint matrix with paths and methods.
 
 ```
 pmerit-technologies/products/aixord-router-worker/
-├── migrations/                          # 21 SQL migration files
+├── migrations/                          # 29 SQL migration files
 │   ├── 0001_subscriptions.sql           # Subscriptions, usage, audit_log
 │   ├── 002_backend_schema.sql           # Users, projects, sessions, gates, phase
 │   ├── 003_messages_schema.sql          # Messages table for chat history
@@ -568,9 +589,17 @@ pmerit-technologies/products/aixord-router-worker/
 │   ├── 027_fix_user_fk_cascades.sql   # FK cascades SET NULL (images, knowledge_artifacts, github_evidence)
 │   ├── 028_conversations.sql          # Conversations + conversation_messages tables (SYS-01)
 │   ├── 028_user_name_column.sql       # Add name column to users table
-│   └── 029_rate_limits.sql            # Rate limiting table
+│   ├── 029_rate_limits.sql            # Rate limiting table
+│   ├── 030_conservation_law.sql       # Conservation law tests (CGC-01 GAP-4)
+│   ├── 031_phase_contracts.sql        # Phase contract validations (CGC-01 GAP-5-8)
+│   ├── 032_deliverable_numbering.sql  # Deliverable numbering map (CGC-01 GAP-9)
+│   ├── 033_numbering_fixes.sql        # Missing indexes/constraints (CGC-01 GAP-10)
+│   ├── 034_resource_security.sql      # Resource-level security classifications (CGC-01 GAP-2/3)
+│   ├── 035_agent_state.sql            # Agent instances (CGC-01 GAP-1)
+│   ├── 036_task_queue.sql             # Agent task queue (CGC-01 GAP-1)
+│   └── 037_agent_audit.sql            # Agent audit log (CGC-01 GAP-1)
 ├── src/
-│   ├── api/                             # Backend API handlers (21 modules)
+│   ├── api/                             # Backend API handlers (24 modules)
 │   │   ├── auth.ts                      # 9 endpoints: register, login, me, logout,
 │   │   │                                #   verify-email, resend-verification,
 │   │   │                                #   forgot-password, reset-password, recover-username
@@ -583,14 +612,18 @@ pmerit-technologies/products/aixord-router-worker/
 │   │   ├── evidence.ts                  # 3 endpoints: sync, list, triad
 │   │   ├── knowledge.ts                 # 7 endpoints: CRUD, approve, generate-csr
 │   │   ├── ccs.ts                       # 11 endpoints: CCS incident lifecycle (v4.4)
-│   │   ├── security.ts                  # 3 endpoints: data classification (SPG-01)
+│   │   ├── security.ts                  # 8 endpoints: data classification (SPG-01) + resource-level (CGC-01 GAP-2)
 │   │   ├── usage.ts                     # 2 endpoints: current, history (H1/H2)
 │   │   ├── images.ts                    # 5 endpoints: upload, list, get, url, delete (Path C)
 │   │   ├── layers.ts                    # 5 endpoints: CRUD + verify (Path B)
 │   │   ├── engineering.ts               # 35 endpoints: Part XIV Engineering Governance (SAR, contracts, fitness, tests, budget, readiness, rollback, alerts, knowledge, compliance)
 │   │   ├── brainstorm.ts               # 4 endpoints: brainstorm artifacts CRUD + validation engine (HANDOFF-VD-CI-01)
 │   │   ├── assignments.ts              # 20 endpoints: task assignments CRUD, lifecycle, escalation, standup, task board (HANDOFF-TDL-01)
-│   │   └── continuity.ts              # 7 endpoints: project continuity capsule, session detail, decisions, artifacts, pins CRUD (HANDOFF-PCC-01)
+│   │   ├── continuity.ts              # 7 endpoints: project continuity capsule, session detail, decisions, artifacts, pins CRUD (HANDOFF-PCC-01)
+│   │   └── agents.ts                  # 14 endpoints: agent CRUD, task CRUD, orchestrate, execute, approve, audit-log (CGC-01 GAP-1)
+│   ├── agents/                          # Multi-agent architecture (CGC-01 GAP-1)
+│   │   ├── registry.ts                  # Agent definitions (5 agents), competency routing, cost tiers
+│   │   └── executor.ts                  # Worker-Auditor loop, retry logic, fallback models
 │   ├── middleware/
 │   │   ├── requireAuth.ts               # Bearer token auth middleware
 │   │   ├── validateBody.ts              # Lightweight body validation (zod-compatible interface)
@@ -624,7 +657,7 @@ pmerit-technologies/products/aixord-router-worker/
 │   │   └── cost.ts                      # Cost estimation per model
 │   ├── index.ts                         # Main entry point (Hono app, route registration)
 │   └── types.ts                         # All type definitions (~817 lines)
-├── tests/                              # Integration test suite (77 tests — HANDOFF-TDL-01 Task 8)
+├── tests/                              # Integration test suite (161 tests — TDL-01 Task 8 + SYS-02)
 │   ├── helpers.ts                      # Mock D1, factory functions
 │   ├── phase-validators.test.ts       # 23 tests: brainstorm validation, PLAN/EXECUTE/REVIEW checks
 │   ├── warning-override.test.ts       # 12 tests: three-way finalize, override audit
@@ -635,7 +668,7 @@ pmerit-technologies/products/aixord-router-worker/
 └── tsconfig.json
 ```
 
-**Total: 39+ TypeScript source files, 17 API modules, 102+ endpoints, 77 integration tests**
+**Total: 44+ TypeScript source files, 24 API modules, 190+ endpoints, 77 integration tests**
 
 ### 7.2 Frontend: WebApp UI
 
@@ -703,7 +736,10 @@ pmerit-technologies/products/aixord-webapp-ui/
 │   │   ├── TaskBoard.tsx               # Kanban task board (HANDOFF-TDL-01 — status columns, priority badges, lifecycle actions)
 │   │   ├── EscalationBanner.tsx        # Escalation decision banners (HANDOFF-TDL-01 — options, recommendation, resolve)
 │   │   ├── StandupCard.tsx             # Structured standup reports (HANDOFF-TDL-01 — completed/blocked/next)
-│   │   └── ProjectMemoryPanel.tsx     # Project continuity memory panel (HANDOFF-PCC-01 — timeline, decisions, pins, progress)
+│   │   ├── ProjectMemoryPanel.tsx     # Project continuity memory panel (HANDOFF-PCC-01 — timeline, decisions, pins, progress)
+│   │   ├── SecurityDashboard.tsx     # Resource-level security dashboard (CGC-01 GAP-2 — classification list, audit log)
+│   │   ├── AgentDashboard.tsx        # Multi-agent status dashboard (CGC-01 GAP-1 — agents, tasks, 5s polling)
+│   │   └── ApprovalGate.tsx          # HITL approval modal (CGC-01 GAP-1 — audit report, findings, feedback)
 │   ├── contexts/
 │   │   ├── AuthContext.tsx              # Auth state (token, user, login/logout)
 │   │   ├── UserSettingsContext.tsx      # Subscription, API keys, preferences
@@ -844,7 +880,7 @@ pmerit-technologies/products/aixord-webapp-ui/
 | Type | Cloudflare D1 (SQLite) |
 | Binding | `DB` |
 
-### 9.2 Table Schema (54 Tables — 25 Migrations + 3 Inline)
+### 9.2 Table Schema (59 Tables — 33 Migrations + 3 Inline)
 
 #### Core Tables (migrations 001-002)
 ```sql
@@ -999,6 +1035,61 @@ reassessment_log (id, project_id → projects, level [1|2|3], phase_from, phase_
 -- Level 2: Major Pivot (cross kingdom, ACTIVE artifacts → SUPERSEDED)
 -- Level 3: Fresh Start (3rd+ reassessment, review summary ≥ 50 chars)
 -- Index: idx_reassessment_project
+```
+
+#### Schema Reconciliation (migrations 026-029 — Session 49)
+```sql
+-- migration 026: FK cascades on decisions, ghost table cleanup, missing columns
+-- migration 027: FK cascades SET NULL on images, knowledge_artifacts, github_evidence
+-- migration 028: conversations + conversation_messages tables (SYS-01)
+-- migration 028b: Add name column to users table
+-- migration 029: rate_limits table
+```
+
+#### Conservation Law + Phase Contracts (migrations 030-033 — CGC-01 Phase 1)
+```sql
+-- migration 030: conservation_law_tests — EXECUTION_TOTAL = VERIFIED_REALITY + FORMULA_EXECUTION
+conservation_law_tests (id, project_id → projects, test_type, execution_total, verified_reality,
+                        formula_execution, delta, passed, evidence JSON, created_at)
+-- migration 031: phase_contract_validations — L-BRN, L-PLN, L-BPX, L-IVL enforcement
+phase_contract_validations (id, project_id → projects, phase, law_code, validation_type,
+                            passed, details JSON, validator_version, created_at)
+-- migration 032: deliverable_numbering_map — Canonical D-number tracking
+deliverable_numbering_map (id, project_id → projects, deliverable_id → blueprint_deliverables,
+                           d_number, scope_path, canonical_name, created_at)
+-- migration 033: Missing index/constraint fixes
+```
+
+#### Resource-Level Security (migration 034 — CGC-01 Phase 2 GAP-2/3)
+```sql
+security_classifications (id, project_id → projects, resource_type, resource_id,
+                          classification ['PUBLIC'|'INTERNAL'|'CONFIDENTIAL'|'RESTRICTED'],
+                          pii, phi, financial, minor_data, jurisdiction, regulations JSON,
+                          ai_exposure_allowed, retention_days, classified_by, review_status, reviewed_by,
+                          reviewed_at, created_at, updated_at)
+secret_access_log (id, project_id → projects, secret_key, access_type ['READ'|'WRITE'|'ROTATE'|'DELETE'],
+                   user_id, ip_address, user_agent, created_at)
+-- Indexes: project+resource_type, project+resource_type+resource_id UNIQUE, project+classification
+```
+
+#### Worker-Auditor Multi-Agent Architecture (migrations 035-037 — CGC-01 Phase 3 GAP-1)
+```sql
+agent_instances (id, project_id → projects, agent_type ['SUPERVISOR'|'WORKER'|'AUDITOR'],
+                 agent_key, model_provider, model_id, status ['INITIALIZING'|'ACTIVE'|'PAUSED'|
+                 'WAITING_APPROVAL'|'EXECUTING'|'COMPLETED'|'FAILED'|'TERMINATED'],
+                 checkpoint_state, tokens_used, wu_consumed, parent_agent_id → self, created_at, updated_at)
+agent_tasks (id, project_id → projects, agent_id → agent_instances, supervisor_id → agent_instances,
+             task_type [11 types], task_description, acceptance_criteria JSON, master_scope,
+             dag_dependencies JSON, status [9 states], execution_mode ['AUTONOMOUS'|'USER_GUIDED'|'HYBRID'],
+             worker_output, audit_report JSON, attempt_count, max_attempts, confidence_score,
+             logic_score, procedural_score, validation_score, readiness_score,
+             approved_by, approved_at, approval_feedback, created_at, updated_at)
+agent_audit_log (id, project_id → projects, agent_id, task_id, event_type [23 types],
+                 event_data, supervisor_id, worker_id, auditor_id,
+                 human_actor_id, human_decision, human_feedback,
+                 latency_ms, tokens_in, tokens_out, cost_usd, wu_delta,
+                 security_classification, created_at)
+-- Indexes: project, agent, task, event_type, created_at, human_actor
 ```
 
 ### 9.3 R2 Object Storage
@@ -2521,6 +2612,62 @@ Added `PHASE_OUTPUT_CONTRACTS` map injected after Interaction Rules. Per-phase s
 
 **Commit:** `d0b14ec` — 2 files changed, 211 insertions, 99 deletions
 
+### 16.31 Sessions 49-51+ — Infrastructure Sync + Consolidated Gap Closure / HANDOFF-CGC-01 (COMPLETE)
+
+**Source:** HANDOFF-CGC-01_CONSOLIDATED_GAP_CLOSURE.md — 10 Gaps, 3 Phases
+**Status:** :lock: **LOCKED** — All gaps closed, 3 phases deployed
+
+**Principle:** "Close every gap. Enforce every law. Build the multi-agent architecture."
+
+#### Session 49: Infrastructure Sync
+- Copilot PR merge (#5, #6)
+- DB migrations 026-029 (schema reconciliation, conversations, rate limits)
+- SYS-02 Execution Layer E2E tests (59 tests)
+- Zod removal + lightweight validation
+- 11 TypeScript error fixes
+
+#### Phase 1 — Conservation Law + Phase Contracts (GAPs 4-10)
+
+| Gap | Description | Deliverable |
+|-----|-------------|-------------|
+| GAP-4 | Conservation Law Tests | D44 — `conservation_law_tests` table + validation logic |
+| GAP-5 | L-BRN Enforcement | D45 — ≥3 brainstorm options validator |
+| GAP-6 | L-PLN Enforcement | D46 — DAG required validator |
+| GAP-7 | L-BPX Enforcement | D47 — Deliverables complete validator |
+| GAP-8 | L-IVL Enforcement | D48 — Tests pass validator |
+| GAP-9 | Migration Numbering | D49 — `deliverable_numbering_map` + reconciliation |
+| GAP-10 | Numbering Fixes | Included in D49 — Missing constraints/indexes |
+
+**Commit:** `6fd1023` — Phase 1, 10 files, 1,028 insertions
+
+#### Phase 2 — Resource-Level Security (GAPs 2-3)
+
+| Gap | Description | Deliverable |
+|-----|-------------|-------------|
+| GAP-2 | Security Gate Enforcement | D50/D51 — 5 resource-level endpoints + `enforceAIExposureControl()` + `auditSecretAccess()` + SecurityDashboard |
+| GAP-3 | Secret Access Audit | Included in D50 — `secret_access_log` table + audit endpoint |
+
+Backend: Updated `security.ts` from v4.3 to v4.5.1 header, added resource classification, jurisdiction review, secret audit endpoints. Frontend: Added 3 methods to `securityApi`, created `SecurityDashboard.tsx`.
+
+**Commit:** `48dc517` — Phase 2, 7 files, 1,455 insertions
+
+#### Phase 3 — Worker-Auditor Multi-Agent Architecture (GAP-1)
+
+| Component | Description | Deliverable |
+|-----------|-------------|-------------|
+| Migrations 035-037 | `agent_instances`, `agent_tasks`, `agent_audit_log` tables | D52 |
+| `agents/registry.ts` | 5 agent definitions (supervisor, codeWorker, bulkWorker, researchWorker, auditor) | D52 |
+| `agents/executor.ts` | Worker-Auditor loop with retry, fallback models | D52 |
+| `api/agents.ts` | 14 Hono endpoints (CRUD, orchestrate, execute, approve, audit-log) | D52 |
+| `AgentDashboard.tsx` | Real-time agent + task status with 5s polling | D53 |
+| `ApprovalGate.tsx` | HITL modal with audit report, findings, feedback | D53 |
+
+Agent registry: 5 agents mapped to preferred models (Claude Sonnet 4, GPT-4o, Gemini 2.5 Pro, DeepSeek Chat) with fallback chains. Executor: Worker → Auditor → (Retry|HITL|Pass) loop, max 3 attempts, readiness metric R = L × P × V. 23 audit event types for full lifecycle tracking.
+
+**Commit:** `29f2124` — Phase 3, 9 files, 1,909 insertions
+
+**Total CGC-01:** 3 commits, 26 files changed, 4,392 insertions, 10 deliverables (D44-D53)
+
 ---
 
 ## 17. RECOVERY COMMANDS
@@ -2531,12 +2678,12 @@ Added `PHASE_OUTPUT_CONTRACTS` map injected after Interaction Rules. Per-phase s
 TECH CONTINUE
 Project: D4-CHAT
 Status: Backend 100%, Frontend ~100% (all API methods wired to UI)
-Governance: AIXORD v4.5 (Hard Gate Enforcement + Phase Awareness Payloads + Finalize Transaction + Task Delegation Layer + Project Continuity Capsule)
+Governance: AIXORD v4.5.1 (CGC-01 Consolidated Gap Closure — conservation laws, phase contracts, resource security, multi-agent)
 Phase Enforcement: Tier 1 ACTIVE (hard gate blocking + Finalize Phase + brainstorm validation + work order injection + continuity conflict detection)
-APIs Working: Auth (9), Projects (5), State (5), Decisions (2), Messages (4), Sessions (7), Router (4), GitHub (5), Evidence (3), Images (5), Security (3), CCS (11), Layers (5), Engineering (35), Knowledge (7), Usage (3), Blueprint (12), Workspace (4), Brainstorm (4), Assignments (20), Continuity (7)
-Completed: All Session 22 Handoff Tasks (5/5), Hard Gate Enforcement, Phase Awareness Payloads, Finalize Phase Transaction, Non-Software Project Types, Director Review Packet, Context Awareness Bridge, Brainstorm Validation Engine, Task Delegation Layer (full-stack), Phase Validators (VD-CI-01 A3), Quality Warning Override (VD-CI-01 A4), Integration Tests (TDL-01 Task 8), Project Continuity Capsule (PCC-01 full-stack), PTX-01, BQL-01, GFB-01, DPF-01
+APIs Working: Auth (9), Projects (5), State (5), Decisions (2), Messages (4), Sessions (7), Router (4), GitHub (5), Evidence (3), Images (5), Security (8), CCS (11), Layers (5), Engineering (35), Knowledge (7), Usage (3), Blueprint (12), Workspace (4), Brainstorm (4), Assignments (20), Continuity (7), Agents (14)
+Completed: All prior handoffs + HANDOFF-CGC-01 (10 gaps / 3 phases — conservation law tests, phase contract validators, resource-level security, Worker-Auditor architecture)
 Remaining: HANDOFF-VD-CI-01 Sessions 4+ (B1-B6), Tier 2 (extended phases), Tier 3 (artifact contracts), Path B Phase 2+3, E2E billing test, data population
-Last Session: Session 48 (Diagnostic + Prompt Fixes — HANDOFF-DPF-01)
+Last Session: Session 51+ (HANDOFF-CGC-01 — Consolidated Gap Closure)
 ```
 
 ### 17.2 AIXORD Continue Format
@@ -2550,7 +2697,7 @@ Phase: EXECUTE
 Reality: GREENFIELD
 Formula: Bound to D4-CHAT Master Scope
 Gates: LIC=1, DIS=1, TIR=1, ENV=1, OBJ=1, RA=1
-Security: GS:DC=0 (pending), GS:AC=1
+Security: GS:DC=1, GS:DP=1, GS:AC=1, GS:AI=1, GS:JR=1, GS:RT=1, GS:SA=1
 ```
 
 ### 17.3 Deployment Commands
@@ -2598,7 +2745,7 @@ npx wrangler pages deploy dist --project-name=aixord-webapp-ui
 | SPG-01 Backend | Complete | Complete | **API + enforcement ✅ (Session 13)** |
 | D3 SDK Integration | Complete | Complete | **sdk.ts + hook + chat binding ✅ (Session 13)** |
 | GKDL-01 Knowledge | Complete | Complete | API + UI deployed ✅ |
-| GateTracker v4.3 | 17 gates | 17 gates | Frontend + Companion ✅ |
+| GateTracker v4.5.1 | 29 gates | 29 gates | Frontend + Companion ✅ (PATCH-GATE-RECONCILIATION-01) |
 | D5 Companion Sync | Complete | Complete | API client + hooks ✅ |
 | Billing E2E | Complete | Complete | Checkout verified ✅ (Session 13) |
 | Session Graph (v4.4) | Complete | Complete | API + UI deployed ✅ (Session 20) |
