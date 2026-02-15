@@ -98,8 +98,8 @@ app.use('/api/v1/auth/login', rateLimit({ windowMs: 60000, maxRequests: 10 }));
 app.use('/api/v1/auth/register', rateLimit({ windowMs: 60000, maxRequests: 10 }));
 app.use('/api/v1/auth/*', rateLimit({ windowMs: 60000, maxRequests: 20 }));
 
-// Router execute: 30 requests per minute (prevent API abuse)
-app.use('/v1/router/execute', rateLimit({ windowMs: 60000, maxRequests: 30 }));
+// Router execute: 200 requests per minute (matches global limit — auth handles abuse)
+app.use('/v1/router/execute', rateLimit({ windowMs: 60000, maxRequests: 200 }));
 
 // Billing endpoints: 20 requests per minute (prevent payment fraud attempts)
 app.use('/api/v1/billing/*', rateLimit({ windowMs: 60000, maxRequests: 20 }));

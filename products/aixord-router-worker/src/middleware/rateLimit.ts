@@ -51,19 +51,21 @@ export function rateLimit(config: RateLimitConfig): MiddlewareHandler {
       const windowEnd = windowStart + windowMs;
       const resetTimestamp = Math.floor(windowEnd / 1000);
 
-      // Check current count
-      const existing = await c.env.DB.prepare(`
-        SELECT request_count
-        FROM rate_limits
-        WHERE key = ? AND window_key = ?
+      // Atomic upsert: increment counter or insert with count=1
+      // Uses INSERT ... ON CONFLICT to avoid race conditions between concurrent requests
+      const result = await c.env.DB.prepare(`
+        INSERT INTO rate_limits (key, window_key, request_count, created_at)
+        VALUES (?, ?, 1, datetime('now'))
+        ON CONFLICT(key, window_key) DO UPDATE SET request_count = request_count + 1
+        RETURNING request_count
       `)
         .bind(compositeKey, windowKey)
         .first<{ request_count: number }>();
 
-      const currentCount = existing?.request_count || 0;
+      const currentCount = result?.request_count || 1;
 
-      // Check if limit exceeded
-      if (currentCount >= maxRequests) {
+      // Check if limit exceeded (after increment — count includes this request)
+      if (currentCount > maxRequests) {
         const retryAfter = Math.ceil((windowEnd - now) / 1000);
 
         c.header('X-RateLimit-Limit', maxRequests.toString());
@@ -82,26 +84,8 @@ export function rateLimit(config: RateLimitConfig): MiddlewareHandler {
         );
       }
 
-      // Increment counter (upsert)
-      if (existing) {
-        await c.env.DB.prepare(`
-          UPDATE rate_limits
-          SET request_count = request_count + 1
-          WHERE key = ? AND window_key = ?
-        `)
-          .bind(compositeKey, windowKey)
-          .run();
-      } else {
-        await c.env.DB.prepare(`
-          INSERT INTO rate_limits (key, window_key, request_count, created_at)
-          VALUES (?, ?, 1, datetime('now'))
-        `)
-          .bind(compositeKey, windowKey)
-          .run();
-      }
-
-      // Set rate limit headers
-      const remaining = maxRequests - currentCount - 1;
+      // Set rate limit headers (currentCount already includes this request)
+      const remaining = maxRequests - currentCount;
       c.header('X-RateLimit-Limit', maxRequests.toString());
       c.header('X-RateLimit-Remaining', Math.max(0, remaining).toString());
       c.header('X-RateLimit-Reset', resetTimestamp.toString());
