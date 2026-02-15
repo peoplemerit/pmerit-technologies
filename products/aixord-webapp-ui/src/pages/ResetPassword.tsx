@@ -6,8 +6,7 @@
 
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-
-const API_BASE = 'https://aixord-router-worker.peoplemerit.workers.dev/api/v1';
+import { API_BASE } from '../lib/api/config';
 
 export function ResetPassword() {
   const [searchParams] = useSearchParams();
