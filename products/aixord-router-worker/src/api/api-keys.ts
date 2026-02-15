@@ -8,6 +8,21 @@ import type { Env, Provider } from '../types';
 import { nanoid } from 'nanoid';
 import { requireAuth } from '../middleware/requireAuth';
 import { invalidateKeyCache } from '../routing/key-resolver';
+import { encryptAESGCM, decryptAESGCM } from '../utils/crypto';
+
+/**
+ * Decrypt an API key, with transparent migration for plaintext keys.
+ * If decryption fails (key is plaintext), returns it as-is.
+ */
+async function decryptApiKey(storedKey: string, encryptionKey: string | undefined): Promise<string> {
+  if (!encryptionKey) return storedKey;
+  try {
+    return await decryptAESGCM(storedKey, encryptionKey);
+  } catch {
+    // Not encrypted (plaintext legacy key) — return as-is
+    return storedKey;
+  }
+}
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -74,10 +89,19 @@ app.get('/', async (c) => {
     ORDER BY provider
   `).bind(userId).all();
 
+  // Decrypt API keys for response (HANDOFF-COPILOT-AUDIT-01)
+  const encKey = c.env.API_KEY_ENCRYPTION_KEY;
+  const decryptedKeys = await Promise.all(
+    (keys.results || []).map(async (row: any) => ({
+      ...row,
+      api_key: await decryptApiKey(row.api_key, encKey),
+    }))
+  );
+
   return c.json({
     success: true,
-    keys: keys.results || [],
-    count: keys.results?.length || 0
+    keys: decryptedKeys,
+    count: decryptedKeys.length
   });
 });
 
@@ -124,6 +148,12 @@ app.post('/', async (c) => {
 
   const now = new Date().toISOString();
 
+  // Encrypt API key before storage (HANDOFF-COPILOT-AUDIT-01)
+  const encKey = c.env.API_KEY_ENCRYPTION_KEY;
+  const keyToStore = encKey
+    ? await encryptAESGCM(body.apiKey.trim(), encKey)
+    : body.apiKey.trim();
+
   if (existing) {
     // Update existing key
     await c.env.DB.prepare(`
@@ -131,7 +161,7 @@ app.post('/', async (c) => {
       SET api_key = ?, label = ?, updated_at = ?
       WHERE user_id = ? AND provider = ?
     `).bind(
-      body.apiKey.trim(),
+      keyToStore,
       body.label || null,
       now,
       userId,
@@ -158,7 +188,7 @@ app.post('/', async (c) => {
       keyId,
       userId,
       body.provider,
-      body.apiKey.trim(),
+      keyToStore,
       body.label || null,
       now,
       now

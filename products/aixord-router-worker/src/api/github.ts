@@ -15,6 +15,7 @@
 import { Hono } from 'hono';
 import type { Env, GitHubConnection } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { encryptAESGCM, decryptAESGCM } from '../utils/crypto';
 
 const github = new Hono<{ Bindings: Env }>();
 
@@ -27,70 +28,17 @@ github.use('/*', async (c, next) => {
 });
 
 // =============================================================================
-// ENCRYPTION HELPERS
+// ENCRYPTION HELPERS (delegates to shared utils/crypto.ts)
 // =============================================================================
 
-/**
- * Encrypt a token for storage
- * Uses AES-GCM with the GITHUB_TOKEN_ENCRYPTION_KEY
- */
+/** Encrypt a token for storage — delegates to shared AES-GCM utility */
 async function encryptToken(token: string, key: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(key.padEnd(32, '0').slice(0, 32));
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'AES-GCM' },
-    false,
-    ['encrypt']
-  );
-
-  const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    cryptoKey,
-    encoder.encode(token)
-  );
-
-  // Combine IV + encrypted data and base64 encode
-  const combined = new Uint8Array(iv.length + encrypted.byteLength);
-  combined.set(iv);
-  combined.set(new Uint8Array(encrypted), iv.length);
-
-  return btoa(String.fromCharCode(...combined));
+  return encryptAESGCM(token, key);
 }
 
-/**
- * Decrypt a stored token
- */
+/** Decrypt a stored token — delegates to shared AES-GCM utility */
 async function decryptToken(encryptedToken: string, key: string): Promise<string> {
-  const decoder = new TextDecoder();
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(key.padEnd(32, '0').slice(0, 32));
-
-  // Decode base64
-  const combined = Uint8Array.from(atob(encryptedToken), c => c.charCodeAt(0));
-
-  // Extract IV and encrypted data
-  const iv = combined.slice(0, 12);
-  const encrypted = combined.slice(12);
-
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'AES-GCM' },
-    false,
-    ['decrypt']
-  );
-
-  const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
-    cryptoKey,
-    encrypted
-  );
-
-  return decoder.decode(decrypted);
+  return decryptAESGCM(encryptedToken, key);
 }
 
 // =============================================================================

@@ -40,6 +40,9 @@ export interface Env {
   GITHUB_REDIRECT_URI?: string;
   GITHUB_TOKEN_ENCRYPTION_KEY?: string;
 
+  // BYOK API key encryption (HANDOFF-COPILOT-AUDIT-01)
+  API_KEY_ENCRYPTION_KEY?: string;
+
   // Frontend URL for OAuth redirects (PATCH-CORS-01)
   FRONTEND_URL?: string;
 

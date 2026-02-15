@@ -18,13 +18,16 @@ import type { Env } from '../types';
 import { validateBody } from '../middleware/validateBody';
 import { loginSchema, registerSchema } from '../schemas/common';
 import { isByokTier } from '../config/tiers';
+import { hashPasswordPBKDF2, verifyPasswordPBKDF2, hashSHA256 } from '../utils/crypto';
 
 const auth = new Hono<{ Bindings: Env }>();
 
 /**
- * Hash password using SHA-256 with salt
+ * Legacy: Hash password using SHA-256 with global salt
+ * Kept for transparent migration from SHA-256 → PBKDF2 (HANDOFF-COPILOT-AUDIT-01)
+ * Will be removed after all users have logged in and been migrated.
  */
-async function hashPassword(password: string, salt: string): Promise<string> {
+async function hashPasswordLegacy(password: string, salt: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(password + salt);
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
@@ -120,9 +123,9 @@ auth.post('/register', validateBody(registerSchema), async (c) => {
     return c.json({ error: 'Invalid email format' }, 400);
   }
 
-  // Password validation
-  if (password.length < 6) {
-    return c.json({ error: 'Password must be at least 6 characters' }, 400);
+  // Password validation (aligned to 8 chars — HANDOFF-COPILOT-AUDIT-01)
+  if (password.length < 8) {
+    return c.json({ error: 'Password must be at least 8 characters' }, 400);
   }
 
   // Username validation (optional)
@@ -151,9 +154,10 @@ auth.post('/register', validateBody(registerSchema), async (c) => {
     return c.json({ error: 'Email already registered' }, 409);
   }
 
-  // Hash password
-  const salt = c.env.AUTH_SALT || 'default-salt-change-in-production';
-  const passwordHash = await hashPassword(password, salt);
+  // Hash password with PBKDF2 (HANDOFF-COPILOT-AUDIT-01)
+  const pbkdf2Result = await hashPasswordPBKDF2(password);
+  const passwordHash = pbkdf2Result.hash;
+  const passwordSalt = pbkdf2Result.salt;
 
   const userId = crypto.randomUUID();
 
@@ -162,9 +166,10 @@ auth.post('/register', validateBody(registerSchema), async (c) => {
 
   // Insert user with NO subscription tier — user must explicitly activate Free Trial
   // via POST /v1/billing/activate/trial (HANDOFF-SUBSCRIPTION-LOCKDOWN-01)
+  // PBKDF2 with per-user salt (HANDOFF-COPILOT-AUDIT-01)
   await c.env.DB.prepare(
-    'INSERT INTO users (id, email, password_hash, username, name, email_verified, subscription_tier, trial_expires_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)'
-  ).bind(userId, email.toLowerCase(), passwordHash, username?.toLowerCase() || null, sanitizedName, 'NONE', null).run();
+    'INSERT INTO users (id, email, password_hash, password_salt, hash_algorithm, username, name, email_verified, subscription_tier, trial_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)'
+  ).bind(userId, email.toLowerCase(), passwordHash, passwordSalt, 'pbkdf2', username?.toLowerCase() || null, sanitizedName, 'NONE', null).run();
 
   // Create email verification token
   const verificationToken = generateToken();
@@ -193,13 +198,14 @@ auth.post('/register', validateBody(registerSchema), async (c) => {
     c.env
   );
 
-  // Create session (user can log in but some features may be restricted until verified)
+  // Create session with hashed token (HANDOFF-COPILOT-AUDIT-01)
   const token = crypto.randomUUID();
+  const tokenHash = await hashSHA256(token);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
 
   await c.env.DB.prepare(
-    'INSERT INTO sessions (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
-  ).bind(crypto.randomUUID(), userId, token, expiresAt).run();
+    'INSERT INTO sessions (id, user_id, token, token_hash, expires_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(crypto.randomUUID(), userId, token, tokenHash, expiresAt).run();
 
   return c.json({
     user: { id: userId, email: email.toLowerCase(), name: sanitizedName, emailVerified: true },
@@ -220,16 +226,46 @@ auth.post('/login', validateBody(loginSchema), async (c) => {
     return c.json({ error: 'Email and password required' }, 400);
   }
 
-  // Hash password
-  const salt = c.env.AUTH_SALT || 'default-salt-change-in-production';
-  const passwordHash = await hashPassword(password, salt);
-
-  // Find user
+  // Find user by email only (HANDOFF-COPILOT-AUDIT-01: transparent PBKDF2 migration)
   const user = await c.env.DB.prepare(
-    'SELECT id, email, email_verified FROM users WHERE email = ? AND password_hash = ?'
-  ).bind(email.toLowerCase(), passwordHash).first<{ id: string; email: string; email_verified: number }>();
+    'SELECT id, email, email_verified, password_hash, password_salt, hash_algorithm FROM users WHERE email = ?'
+  ).bind(email.toLowerCase()).first<{
+    id: string;
+    email: string;
+    email_verified: number;
+    password_hash: string;
+    password_salt: string | null;
+    hash_algorithm: string | null;
+  }>();
 
   if (!user) {
+    return c.json({ error: 'Invalid credentials' }, 401);
+  }
+
+  // Verify password based on stored algorithm
+  let passwordValid = false;
+  const algorithm = user.hash_algorithm || 'sha256';
+
+  if (algorithm === 'pbkdf2' && user.password_salt) {
+    // Modern: PBKDF2 verification
+    passwordValid = await verifyPasswordPBKDF2(password, user.password_salt, user.password_hash);
+  } else {
+    // Legacy: SHA-256 with global salt
+    const globalSalt = c.env.AUTH_SALT || 'default-salt-change-in-production';
+    const legacyHash = await hashPasswordLegacy(password, globalSalt);
+    passwordValid = legacyHash === user.password_hash;
+
+    // Transparent upgrade: re-hash with PBKDF2 on successful legacy login
+    if (passwordValid) {
+      const pbkdf2Result = await hashPasswordPBKDF2(password);
+      await c.env.DB.prepare(
+        'UPDATE users SET password_hash = ?, password_salt = ?, hash_algorithm = ?, updated_at = ? WHERE id = ?'
+      ).bind(pbkdf2Result.hash, pbkdf2Result.salt, 'pbkdf2', new Date().toISOString(), user.id).run();
+      console.log(`[AUTH] Transparent PBKDF2 upgrade for user ${user.id.substring(0, 8)}...`);
+    }
+  }
+
+  if (!passwordValid) {
     return c.json({ error: 'Invalid credentials' }, 401);
   }
 
@@ -240,13 +276,14 @@ auth.post('/login', validateBody(loginSchema), async (c) => {
     ).bind(new Date().toISOString(), user.id).run();
   }
 
-  // Create session
+  // Create session with hashed token (HANDOFF-COPILOT-AUDIT-01)
   const token = crypto.randomUUID();
+  const tokenHash = await hashSHA256(token);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
   await c.env.DB.prepare(
-    'INSERT INTO sessions (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
-  ).bind(crypto.randomUUID(), user.id, token, expiresAt).run();
+    'INSERT INTO sessions (id, user_id, token, token_hash, expires_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(crypto.randomUUID(), user.id, token, tokenHash, expiresAt).run();
 
   return c.json({
     user: { id: user.id, email: user.email, emailVerified: true },
@@ -265,13 +302,32 @@ auth.get('/me', async (c) => {
   }
 
   const token = authHeader.slice(7);
+  const tokenHash = await hashSHA256(token);
 
-  const session = await c.env.DB.prepare(`
+  // Try hashed lookup first, fallback to plaintext for migration (HANDOFF-COPILOT-AUDIT-01)
+  let session = await c.env.DB.prepare(`
     SELECT s.*, u.email, u.email_verified
     FROM sessions s
     JOIN users u ON s.user_id = u.id
-    WHERE s.token = ? AND s.expires_at > datetime('now')
-  `).bind(token).first<{ user_id: string; email: string; email_verified: number }>();
+    WHERE s.token_hash = ? AND s.expires_at > datetime('now')
+  `).bind(tokenHash).first<{ user_id: string; email: string; email_verified: number; id: string }>();
+
+  if (!session) {
+    // Fallback: plaintext token lookup (legacy sessions without token_hash)
+    session = await c.env.DB.prepare(`
+      SELECT s.*, u.email, u.email_verified
+      FROM sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.token = ? AND s.expires_at > datetime('now')
+    `).bind(token).first<{ user_id: string; email: string; email_verified: number; id: string }>();
+
+    // Backfill token_hash for this legacy session
+    if (session) {
+      await c.env.DB.prepare(
+        'UPDATE sessions SET token_hash = ? WHERE id = ?'
+      ).bind(tokenHash, session.id).run();
+    }
+  }
 
   if (!session) {
     return c.json({ error: 'Invalid or expired token' }, 401);
@@ -282,18 +338,23 @@ auth.get('/me', async (c) => {
   });
 });
 
-// DEAD ENDPOINT: No frontend consumer — commented 2026-02-12
 /**
  * POST /api/v1/auth/logout
+ * Invalidates the current session server-side (HANDOFF-COPILOT-AUDIT-01)
  */
-// auth.post('/logout', async (c) => {
-//   const authHeader = c.req.header('Authorization');
-//   if (authHeader?.startsWith('Bearer ')) {
-//     const token = authHeader.slice(7);
-//     await c.env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
-//   }
-//   return c.json({ success: true });
-// });
+auth.post('/logout', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7);
+    const tokenHash = await hashSHA256(token);
+    // Delete by hash first, then fallback to plaintext for migration period
+    const hashResult = await c.env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(tokenHash).run();
+    if (!hashResult.meta.changes || hashResult.meta.changes === 0) {
+      await c.env.DB.prepare('DELETE FROM sessions WHERE token = ?').bind(token).run();
+    }
+  }
+  return c.json({ success: true });
+});
 
 /**
  * GET /api/v1/auth/subscription
@@ -306,12 +367,29 @@ auth.get('/subscription', async (c) => {
   }
 
   const token = authHeader.slice(7);
+  const tokenHash = await hashSHA256(token);
 
-  const session = await c.env.DB.prepare(`
-    SELECT s.user_id
+  // Try hashed lookup first, fallback to plaintext for migration (HANDOFF-COPILOT-AUDIT-01)
+  let session = await c.env.DB.prepare(`
+    SELECT s.user_id, s.id
     FROM sessions s
-    WHERE s.token = ? AND s.expires_at > datetime('now')
-  `).bind(token).first<{ user_id: string }>();
+    WHERE s.token_hash = ? AND s.expires_at > datetime('now')
+  `).bind(tokenHash).first<{ user_id: string; id: string }>();
+
+  if (!session) {
+    session = await c.env.DB.prepare(`
+      SELECT s.user_id, s.id
+      FROM sessions s
+      WHERE s.token = ? AND s.expires_at > datetime('now')
+    `).bind(token).first<{ user_id: string; id: string }>();
+
+    // Backfill token_hash
+    if (session) {
+      await c.env.DB.prepare(
+        'UPDATE sessions SET token_hash = ? WHERE id = ?'
+      ).bind(tokenHash, session.id).run();
+    }
+  }
 
   if (!session) {
     return c.json({ error: 'Invalid or expired token' }, 401);
@@ -597,14 +675,13 @@ auth.post('/reset-password', async (c) => {
     return c.json({ error: 'Reset link has expired. Please request a new one.' }, 400);
   }
 
-  // Hash new password
-  const salt = c.env.AUTH_SALT || 'default-salt-change-in-production';
-  const passwordHash = await hashPassword(password, salt);
+  // Hash new password with PBKDF2 (HANDOFF-COPILOT-AUDIT-01)
+  const pbkdf2Result = await hashPasswordPBKDF2(password);
 
-  // Update password
+  // Update password with per-user salt
   await c.env.DB.prepare(
-    'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?'
-  ).bind(passwordHash, new Date().toISOString(), tokenRecord.user_id).run();
+    'UPDATE users SET password_hash = ?, password_salt = ?, hash_algorithm = ?, updated_at = ? WHERE id = ?'
+  ).bind(pbkdf2Result.hash, pbkdf2Result.salt, 'pbkdf2', new Date().toISOString(), tokenRecord.user_id).run();
 
   // Mark token as used
   await c.env.DB.prepare(

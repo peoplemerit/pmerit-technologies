@@ -60,8 +60,16 @@ import governance from './api/governance';
 import artifacts from './api/artifacts';
 import apiKeys from './api/api-keys';
 import agents from './api/agents';
+import { decryptAESGCM } from './utils/crypto';
 
 const app = new Hono<{ Bindings: Env }>();
+
+// Request correlation ID middleware (HANDOFF-COPILOT-AUDIT-01)
+app.use('*', async (c, next) => {
+  const requestId = c.req.header('X-Request-ID') || crypto.randomUUID();
+  c.header('X-Request-ID', requestId);
+  await next();
+});
 
 // CORS middleware (PATCH-CORS-01: Updated for new domains, LOW-07: localhost conditional)
 app.use('*', async (c, next) => {
@@ -672,16 +680,8 @@ app.post('/v1/router/execute', async (c) => {
 
           if (ghConn?.repo_owner && ghConn?.repo_name && ghConn?.access_token_encrypted) {
             const encKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY || 'default-key-change-in-production';
-            // Decrypt token inline (same pattern as evidence-fetch.ts)
-            const decoder = new TextDecoder();
-            const encoder = new TextEncoder();
-            const keyData = encoder.encode(encKey.padEnd(32, '0').slice(0, 32));
-            const combined = Uint8Array.from(atob(ghConn.access_token_encrypted), ch => ch.charCodeAt(0));
-            const iv = combined.slice(0, 12);
-            const encrypted = combined.slice(12);
-            const cryptoKey = await crypto.subtle.importKey('raw', keyData, 'AES-GCM', false, ['decrypt']);
-            const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, encrypted);
-            const ghToken = decoder.decode(decrypted);
+            // Decrypt token using shared crypto utility (HANDOFF-COPILOT-AUDIT-01)
+            const ghToken = await decryptAESGCM(ghConn.access_token_encrypted, encKey);
 
             const repoPath = `${ghConn.repo_owner}/${ghConn.repo_name}`;
 

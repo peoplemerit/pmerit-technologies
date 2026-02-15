@@ -133,12 +133,12 @@ export function Settings() {
     }
   }, [isAuthenticated, user]);
 
-  // API Key validation patterns
+  // API Key validation patterns — aligned to backend (HANDOFF-COPILOT-AUDIT-01)
   const API_KEY_PATTERNS: Record<string, RegExp> = {
-    anthropic: /^sk-ant-[a-zA-Z0-9\-_]{95,}$/,
-    openai: /^sk-[a-zA-Z0-9\-_]{20,}$/,
-    google: /^AIzaSy[a-zA-Z0-9\-_]{33}$/,
-    deepseek: /^sk-[a-zA-Z0-9]{32,}$/,
+    anthropic: /^sk-ant-api03-[a-zA-Z0-9_-]{32,}$/,
+    openai: /^sk-[a-zA-Z0-9._-]{20,}$/,
+    google: /^AIzaSy[a-zA-Z0-9_-]{30,}$/,
+    deepseek: /^sk-[a-zA-Z0-9_-]{32,}$/,
   };
 
   const API_KEY_EXAMPLES: Record<string, string> = {

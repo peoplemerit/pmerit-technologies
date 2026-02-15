@@ -13,6 +13,7 @@
 import type { Provider, Subscription, Env } from '../types';
 import { RouterError } from '../types';
 import { isByokTier, isPlatformTier } from '../config/tiers';
+import { decryptAESGCM } from '../utils/crypto';
 
 /**
  * Cache for BYOK API keys
@@ -95,18 +96,31 @@ async function resolveBYOKKey(
     );
   }
 
-  // Update cache
+  // Decrypt API key (HANDOFF-COPILOT-AUDIT-01)
+  // Transparent migration: try decrypt first, if it fails (plaintext), use as-is
+  let decryptedKey: string;
+  const encKey = env.API_KEY_ENCRYPTION_KEY;
+  if (encKey) {
+    try {
+      decryptedKey = await decryptAESGCM(userKey.api_key, encKey);
+    } catch {
+      // Not encrypted (plaintext legacy key) — use as-is
+      decryptedKey = userKey.api_key;
+    }
+  } else {
+    decryptedKey = userKey.api_key;
+  }
+
+  // Update cache (cache the decrypted key)
   KEY_CACHE.set(cacheKey, {
-    key: userKey.api_key,
+    key: decryptedKey,
     timestamp: now,
     updated_at: userKey.updated_at
   });
 
-  // Debug logging to track key resolution and cache issues
-  const keyPreview = userKey.api_key.substring(0, 15) + '...';
-  console.log(`[BYOK] [CACHE MISS] Fetched fresh ${provider} key for user ${userId.substring(0, 8)}... | Updated: ${userKey.updated_at} | Preview: ${keyPreview}`);
+  console.log(`[BYOK] [CACHE MISS] Fetched fresh ${provider} key for user ${userId.substring(0, 8)}... | Updated: ${userKey.updated_at}`);
 
-  return userKey.api_key;
+  return decryptedKey;
 }
 
 /**

@@ -312,6 +312,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // Server-side session invalidation (HANDOFF-COPILOT-AUDIT-01)
+    // Best-effort: always clear local state regardless of API success
+    const currentToken = getToken();
+    if (currentToken) {
+      api.auth.logout(currentToken).catch(() => {
+        // Ignore errors — local cleanup is sufficient
+      });
+    }
     removeToken();
     setToken(null);
     setUser(null);

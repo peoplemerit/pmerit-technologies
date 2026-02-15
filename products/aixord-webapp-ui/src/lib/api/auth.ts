@@ -86,4 +86,14 @@ export const authApi = {
       stripeCustomerId: string | null;
     }>('/auth/subscription', {}, token);
   },
+
+  /**
+   * Logout — invalidate session server-side (HANDOFF-COPILOT-AUDIT-01)
+   * Best-effort: errors are caught by caller, local state is always cleared
+   */
+  async logout(token: string): Promise<void> {
+    await request<{ success: boolean }>('/auth/logout', {
+      method: 'POST',
+    }, token);
+  },
 };
