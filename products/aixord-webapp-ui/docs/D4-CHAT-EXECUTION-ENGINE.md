@@ -72,10 +72,10 @@ next: Add password reset functionality
 ```
 === ESCALATION ===
 assignment_id: A1234
-decision_needed: Authentication strategy
-options: JWT vs Session-based
-recommendation: JWT for better scalability
-rationale: Easier to implement microservices
+decision_needed: Database strategy for caching layer
+options: KV store vs D1 SQLite
+recommendation: KV store for better read performance
+rationale: Cache reads far exceed writes, KV optimized for edge
 === END ESCALATION ===
 ```
 

@@ -1,12 +1,12 @@
 # D4-CHAT PROJECT PLAN
 
 **Document Type:** Comprehensive Project Plan
-**Version:** 13.0 (Session 53 — Second Audit Remediation + Error Tracking + Unit Tests)
-**Date:** 2026-02-15 (Updated: Sessions 34-53 — Full governance enforcement + TDL + PCC + PTX + BQL + GFB + DPF + CGC-01 + Security Audit + Second Audit Remediation deployed)
+**Version:** 14.0 (Session 53 — Third Audit Triage + Outdated Content Cleanup)
+**Date:** 2026-02-15 (Updated: Sessions 34-53 — Full governance enforcement + TDL + PCC + PTX + BQL + GFB + DPF + CGC-01 + Security Audit + Second Audit Remediation + Third Audit Triage deployed)
 **Entity:** PMERIT Technologies LLC
-**Governance:** AIXORD v4.3 → v4.4.1 → v4.4 → v4.4.3 → v4.5 → v4.5.1 → v4.5.2 → **v4.5.3 (Second Audit Remediation)**
+**Governance:** AIXORD v4.3 → v4.4.1 → v4.4 → v4.4.3 → v4.5 → v4.5.1 → v4.5.2 → v4.5.3 → **v4.5.4 (Third Audit Triage + Content Cleanup)**
 **Source Files:** Audit Report v5.0, AIXORD Baseline v4.5, Compact Core v4.5-C, 40+ sandbox files, HANDOFF-CGC-01_CONSOLIDATED_GAP_CLOSURE.md, HANDOFF-COPILOT-AUDIT-01 (16 findings), Second D4-CHAT Platform Audit Report (11 GAPs — 8 valid, 3 incorrect), Third D4-CHAT Platform Audit Report (13 findings — 3 inaccurate, 4 already accepted, 3 accepted new, 1 deferred, 2 acknowledged future)
-**Last Updated By:** Commander — Session 53 (Second Audit Remediation: error tracking, LEGACY_TOKEN_DEADLINE, 30 new unit tests, doc cleanup — 193/193 tests passing)
+**Last Updated By:** Commander — Session 53 (Third Audit Triage + Outdated Content Cleanup: JWT corrections in TECHNICAL_DUE_DILIGENCE.md, Path B/Activity tab status fixes, D4-CHAT_PROJECT_PLAN.md v14.0 — 193/193 tests passing)
 
 ---
 
@@ -222,7 +222,7 @@ D4-CHAT implements the AIXORD Authority Model:
 
 | Law | Requirement | D4-CHAT Status |
 |-----|-------------|----------------|
-| L-LEM1-2 | LEM is doctrine, not gate/phase; inside EXECUTE only | ✅ Path B Phase 1 |
+| L-LEM1-2 | LEM is doctrine, not gate/phase; inside EXECUTE only | ✅ Path B Phase 1+2 |
 | L-LEM3-4 | Blueprint → layers; 4 checks per layer | ✅ execution_layers table + API |
 | L-LEM5-6 | Failed layer blocks; verified outputs frozen | ✅ No Broken State rule |
 | L-LEM7-8 | LEM recommended not blocking; ENH:PD affects visibility | ✅ Optional enforcement |
@@ -333,13 +333,13 @@ aggregation at session, project, and account levels.
 |-------|---------|-----------------|--------|
 | **Message** | Cost, tokens, latency, model, provider | Chat bubbles | ✅ Already shown |
 | **Session** | Total cost, total tokens, avg latency, message count | Session Info panel | Partial |
-| **Project** | Cumulative cost, token distribution by model class, cost trend | Activity tab | ⏳ Blank (D-015) |
+| **Project** | Cumulative cost, token distribution by model class, cost trend | Activity tab | ✅ Implemented (Session 19) |
 | **Account** | Total spend, usage by project, budget alerts | Settings or Analytics page | ⏳ Missing |
 
 **Implementation Notes:**
 - Backend already stores all raw data in messages table
 - Session/project aggregation requires SQL queries on existing data (no new tables)
-- Activity tab content (currently blank) should display project-level metrics
+- Activity tab content displays project-level metrics (implemented Session 19 — ActivityTab.tsx)
 - Account-level requires new aggregation endpoint
 
 ---
@@ -420,7 +420,7 @@ aggregation at session, project, and account levels.
 | **AIXORD v4.5.1 Compliance** | ~70% | ~90% | ~95% | ~97% | ~99% | ~97% | ~98% | ~99.5% | **~99.5%** | — |
 | **D3 SDK Integration** | N/A | 40% | **100%** | **100%** | **100%** | **100%** | **100%** | **100%** | **100%** | — |
 | **Path C (Image/Evidence)** | N/A | N/A | 0% | **100%** | **100%** | **100%** | **100%** | **100%** | **100%** | — |
-| **Path B (Proactive Debug)** | N/A | N/A | 0% | **33%** | **33%** | **33%** | **33%** | **50%** | **50%** (Phase 1/3 + E2E tested) | — |
+| **Path B (Proactive Debug)** | N/A | N/A | 0% | **33%** | **33%** | **33%** | **33%** | **50%** | **~85%** (Phase 1+2/3 complete, Phase 3 telemetry remaining) | +35% |
 | **Vision API (ENH-4)** | N/A | N/A | N/A | ~33% | **100%** | **100%** | **100%** | **100%** | **100%** (3/3 providers) | — |
 | **SPG-01 Content Redaction** | N/A | N/A | N/A | TODO | **100%** | **100%** | **100%** | **100%** | **100%** | — |
 | **Session Graph (v4.4)** | N/A | N/A | N/A | N/A | N/A | **100%** | **100%** | **100%** | **100%** (5/5 phases) | — |
@@ -475,6 +475,7 @@ aggregation at session, project, and account levels.
 | **Crypto + Auth + Error Unit Tests** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (30 new tests: crypto 18, errorTracker 7, requireAuth 5) | NEW |
 | **Second Audit Validation** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (11 GAPs validated: 8 accurate, 3 incorrect — docs cleaned) | NEW |
 | **Third Audit Triage (COPILOT-AUDIT-03)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (13 findings: 3 inaccurate, 4 already accepted, 3 accepted new, 1 deferred, 2 ack'd future) | NEW |
+| **Outdated Content Cleanup** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (JWT refs removed from TDD, Path B→85%, Activity tab→Implemented) | NEW |
 
 ### 6.2 Deliverable Matrix
 
@@ -540,8 +541,9 @@ aggregation at session, project, and account levels.
 | D58 | Legacy Token Deadline (LEGACY_TOKEN_DEADLINE 2026-03-15) | ✅ **DEPLOYED** | **100%** |
 | D59 | Crypto + Auth + Error Unit Tests (30 new tests — 193/193 total) | ✅ **COMPLETE** | **100%** |
 | D60 | Third Audit Triage (HANDOFF-COPILOT-AUDIT-03 — 13 findings validated) | ✅ **COMPLETE** | **100%** |
+| D61 | Outdated Content Cleanup (JWT corrections, Path B/Activity tab status fixes) | ✅ **COMPLETE** | **100%** |
 
-**Total Deliverables:** 60 (D1-D60)
+**Total Deliverables:** 61 (D1-D61)
 
 **Note (PATCH-CGC-01, GAP-9):** Session 23 sprint deliverables (§16.10) used internal numbering D7-D16 that maps to the main deliverable matrix as follows: Sprint-D10+D11 (Session Metrics) = main D10 (Usage Statistics). Sprint-D14+D15 (Prompt Caching) are implementation details within D1 (Model Router Worker). The main D1-D43 numbering is canonical.
 
@@ -2798,12 +2800,12 @@ All security upgrades use **zero-downtime transparent migration**:
 TECH CONTINUE
 Project: D4-CHAT
 Status: Backend 100%, Frontend ~100% (all API methods wired to UI)
-Governance: AIXORD v4.5.3 (Second Audit Remediation — error tracking, legacy token deadline, unit tests)
+Governance: AIXORD v4.5.4 (Third Audit Triage + Outdated Content Cleanup)
 Phase Enforcement: Tier 1 ACTIVE (hard gate blocking + Finalize Phase + brainstorm validation + work order injection + continuity conflict detection)
 APIs Working: Auth (9), Projects (5), State (5), Decisions (2), Messages (4), Sessions (7), Router (4), GitHub (5), Evidence (3), Images (5), Security (8), CCS (11), Layers (5), Engineering (35), Knowledge (7), Usage (3), Blueprint (12), Workspace (4), Brainstorm (4), Assignments (20), Continuity (7), Agents (14)
 Completed: All prior handoffs + HANDOFF-CGC-01 + HANDOFF-COPILOT-AUDIT-01 + Second Audit Remediation + Third Audit Triage (COPILOT-AUDIT-03)
-Remaining: HANDOFF-VD-CI-01 Sessions 4+ (B1-B6), Tier 2 (extended phases), Tier 3 (artifact contracts), Path B Phase 2+3, E2E billing test, data population, 2FA (deferred to pre-launch)
-Last Session: Session 53 (Third Audit Triage — 13 findings: 3 inaccurate, 4 already accepted, 3 accepted new, 1 deferred)
+Remaining: HANDOFF-VD-CI-01 Sessions 4+ (B1-B6), Tier 2 (extended phases), Tier 3 (artifact contracts), Path B Phase 3 (telemetry), E2E billing test, data population, 2FA (deferred to pre-launch)
+Last Session: Session 53 (Third Audit Triage + Outdated Content Cleanup — JWT corrections, Path B/Activity tab fixes, 61 deliverables)
 ```
 
 ### 17.2 AIXORD Continue Format
@@ -2899,9 +2901,10 @@ npx wrangler pages deploy dist --project-name=aixord-webapp-ui
 **Session 37 added non-software project types (general/research/legal/personal) with reduced gates and hidden tabs.**
 **Session 38 enforced Director Review Packet — AI must present structured review before suggesting phase advance.**
 **Session 39 implemented Context Awareness Bridge (HANDOFF-PR-01) — AI sees security gates, redaction status, data classification, evidence context, CCS incidents.**
-**All 5 Architect Handoff Session 22 tasks COMPLETE. HANDOFF-PR-01 COMPLETE. Project is ~100% functionally complete. Remaining: Tier 2/3 governance extensions, Path B Phase 2+3, Tier 3 strategic integrations, data population.**
+**All 5 Architect Handoff Session 22 tasks COMPLETE. HANDOFF-PR-01 COMPLETE. Project is ~100% functionally complete. Remaining: Tier 2/3 governance extensions, Path B Phase 3 (telemetry), Tier 3 strategic integrations, data population.**
 **Session 53 completed Second Audit Remediation — structured error tracking (errorTracker.ts + app.onError + ErrorBoundary), LEGACY_TOKEN_DEADLINE (2026-03-15) for auto-disable of plaintext token fallback, 30 new unit tests (crypto/errorTracker/requireAuth). Total: 193/193 tests passing across 9 files. 59 deliverables (D1-D59).**
-**Session 53 also triaged Third Copilot Audit (HANDOFF-COPILOT-AUDIT-03) — 13 findings validated: 3 inaccurate (GAP-C2 wrong about JWTs, GAP-L1 understated at 50%, GAP-L2 Activity tab fully implemented), 4 already accepted from first audit, 3 accepted new (E2E tests, error monitoring, OpenAPI), 1 deferred (2FA to pre-launch), 2 acknowledged future (pen testing, SOC 2). 60 deliverables (D1-D60).**
+**Session 53 also triaged Third Copilot Audit (HANDOFF-COPILOT-AUDIT-03) — 13 findings validated: 3 inaccurate (GAP-C2 wrong about JWTs, GAP-L1 understated at 50%, GAP-L2 Activity tab fully implemented), 4 already accepted from first audit, 3 accepted new (E2E tests, error monitoring, OpenAPI), 1 deferred (2FA to pre-launch), 2 acknowledged future (pen testing, SOC 2).**
+**Session 53 cleaned up outdated content that caused inaccurate audit findings — removed all JWT references from TECHNICAL_DUE_DILIGENCE.md (8 corrections: fake jwt.ts, fake AuthToken interface, wrong token format/expiry, non-existent JWT_SECRET env var), updated Path B from 50% to ~85% (Phase 1+2 complete), updated Activity tab from Blank to Implemented (Session 19). 61 deliverables (D1-D61).**
 
 ---
 

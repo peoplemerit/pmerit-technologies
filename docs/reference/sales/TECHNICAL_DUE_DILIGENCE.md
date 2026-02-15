@@ -44,7 +44,7 @@
         │  - 45 HTML Pages      │   │  - 40+ API Endpoints  │   │  - Llama 3.1 70B      │
         │  - 44 JS Files        │   │  - TypeScript         │   │  - Embeddings         │
         │  - 25 CSS Files       │   │  - RESTful Design     │   │  - TTS Routing        │
-        │  - WebGL Avatar       │   │  - JWT Auth           │   │                       │
+        │  - WebGL Avatar       │   │  - Bearer Token Auth  │   │                       │
         └───────────────────────┘   └───────────┬───────────┘   └───────────────────────┘
                                                 │
                     ┌───────────────────────────┼───────────────────────────┐
@@ -74,7 +74,7 @@
 |-----------|----------------|
 | **Serverless-First** | All compute via Cloudflare Workers |
 | **Edge-Deployed** | Global distribution, low latency |
-| **Stateless APIs** | JWT tokens, no server sessions |
+| **Session-Based APIs** | Opaque session tokens, SHA-256 hashed before storage |
 | **Event-Driven** | Request-response pattern |
 | **Microservices-Ready** | Modular route handlers |
 
@@ -263,7 +263,7 @@ pmerit-api-worker/
 │   │   └── HollandCodeCalculator.ts # Career matching (320 LOC)
 │   └── utils/
 │       ├── db.ts             # Database utilities (180 LOC)
-│       ├── jwt.ts            # JWT handling (120 LOC)
+│       ├── crypto.ts         # AES-GCM, SHA-256, PBKDF2 (200+ LOC)
 │       └── email.ts          # Email utilities (150 LOC)
 ├── migrations/
 │   ├── 001_initial.sql       # Initial schema
@@ -376,20 +376,22 @@ POST /api/v1/embeddings/generate - Generate embeddings
 ### 3.3 Authentication System
 
 ```typescript
-// JWT-based authentication
-interface AuthToken {
-  userId: string;
-  email: string;
-  role: 'user' | 'tier2_admin' | 'tier1_admin';
-  iat: number;
-  exp: number;  // 60 minutes
-}
+// Opaque session token authentication
+// - Token: 64 hex bytes via crypto.getRandomValues(new Uint8Array(32))
+// - Storage: SHA-256 hashed before DB storage (one-way)
+// - Expiry: 7 days
+// - Lookup: DB query on token_hash column
+// - Legacy: Plaintext fallback with auto-backfill (deadline: 2026-03-15)
 
 // Password hashing: PBKDF2
 // - 100,000 iterations
 // - SHA-256
-// - 128-bit salt
+// - Per-user random salt (16 bytes)
 // - 256-bit derived key
+
+// API key encryption: AES-256-GCM at rest
+// - Per-key random IV
+// - Transparent plaintext→encrypted migration on access
 ```
 
 ### 3.4 Error Handling
@@ -659,12 +661,13 @@ interface HollandCode {
 
 | Feature | Implementation | Status |
 |---------|----------------|--------|
-| Password Hashing | PBKDF2 (100K iterations) | ✅ Strong |
-| Token Format | JWT (HS256) | ✅ Standard |
-| Token Expiry | 60 minutes | ✅ Appropriate |
-| Refresh Tokens | Not implemented | ⚠️ Gap |
-| Rate Limiting | KV-based counters | ✅ Implemented |
+| Password Hashing | PBKDF2 (100K iterations, per-user salt) | ✅ Strong |
+| Token Format | Opaque (64 hex bytes, SHA-256 hashed) | ✅ Secure |
+| Token Expiry | 7 days | ✅ Appropriate |
+| API Key Encryption | AES-256-GCM at rest | ✅ Strong |
+| Rate Limiting | D1-based atomic counters | ✅ Implemented |
 | Account Lockout | 5 failures = 15min lock | ✅ Implemented |
+| CSP Headers | Full security header set via _headers | ✅ Implemented |
 
 ### 6.2 API Security
 
@@ -689,11 +692,10 @@ interface HollandCode {
 
 ### 6.4 Security Gaps (To Address)
 
-1. **Refresh Tokens** - Currently using single JWT
-2. **2FA** - Not implemented
-3. **API Key Management** - Basic secret storage
-4. **Penetration Testing** - Not performed
-5. **SOC 2 Compliance** - Not certified
+1. **2FA** - Not implemented (deferred to pre-launch)
+2. **API Key Management** - ✅ RESOLVED: AES-256-GCM encryption at rest
+3. **Penetration Testing** - Not performed
+4. **SOC 2 Compliance** - Not certified
 
 ---
 
@@ -739,7 +741,7 @@ binding = "AI"
 | Variable | Purpose | Storage |
 |----------|---------|---------|
 | `DATABASE_URL` | Neon connection | Cloudflare Secret |
-| `JWT_SECRET` | Token signing | Cloudflare Secret |
+| `API_KEY_ENCRYPTION_KEY` | AES-256-GCM key encryption | Cloudflare Secret |
 | `RESEND_API_KEY` | Email service | Cloudflare Secret |
 | `AZURE_TRANSLATOR_KEY` | Translation API | Cloudflare Secret |
 | `RUNPOD_API_KEY` | GPU provisioning | Cloudflare Secret |
@@ -819,7 +821,7 @@ wrangler deploy  # Deploys to Cloudflare Workers
 | Limited test coverage | Medium | High | P2 |
 | No API documentation | Low | Medium | P3 |
 | Basic monitoring/alerting | Medium | Medium | P2 |
-| No refresh token flow | Medium | Low | P2 |
+| No 2FA implementation | Medium | Medium | P2 |
 | Frontend state management | Low | High | P4 |
 | Mobile app wrapper | Low | Medium | P4 |
 
@@ -841,8 +843,7 @@ wrangler deploy  # Deploys to Cloudflare Workers
    - Set up alerting
 
 4. **Security Enhancements**
-   - Implement refresh tokens
-   - Add 2FA option
+   - Add 2FA option (TOTP-based)
    - Schedule penetration test
 
 ---
