@@ -1,12 +1,12 @@
 # D4-CHAT PROJECT PLAN
 
 **Document Type:** Comprehensive Project Plan
-**Version:** 11.0 (Session 51+ — HANDOFF-CGC-01 Consolidated Gap Closure)
-**Date:** 2026-02-15 (Updated: Sessions 34-51+ — Full governance enforcement + TDL + PCC + PTX + BQL + GFB + DPF + CGC-01 deployed)
+**Version:** 12.0 (Session 52 — HANDOFF-COPILOT-AUDIT-01 Security Remediation)
+**Date:** 2026-02-15 (Updated: Sessions 34-52 — Full governance enforcement + TDL + PCC + PTX + BQL + GFB + DPF + CGC-01 + Security Audit deployed)
 **Entity:** PMERIT Technologies LLC
-**Governance:** AIXORD v4.3 → v4.4.1 → v4.4 → v4.4.3 → v4.5 → **v4.5.1 (CGC-01 Gap Closure)**
-**Source Files:** Audit Report v5.0, AIXORD Baseline v4.5, Compact Core v4.5-C, 40+ sandbox files, HANDOFF-CGC-01_CONSOLIDATED_GAP_CLOSURE.md
-**Last Updated By:** Commander — Session 51+ (HANDOFF-CGC-01: Conservation law tests, phase contract validators, resource-level security, Worker-Auditor multi-agent architecture, 10 gaps across 3 phases)
+**Governance:** AIXORD v4.3 → v4.4.1 → v4.4 → v4.4.3 → v4.5 → v4.5.1 → **v4.5.2 (Security Audit Remediation)**
+**Source Files:** Audit Report v5.0, AIXORD Baseline v4.5, Compact Core v4.5-C, 40+ sandbox files, HANDOFF-CGC-01_CONSOLIDATED_GAP_CLOSURE.md, HANDOFF-COPILOT-AUDIT-01 (GitHub Copilot Security Audit — 16 findings)
+**Last Updated By:** Commander — Session 52 (HANDOFF-COPILOT-AUDIT-01: PBKDF2 passwords, session token hashing, API key encryption, CSP headers, X-Request-ID, CORS preview support — 8 fixes, 7 accepted, 1 deferred)
 
 ---
 
@@ -462,7 +462,14 @@ aggregation at session, project, and account levels.
 | **Phase Contract Validators (CGC-01 GAP-5/6/7/8)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (L-BRN, L-PLN, L-BPX, L-IVL enforcement) | NEW |
 | **Resource-Level Security (CGC-01 GAP-2/3)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (GS:DC/DP/AI/JR/RT/SA + classify/audit endpoints + SecurityDashboard) | NEW |
 | **Worker-Auditor Architecture (CGC-01 GAP-1)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (5 agents, registry, executor loop, HITL, AgentDashboard + ApprovalGate) | NEW |
-| **Conservation Law Migration (CGC-01 GAP-9/10)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Migrations 030-037, numbering reconciliation) | NEW |
+| **Conservation Law Migration (CGC-01 GAP-9/10)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Migrations 030-037, numbering reconciliation) | — |
+| **Security Audit Remediation (COPILOT-AUDIT-01)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (8 fixes, 7 accepted, 1 deferred — 16 findings triaged) | NEW |
+| **PBKDF2 Password Hashing** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (100K iter, per-user salt, transparent SHA-256→PBKDF2 migration) | NEW |
+| **Session Token Hashing** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (SHA-256 one-way hash, plaintext fallback + backfill) | NEW |
+| **API Key Encryption at Rest** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (AES-256-GCM, transparent plaintext→encrypted migration) | NEW |
+| **CSP + Security Headers** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (6 headers via Cloudflare Pages `_headers` file) | NEW |
+| **X-Request-ID Correlation** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (UUID per request, propagated in response) | NEW |
+| **CORS Preview Deployment Support** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Dynamic origin callback for *.pages.dev subdomains) | NEW |
 
 ### 6.2 Deliverable Matrix
 
@@ -521,8 +528,11 @@ aggregation at session, project, and account levels.
 | D51 | Resource-Level Security — Frontend (HANDOFF-CGC-01 GAP-2) | ✅ **DEPLOYED** | **100%** |
 | D52 | Worker-Auditor Architecture — Backend (HANDOFF-CGC-01 GAP-1) | ✅ **DEPLOYED** | **100%** |
 | D53 | Worker-Auditor Architecture — Frontend (HANDOFF-CGC-01 GAP-1) | ✅ **DEPLOYED** | **100%** |
+| D54 | Security Audit Remediation — Crypto & Auth (HANDOFF-COPILOT-AUDIT-01) | ✅ **DEPLOYED** | **100%** |
+| D55 | Security Audit Remediation — Headers & Observability (HANDOFF-COPILOT-AUDIT-01) | ✅ **DEPLOYED** | **100%** |
+| D56 | CORS Preview Deployment Support | ✅ **DEPLOYED** | **100%** |
 
-**Total Deliverables:** 53 (D1-D53)
+**Total Deliverables:** 56 (D1-D56)
 
 **Note (PATCH-CGC-01, GAP-9):** Session 23 sprint deliverables (§16.10) used internal numbering D7-D16 that maps to the main deliverable matrix as follows: Sprint-D10+D11 (Session Metrics) = main D10 (Usage Statistics). Sprint-D14+D15 (Prompt Caching) are implementation details within D1 (Model Router Worker). The main D1-D43 numbering is canonical.
 
@@ -1563,6 +1573,7 @@ D4-CHAT is classified as **COMPLEX** (multi-component, multi-provider, persisten
 | **47_*** | **02/10** | **Governance Foundation Bridging (HANDOFF-GFB-01)** | **Task 2 (R3): Artifact State Class — migration 024 (superseded_by column + backfill), BRAINSTORM finalize DRAFT→ACTIVE, REVIEW finalize ACTIVE→FROZEN, new artifact marks previous HISTORICAL, Tier 5 state display. Task 1 (R2): Fitness Blocking — WARN policy on EXECUTE finalize, failing dimensions in warnChecks, Tier 6B quality dimensions advisory. Task 3 (R6): REASSESS Protocol — migration 025 (reassess_count + reassessment_log table), 3-level friction (L1 Surgical, L2 Major Pivot, L3 Fresh Start), frontend modal with level-aware UI (color-coded, character counters, artifact impact warnings), Tier 6C reassessment history. Commit 45bbd8b. Deployed backend + frontend.** |
 | **48_*** | **02/10** | **Diagnostic + Prompt Fixes (HANDOFF-DPF-01)** | **Task 1 (P0): Cold-start null guards — Tiers 1C/2D/2F/3 wrapped in try/catch to prevent INTERNAL_ERROR on new projects. Task 2 (P1): PTX-01 timing gap — 200ms retry on Tier 5 artifact query when messageCount > 5. Task 3: Interaction SOP — INTERACTION RULES block in system prompt preventing AI from delegating governance assessment + Finalize action directive replacing review_prompt. Task 4: Phase Output Contracts — PHASE_OUTPUT_CONTRACTS map with structured output rules for all 4 phases (BRAINSTORM/PLAN/EXECUTE/REVIEW). Task 5: GFB-01 verification — confirmed readiness endpoint null handling + REASSESS artifact lifecycle. Commit d0b14ec. Deployed backend + frontend.** |
 | **49_*** | **02/12** | **Infrastructure Sync + DB Migrations + SYS-02 E2E Tests** | **Merged 2 Copilot agent PRs (#5 D4-CHAT Project Plan v9.0, #6 manuscript fixes) via GitHub GraphQL API (draft→ready→squash merge). Fixed 11 backend TS errors: rewrote validateBody.ts + schemas/common.ts to remove zod dependency, fixed D1 unsafe casts in layers.ts/security.ts/index.ts/subscription.ts. Fixed stale ChatWindow barrel export. Commit 6754a13 (71 files, +8003/-460). Ran all 5 D1 migrations (026-029) on aixord-db — adapted 027 to match live schemas (19-col knowledge_artifacts, 17-col github_evidence). New tables: conversations, conversation_messages, rate_limits. New column: users.name. Created SYS-02 execution layer E2E test suite (59 tests: state machine transitions, sequential enforcement, single-active constraint, deletion/modification rules, verification, retry mechanics, batch creation). Full test suite: 141/141 passing across 5 files. Reviewed 4 Dependabot branches (router-worker multi is stale, 3 minor bumps on secondary products).** |
+| **52_*** | **02/15** | **Security Audit Remediation (HANDOFF-COPILOT-AUDIT-01)** | **GitHub Copilot security audit triage: 16 findings → 8 fixed, 7 accepted, 1 deferred. Created shared crypto module (utils/crypto.ts — AES-GCM, SHA-256, PBKDF2). PBKDF2 password hashing (100K iterations, per-user 16-byte salt, transparent SHA-256→PBKDF2 migration on login). Session token hashing (SHA-256 one-way hash stored in token_hash, plaintext fallback + backfill for 7-day migration window). API key encryption at rest (AES-256-GCM with random IV, transparent plaintext→encrypted migration). Server-side logout endpoint wired to frontend. CSP + 5 security response headers via Cloudflare Pages `_headers` file. X-Request-ID correlation middleware (UUID per request). Frontend regex alignment for API key validation. CORS dynamic origin callback for Pages preview deployments (*.aixord-webapp-ui.pages.dev). Migrations 038-039 applied to production D1. 161/163 tests passing (2 pre-existing rateLimit failures). Commits 583898a, f8e05d9, c3e4515 on deploy/gap-closure-cgc-01, merged to main. Worker deployed (f1da8c91), Pages deployed (b026d3d8). Full E2E verification: registration, login, /auth/me, API key save+retrieve+decrypt, logout+invalidation, security headers, X-Request-ID — all confirmed via live production testing.** |
 
 ### 14.2 Key Learnings (Aligned with L-GCP)
 
@@ -2668,6 +2679,98 @@ Agent registry: 5 agents mapped to preferred models (Claude Sonnet 4, GPT-4o, Ge
 
 **Total CGC-01:** 3 commits, 26 files changed, 4,392 insertions, 10 deliverables (D44-D53)
 
+### 16.32 Session 52 — Security Audit Remediation / HANDOFF-COPILOT-AUDIT-01 (COMPLETE)
+
+**Source:** GitHub Copilot Security Audit — 16 findings across backend + frontend
+**Status:** :lock: **LOCKED** — 8 fixed, 7 accepted risks (documented), 1 deferred
+
+**Principle:** "Hash passwords properly. Encrypt secrets at rest. Add defense-in-depth headers."
+
+#### Audit Triage Summary
+
+| Category | Count | Action |
+|----------|-------|--------|
+| **FIX** | 8 | Implemented and deployed |
+| **ACCEPT** | 7 | Documented in SECURITY_AUDIT_DECISIONS.md |
+| **DEFER** | 1 | Rate limiting IP spoofing (Cloudflare handles) |
+
+#### 8 Fixes Implemented
+
+| Fix | Finding | Description | Deliverable |
+|-----|---------|-------------|-------------|
+| F1 | Weak password hashing | SHA-256 → PBKDF2 (100K iterations, per-user 16-byte salt) | D54 |
+| F2 | Plaintext session tokens | SHA-256 one-way hash stored in `token_hash` column | D54 |
+| F3 | API keys stored in plaintext | AES-256-GCM encryption at rest with random 12-byte IV | D54 |
+| F4 | No server-side logout | DELETE session by token_hash on `/auth/logout` | D54 |
+| F5 | Password min length inconsistency | Aligned registration (was 6) to reset-password (8 chars) | D54 |
+| F6 | No security response headers | CSP, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy | D55 |
+| F7 | No request correlation | X-Request-ID middleware (UUID per request) | D55 |
+| F8 | Frontend regex misalignment | API key validation patterns aligned to backend | D54 |
+
+#### 7 Accepted Risks
+
+| Risk | Finding | Rationale |
+|------|---------|-----------|
+| A1 | localStorage for tokens | Bearer token auth (not cookies) — CSRF N/A; established pattern after cookie failures |
+| A2 | No CSRF protection | Authorization header auth, not cookie-based — CSRF not applicable |
+| A3 | Broad try/catch in routes | Intentional — prevents 500 errors leaking stack traces |
+| A4 | API key preview logging | Removed in F3 fix (key-resolver.ts) |
+| A5 | Email enumeration via registration | Acceptable for MVP; rate-limited |
+| A6 | No account lockout | Rate limiting provides sufficient protection |
+| A7 | Token expiry in response | Session tokens are opaque UUIDs; knowing expiry is low risk |
+
+#### Transparent Migration Patterns
+
+All security upgrades use **zero-downtime transparent migration**:
+
+- **Passwords:** Login verifies by `hash_algorithm` column — legacy SHA-256 verified first, then re-hashed with PBKDF2 automatically
+- **Session tokens:** `requireAuth` queries `token_hash` first, falls back to plaintext `token` column, backfills hash on legacy match
+- **API keys:** `decryptApiKey()` tries AES-GCM decrypt, catches error for plaintext legacy keys — new keys always encrypted
+
+#### New Files (5)
+
+| File | Purpose |
+|------|---------|
+| `src/utils/crypto.ts` | Shared crypto module: AES-GCM encrypt/decrypt, SHA-256 hash, PBKDF2 hash/verify |
+| `migrations/038_password_hash_upgrade.sql` | Adds `password_salt TEXT`, `hash_algorithm TEXT DEFAULT 'sha256'` to users |
+| `migrations/039_session_token_hash.sql` | Adds `token_hash TEXT` + index to sessions |
+| `public/_headers` (webapp-ui) | Cloudflare Pages security response headers (CSP + 5 headers) |
+| `docs/SECURITY_AUDIT_DECISIONS.md` | Documents all 7 accepted risks + 1 deferred with rationale |
+
+#### Modified Files (11)
+
+| File | Changes |
+|------|---------|
+| `src/api/auth.ts` | PBKDF2 registration + transparent login migration + token hashing + logout |
+| `src/middleware/requireAuth.ts` | Token hash lookup with plaintext fallback + backfill |
+| `src/api/api-keys.ts` | AES-GCM encrypt on write, decrypt on read |
+| `src/routing/key-resolver.ts` | BYOK key decryption, removed key preview logging |
+| `src/api/github.ts` | Delegated to shared crypto module |
+| `src/index.ts` | Shared crypto import, X-Request-ID middleware, dynamic CORS origin |
+| `src/types.ts` | Added `API_KEY_ENCRYPTION_KEY` env var |
+| `webapp-ui/src/contexts/AuthContext.tsx` | Server-side logout call |
+| `webapp-ui/src/lib/api/auth.ts` | Added `logout()` method |
+| `webapp-ui/src/pages/Settings.tsx` | Frontend regex alignment |
+
+#### Deployment Verification (E2E — Live Production)
+
+| Test | Result | Method |
+|------|--------|--------|
+| Security headers (6) | ✅ PASS | XHR getResponseHeader on all 6 headers |
+| PBKDF2 registration | ✅ PASS | POST /auth/register → 201, user created |
+| PBKDF2 login | ✅ PASS | POST /auth/login → 200, token returned |
+| Token hash auth | ✅ PASS | GET /auth/me → 200 via hashed token lookup |
+| API key encrypt/decrypt | ✅ PASS | POST key → GET key → exact match confirmed |
+| Server-side logout | ✅ PASS | POST /auth/logout → 200, re-use token → 401 |
+| X-Request-ID | ✅ PASS | UUID in response headers on all endpoints |
+| CORS preview domains | ✅ PASS | curl preflight returns correct ACAO header |
+
+**Commits:** `583898a` (5 new files), `f8e05d9` (10 modified files), `c3e4515` (CORS fix)
+**Branch:** `deploy/gap-closure-cgc-01` → merged to `main`
+**Worker Version:** `f1da8c91`
+**Pages Deployment:** `b026d3d8`
+**Total:** 3 commits, 16 files changed, ~600 insertions, 3 deliverables (D54-D56)
+
 ---
 
 ## 17. RECOVERY COMMANDS
@@ -2678,12 +2781,12 @@ Agent registry: 5 agents mapped to preferred models (Claude Sonnet 4, GPT-4o, Ge
 TECH CONTINUE
 Project: D4-CHAT
 Status: Backend 100%, Frontend ~100% (all API methods wired to UI)
-Governance: AIXORD v4.5.1 (CGC-01 Consolidated Gap Closure — conservation laws, phase contracts, resource security, multi-agent)
+Governance: AIXORD v4.5.2 (Security Audit Remediation — PBKDF2, token hashing, AES-GCM API key encryption, CSP headers)
 Phase Enforcement: Tier 1 ACTIVE (hard gate blocking + Finalize Phase + brainstorm validation + work order injection + continuity conflict detection)
 APIs Working: Auth (9), Projects (5), State (5), Decisions (2), Messages (4), Sessions (7), Router (4), GitHub (5), Evidence (3), Images (5), Security (8), CCS (11), Layers (5), Engineering (35), Knowledge (7), Usage (3), Blueprint (12), Workspace (4), Brainstorm (4), Assignments (20), Continuity (7), Agents (14)
-Completed: All prior handoffs + HANDOFF-CGC-01 (10 gaps / 3 phases — conservation law tests, phase contract validators, resource-level security, Worker-Auditor architecture)
+Completed: All prior handoffs + HANDOFF-CGC-01 (10 gaps / 3 phases) + HANDOFF-COPILOT-AUDIT-01 (security audit — PBKDF2, token hashing, API key encryption, CSP, X-Request-ID, CORS)
 Remaining: HANDOFF-VD-CI-01 Sessions 4+ (B1-B6), Tier 2 (extended phases), Tier 3 (artifact contracts), Path B Phase 2+3, E2E billing test, data population
-Last Session: Session 51+ (HANDOFF-CGC-01 — Consolidated Gap Closure)
+Last Session: Session 52 (HANDOFF-COPILOT-AUDIT-01 — Security Audit Remediation)
 ```
 
 ### 17.2 AIXORD Continue Format
