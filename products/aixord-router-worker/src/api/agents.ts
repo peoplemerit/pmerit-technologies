@@ -10,6 +10,8 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
 import { selectAgentForTask, AGENT_REGISTRY, type TaskType } from '../agents/registry';
+import { validateAuditGate } from '../lib/gates/ga-aud';
+import { detectDiminishingReturns } from '../lib/diminishing-returns';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -1209,5 +1211,153 @@ function levenshteinDistance(a: string, b: string): number {
   }
   return matrix[b.length][a.length];
 }
+
+// =============================================================================
+// GA:AUD GATE — Phase 2C
+// =============================================================================
+
+// GET /:projectId/gates/ga-aud — Check GA:AUD gate status
+app.get('/:projectId/gates/ga-aud', requireAuth, async (c) => {
+  const { projectId } = c.req.param();
+  const { required_for_lock } = c.req.query();
+
+  // Verify project ownership
+  const userId = (c as any).userId;
+  const project = await c.env.DB.prepare(
+    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+  ).bind(projectId, userId).first();
+
+  if (!project) {
+    return c.json({ success: false, error: 'Project not found' }, 404);
+  }
+
+  try {
+    const result = await validateAuditGate(
+      projectId,
+      c.env,
+      { required_for_lock: required_for_lock === 'true' }
+    );
+
+    return c.json({
+      success: true,
+      gate: 'GA:AUD',
+      ...result
+    });
+  } catch (error: any) {
+    console.error('GA:AUD validation error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// =============================================================================
+// DIMINISHING RETURNS — Phase 2D
+// =============================================================================
+
+// GET /:projectId/agents/diminishing-returns — Check if audit frequency should be reduced
+app.get('/:projectId/agents/diminishing-returns', requireAuth, async (c) => {
+  const { projectId } = c.req.param();
+  const { look_back_count, threshold } = c.req.query();
+
+  // Verify project ownership
+  const userId = (c as any).userId;
+  const project = await c.env.DB.prepare(
+    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+  ).bind(projectId, userId).first();
+
+  if (!project) {
+    return c.json({ success: false, error: 'Project not found' }, 404);
+  }
+
+  try {
+    const result = await detectDiminishingReturns(
+      projectId,
+      c.env,
+      {
+        look_back_count: look_back_count ? parseInt(look_back_count) : undefined,
+        threshold: threshold ? parseInt(threshold) : undefined
+      }
+    );
+
+    return c.json({
+      success: true,
+      ...result
+    });
+  } catch (error: any) {
+    console.error('Diminishing returns detection error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+// =============================================================================
+// INCREMENTAL AUDIT — Phase 2D
+// =============================================================================
+
+// POST /:projectId/agents/audit-incremental — Run incremental audit
+app.post('/:projectId/agents/audit-incremental', requireAuth, async (c) => {
+  const { projectId } = c.req.param();
+  const body = await c.req.json();
+  const { modules, worker_model, auditor_model } = body;
+
+  if (!modules || !Array.isArray(modules) || modules.length === 0) {
+    return c.json({ success: false, error: 'modules array required' }, 400);
+  }
+
+  // Verify project ownership
+  const userId = (c as any).userId;
+  const project = await c.env.DB.prepare(
+    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+  ).bind(projectId, userId).first();
+
+  if (!project) {
+    return c.json({ success: false, error: 'Project not found' }, 404);
+  }
+
+  try {
+    // Create task entries for each module (orchestration placeholder)
+    const audits = [];
+    for (const mod of modules) {
+      const taskResult = await c.env.DB.prepare(`
+        INSERT INTO agent_tasks (
+          project_id,
+          agent_id,
+          task_type,
+          description,
+          parameters,
+          status
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `).bind(
+        projectId,
+        'worker-agent-1',
+        'CROSS_MODEL_VALIDATION',
+        `Incremental audit: ${mod}`,
+        JSON.stringify({
+          scope: 'module',
+          target: mod,
+          worker_model: worker_model || 'openai:gpt-4o',
+          auditor_model: auditor_model || 'anthropic:claude-sonnet-4-20250514'
+        }),
+        'PENDING'
+      ).run();
+
+      audits.push({
+        module: mod,
+        task_created: true,
+        status: 'PENDING'
+      });
+    }
+
+    return c.json({
+      success: true,
+      message: `Created ${modules.length} incremental audit task(s)`,
+      audits,
+      summary: {
+        total_modules: modules.length
+      }
+    });
+  } catch (error: any) {
+    console.error('Incremental audit error:', error);
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
 
 export default app;

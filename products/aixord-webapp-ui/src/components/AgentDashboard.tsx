@@ -1,13 +1,15 @@
 /**
  * Agent Dashboard — Multi-Agent Status View
- * AIXORD v4.5.1 — HANDOFF-CGC-01 GAP-1
+ * AIXORD v4.6 — HANDOFF-CGC-01 GAP-1 + HANDOFF-AUDIT-FRONTEND-01 Phase 2B.3
  *
  * Real-time display of agent instances and task queue
  * for the Worker-Auditor multi-agent architecture.
+ * Enhanced with audit status, context budget meter, and audit controls.
  */
 
 import { useEffect, useState, useCallback } from 'react';
 import { request } from '../lib/api/core';
+import { API_BASE } from '../lib/api/config';
 
 interface Agent {
   id: string;
@@ -91,6 +93,11 @@ export function AgentDashboard({ projectId, token }: AgentDashboardProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Audit enhancements (Phase 2B.3)
+  const [auditConfig, setAuditConfig] = useState<any>(null);
+  const [contextBudget, setContextBudget] = useState<any>(null);
+  const [pendingAudits, setPendingAudits] = useState<any[]>([]);
+
   const loadAgents = useCallback(async () => {
     try {
       const data = await request<Agent[]>(
@@ -128,6 +135,111 @@ export function AgentDashboard({ projectId, token }: AgentDashboardProps) {
 
     return () => clearInterval(interval);
   }, [loadAgents, loadTasks]);
+
+  // Audit data polling (Phase 2B.3)
+  useEffect(() => {
+    async function loadAuditData() {
+      const sessionToken = localStorage.getItem('session_token');
+      if (!sessionToken) return;
+
+      // Load audit config
+      try {
+        const configRes = await fetch(
+          `${API_BASE}/projects/${projectId}/audit-config`,
+          { headers: { 'Authorization': `Bearer ${sessionToken}` } }
+        );
+        if (configRes.ok) {
+          const data = await configRes.json();
+          setAuditConfig(data.config);
+        }
+      } catch (e) { /* silent */ }
+
+      // Load context budget
+      try {
+        const budgetRes = await fetch(
+          `${API_BASE}/projects/${projectId}/agents/context-budget?scope=full`,
+          { headers: { 'Authorization': `Bearer ${sessionToken}` } }
+        );
+        if (budgetRes.ok) {
+          const data = await budgetRes.json();
+          setContextBudget(data.budget);
+        }
+      } catch (e) { /* silent */ }
+
+      // Load pending audits (audits with pending findings)
+      try {
+        const auditsRes = await fetch(
+          `${API_BASE}/projects/${projectId}/agents/audit-log`,
+          { headers: { 'Authorization': `Bearer ${sessionToken}` } }
+        );
+        if (auditsRes.ok) {
+          const auditsData = await auditsRes.json();
+          const pending = [];
+
+          for (const audit of auditsData.audits || []) {
+            const findingsRes = await fetch(
+              `${API_BASE}/projects/${projectId}/audit-findings?audit_id=${audit.id}&disposition=PENDING`,
+              { headers: { 'Authorization': `Bearer ${sessionToken}` } }
+            );
+            if (findingsRes.ok) {
+              const findingsData = await findingsRes.json();
+              if (findingsData.findings?.length > 0) {
+                pending.push({
+                  ...audit,
+                  pending_count: findingsData.findings.length
+                });
+              }
+            }
+          }
+
+          setPendingAudits(pending);
+        }
+      } catch (e) { /* silent */ }
+    }
+
+    loadAuditData();
+    const interval = setInterval(loadAuditData, 10000); // Poll every 10s
+    return () => clearInterval(interval);
+  }, [projectId]);
+
+  // Run audit (Phase 2B.3)
+  async function runAudit(scope: 'full' | 'module', target?: string) {
+    const sessionToken = localStorage.getItem('session_token');
+    if (!sessionToken) return;
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/projects/${projectId}/agents/tasks`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${sessionToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            task_type: 'CROSS_MODEL_VALIDATION',
+            description: scope === 'full'
+              ? 'Full codebase audit'
+              : `Audit ${target}`,
+            parameters: {
+              scope,
+              target,
+              worker_model: auditConfig?.worker_model || 'openai:gpt-4o',
+              auditor_model: auditConfig?.auditor_model || 'anthropic:claude-sonnet-4-20250514'
+            }
+          })
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to create audit task');
+
+      alert('Audit task created successfully');
+      loadTasks();
+    } catch (error) {
+      console.error('Run audit error:', error);
+      alert('Failed to create audit task');
+    }
+  }
 
   if (loading) {
     return (
@@ -300,6 +412,155 @@ export function AgentDashboard({ projectId, token }: AgentDashboardProps) {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Context Budget Section (Phase 2B.3) */}
+      {contextBudget && (
+        <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold bg-green-500/20 text-green-400">
+              CB
+            </div>
+            <h3 className="text-sm font-semibold text-white">Context Budget</h3>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <div className="flex justify-between text-[10px] mb-1">
+                <span className="text-gray-500">Startup Context</span>
+                <span className="text-gray-400 font-mono">
+                  {contextBudget.startup?.total || 0} lines
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-all"
+                  style={{ width: `${Math.min(((contextBudget.startup?.total || 0) / 500) * 100, 100)}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                Target: &le;500 lines (L-MOSA3)
+              </p>
+            </div>
+
+            <div>
+              <div className="flex justify-between text-[10px] mb-1">
+                <span className="text-gray-500">Claude Capacity</span>
+                <span className={`font-mono font-medium ${
+                  (contextBudget.total?.claude_capacity_percent || 0) > 75
+                    ? 'text-red-400'
+                    : (contextBudget.total?.claude_capacity_percent || 0) > 50
+                    ? 'text-yellow-400'
+                    : 'text-green-400'
+                }`}>
+                  {contextBudget.total?.claude_capacity_percent || 0}%
+                </span>
+              </div>
+              <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    (contextBudget.total?.claude_capacity_percent || 0) > 75
+                      ? 'bg-red-500'
+                      : (contextBudget.total?.claude_capacity_percent || 0) > 50
+                      ? 'bg-yellow-500'
+                      : 'bg-green-500'
+                  }`}
+                  style={{ width: `${Math.min(contextBudget.total?.claude_capacity_percent || 0, 100)}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="text-[10px] text-gray-500">
+              <p>Status: <span className="font-semibold text-gray-400">{contextBudget.status || 'Unknown'}</span></p>
+              {contextBudget.recommendation && (
+                <p className="mt-0.5">{contextBudget.recommendation}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Audits Section (Phase 2B.3) */}
+      {pendingAudits.length > 0 && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold bg-yellow-500/20 text-yellow-400">
+              !
+            </div>
+            <h3 className="text-sm font-semibold text-yellow-400">Audits Requiring Triage</h3>
+          </div>
+
+          <div className="space-y-2">
+            {pendingAudits.map(audit => (
+              <div key={audit.id} className="bg-gray-900/30 border border-gray-700/50 rounded-lg p-2.5 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-medium text-white">
+                    Audit from {new Date(audit.created_at).toLocaleDateString()}
+                  </p>
+                  <p className="text-[10px] text-gray-500">
+                    {audit.pending_count} findings pending triage
+                  </p>
+                </div>
+                <button
+                  onClick={() => {/* Open AuditGate — wired by parent component */}}
+                  className="px-2.5 py-1 text-[10px] font-medium bg-yellow-600 hover:bg-yellow-500 text-white rounded transition-colors"
+                >
+                  Triage Now
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Audit Controls Section (Phase 2B.3) */}
+      <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold bg-orange-500/20 text-orange-400">
+            AC
+          </div>
+          <h3 className="text-sm font-semibold text-white">Audit Controls</h3>
+        </div>
+
+        <div className="space-y-3">
+          {auditConfig && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-900/30 border border-gray-700/50 rounded-lg p-2.5">
+                <p className="text-[10px] text-gray-500">Worker Model</p>
+                <p className="text-xs font-mono text-gray-300">{auditConfig.worker_model}</p>
+              </div>
+              <div className="bg-gray-900/30 border border-gray-700/50 rounded-lg p-2.5">
+                <p className="text-[10px] text-gray-500">Auditor Model</p>
+                <p className="text-xs font-mono text-gray-300">{auditConfig.auditor_model}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            <button
+              onClick={() => runAudit('full')}
+              className="flex-1 px-3 py-1.5 text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors disabled:opacity-40"
+              disabled={contextBudget?.status === 'RED'}
+            >
+              Run Full Audit
+            </button>
+            <button
+              onClick={() => {
+                const target = prompt('Enter module name (e.g., 03-ARCHITECTURE):');
+                if (target) runAudit('module', target);
+              }}
+              className="flex-1 px-3 py-1.5 text-xs font-medium bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors"
+            >
+              Audit Single Module
+            </button>
+          </div>
+
+          {contextBudget?.status === 'RED' && (
+            <p className="text-[10px] text-red-400">
+              Context budget exceeded. Use incremental audit only.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
