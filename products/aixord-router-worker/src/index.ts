@@ -59,6 +59,7 @@ import conversations from './api/conversations';
 import governance from './api/governance';
 import artifacts from './api/artifacts';
 import apiKeys from './api/api-keys';
+import agents from './api/agents';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -1283,5 +1284,8 @@ app.route('/api/v1/projects', governance);
 
 // Artifact Commit Layer routes (L-AB — persistence tracking)
 app.route('/api/v1/projects', artifacts);
+
+// Agent Orchestration routes (HANDOFF-CGC-01 GAP-1 — Worker-Auditor architecture)
+app.route('/api/v1/projects', agents);
 
 export default app;
