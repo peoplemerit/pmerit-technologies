@@ -6,14 +6,12 @@
 
 import type { RouterRequest, Product, Intent, Mode, SubscriptionTier, KeyMode, RouterIntent, Capsule } from '../types';
 import { RouterError } from '../types';
+import { ALL_TIER_IDS } from '../config/tiers';
 
 const VALID_PRODUCTS: Product[] = ['AIXORD_COPILOT', 'PMERIT_CHATBOT'];
 const VALID_INTENTS: Intent[] = ['CHAT', 'VERIFY', 'EXTRACT', 'CLASSIFY', 'RAG_VERIFY'];
 const VALID_MODES: Mode[] = ['ECONOMY', 'BALANCED', 'PREMIUM'];
-const VALID_TIERS: SubscriptionTier[] = [
-  'TRIAL', 'MANUSCRIPT_BYOK', 'BYOK_STANDARD',
-  'PLATFORM_STANDARD', 'PLATFORM_PRO', 'ENTERPRISE'
-];
+const VALID_TIERS: SubscriptionTier[] = ALL_TIER_IDS;
 const VALID_KEY_MODES: KeyMode[] = ['PLATFORM', 'BYOK'];
 const VALID_PHASES = ['B', 'P', 'E', 'R', 'BRAINSTORM', 'PLAN', 'EXECUTE', 'REVIEW', 'DISCOVER'];
 const PHASE_NORMALIZE: Record<string, string> = {

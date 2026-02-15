@@ -22,6 +22,7 @@ interface UpgradeBannerProps {
 }
 
 const UPGRADE_PATH: Record<SubscriptionTier, SubscriptionTier | null> = {
+  NONE: 'TRIAL',
   TRIAL: 'BYOK_STANDARD',
   MANUSCRIPT_BYOK: 'BYOK_STANDARD',
   BYOK_STANDARD: 'PLATFORM_STANDARD',
@@ -31,6 +32,7 @@ const UPGRADE_PATH: Record<SubscriptionTier, SubscriptionTier | null> = {
 };
 
 const TIER_NAMES: Record<SubscriptionTier, string> = {
+  NONE: 'No Plan',
   TRIAL: 'Free Trial',
   MANUSCRIPT_BYOK: 'Manuscript',
   BYOK_STANDARD: 'Standard (BYOK)',

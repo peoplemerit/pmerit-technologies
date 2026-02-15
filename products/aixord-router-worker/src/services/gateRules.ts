@@ -13,6 +13,7 @@
  */
 
 import type { Env } from '../types';
+import { ALL_TIER_IDS } from '../config/tiers';
 import {
   computeProjectReadiness,
   getConservationSnapshot,
@@ -64,7 +65,7 @@ export const GATE_RULES: Record<string, GateRule> = {
         'SELECT subscription_tier FROM users WHERE id = ?'
       ).bind(ctx.userId).first<{ subscription_tier: string | null }>();
       const satisfied = !!user?.subscription_tier &&
-        ['TRIAL', 'MANUSCRIPT_BYOK', 'BYOK_STANDARD', 'PLATFORM_STANDARD', 'PLATFORM_PRO', 'ENTERPRISE', 'STARTER', 'PRO', 'PREMIUM'].includes(user.subscription_tier);
+        ALL_TIER_IDS.includes(user.subscription_tier as any);
       return {
         satisfied,
         reason: satisfied
@@ -97,7 +98,7 @@ export const GATE_RULES: Record<string, GateRule> = {
         'SELECT subscription_tier FROM users WHERE id = ?'
       ).bind(ctx.userId).first<{ subscription_tier: string | null }>();
       const satisfied = !!user?.subscription_tier &&
-        ['TRIAL', 'MANUSCRIPT_BYOK', 'BYOK_STANDARD', 'PLATFORM_STANDARD', 'PLATFORM_PRO', 'ENTERPRISE', 'STARTER', 'PRO', 'PREMIUM'].includes(user.subscription_tier);
+        ALL_TIER_IDS.includes(user.subscription_tier as any);
       return {
         satisfied,
         reason: satisfied

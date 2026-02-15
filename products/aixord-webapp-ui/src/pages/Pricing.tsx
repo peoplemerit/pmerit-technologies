@@ -16,6 +16,7 @@ import { billingApi } from '../lib/api';
 // AIXORD Standard: $19.99/month
 // AIXORD Pro: $49.99/month
 const STRIPE_PRICES: Record<SubscriptionTier, string | null> = {
+  NONE: null,
   TRIAL: null,
   MANUSCRIPT_BYOK: null, // One-time purchase via Gumroad
   BYOK_STANDARD: import.meta.env.VITE_STRIPE_PRICE_BYOK_STANDARD || 'price_1SwVtL1Uy2Gsjci2w3a8b5hX',
@@ -146,10 +147,19 @@ export function Pricing() {
 
     // Handle different plan types
     if (plan.tier === 'TRIAL') {
-      if (isAuthenticated) {
-        navigate('/dashboard');
-      } else {
+      if (!isAuthenticated) {
         navigate('/signup');
+        return;
+      }
+      // Authenticated user: activate Free Trial via explicit endpoint
+      setIsProcessing('TRIAL');
+      try {
+        await billingApi.activateTrial();
+        // Refresh settings to pick up new tier
+        window.location.href = '/dashboard';
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to activate trial');
+        setIsProcessing(null);
       }
       return;
     }

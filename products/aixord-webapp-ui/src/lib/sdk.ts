@@ -37,7 +37,7 @@ export interface AIXORDSDKConfig {
   /** User ID for audit */
   userId: string;
   /** Subscription tier */
-  tier: 'TRIAL' | 'MANUSCRIPT_BYOK' | 'BYOK_STANDARD' | 'PLATFORM_STANDARD' | 'PLATFORM_PRO' | 'ENTERPRISE';
+  tier: 'NONE' | 'TRIAL' | 'MANUSCRIPT_BYOK' | 'BYOK_STANDARD' | 'PLATFORM_STANDARD' | 'PLATFORM_PRO' | 'ENTERPRISE';
   /** Key mode */
   keyMode: 'PLATFORM' | 'BYOK';
   /** User API key for BYOK mode */

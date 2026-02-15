@@ -14,7 +14,7 @@ import { API_BASE } from '../lib/api/config'; // Session 6: Unified config
 // Types
 // ============================================================================
 
-export type SubscriptionTier = 'TRIAL' | 'MANUSCRIPT_BYOK' | 'BYOK_STANDARD' | 'PLATFORM_STANDARD' | 'PLATFORM_PRO' | 'ENTERPRISE';
+export type SubscriptionTier = 'NONE' | 'TRIAL' | 'MANUSCRIPT_BYOK' | 'BYOK_STANDARD' | 'PLATFORM_STANDARD' | 'PLATFORM_PRO' | 'ENTERPRISE';
 export type KeyMode = 'PLATFORM' | 'BYOK';
 export type DefaultMode = 'ECONOMY' | 'BALANCED' | 'PREMIUM';
 

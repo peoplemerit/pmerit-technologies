@@ -38,7 +38,7 @@ usage.get('/', async (c) => {
     code_task_count: number;
   }>();
 
-  const tier = user?.subscription_tier || 'TRIAL';
+  const tier = user?.subscription_tier || 'NONE';
   const limit = getTierLimit(tier);
   const used = current?.request_count || 0;
 

@@ -153,9 +153,18 @@ app.post('/v1/router/execute', async (c) => {
       }>();
 
       if (user) {
-        const tier = user.subscription_tier || 'TRIAL';
+        const tier = user.subscription_tier || 'NONE';
         const now = new Date();
         const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+        // Check if user has no subscription tier (must activate via pricing page)
+        if (!tier || tier === 'NONE') {
+          throw new RouterError(
+            'NO_ACTIVE_SUBSCRIPTION',
+            'Please select a plan to start using AI features.',
+            403
+          );
+        }
 
         // Check trial expiration
         if (tier === 'TRIAL' && user.trial_expires_at) {
@@ -1154,6 +1163,48 @@ app.post('/v1/billing/activate/kdp', requireAuth, async (c) => {
   } catch (error) {
     console.error('KDP activation error:', error);
     return c.json({ error: 'Failed to activate code' }, 500);
+  }
+});
+
+// Activate Free Trial — explicit opt-in (HANDOFF-SUBSCRIPTION-LOCKDOWN-01)
+app.post('/v1/billing/activate/trial', requireAuth, async (c) => {
+  try {
+    const userId = c.get('userId');
+
+    // Check user doesn't already have a paid tier
+    const user = await c.env.DB.prepare(
+      'SELECT subscription_tier FROM users WHERE id = ?'
+    ).bind(userId).first<{ subscription_tier: string | null }>();
+
+    const currentTier = user?.subscription_tier;
+    if (currentTier && currentTier !== 'NONE' && currentTier !== 'TRIAL') {
+      return c.json({ error: 'Already subscribed', tier: currentTier }, 400);
+    }
+
+    // Calculate 14-day trial expiration
+    const trialExpiresAt = new Date();
+    trialExpiresAt.setDate(trialExpiresAt.getDate() + 14);
+
+    // Activate trial on user
+    await c.env.DB.prepare(
+      'UPDATE users SET subscription_tier = ?, trial_expires_at = ?, updated_at = datetime(\'now\') WHERE id = ?'
+    ).bind('TRIAL', trialExpiresAt.toISOString(), userId).run();
+
+    // Upsert subscription record
+    await c.env.DB.prepare(`
+      INSERT INTO subscriptions (id, user_id, tier, status, period_start, period_end)
+      VALUES (?, ?, 'TRIAL', 'active', datetime('now'), ?)
+      ON CONFLICT(user_id) DO UPDATE SET
+        tier = 'TRIAL', status = 'active',
+        period_end = excluded.period_end,
+        updated_at = datetime('now')
+    `).bind(crypto.randomUUID(), userId, trialExpiresAt.toISOString()).run();
+
+    console.log(`[TRIAL] Activated free trial for user=${userId}, expires=${trialExpiresAt.toISOString()}`);
+    return c.json({ success: true, tier: 'TRIAL', expires_at: trialExpiresAt.toISOString() });
+  } catch (error) {
+    console.error('Trial activation error:', error);
+    return c.json({ error: 'Failed to activate trial' }, 500);
   }
 });
 

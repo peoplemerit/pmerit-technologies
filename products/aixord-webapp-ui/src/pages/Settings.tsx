@@ -22,6 +22,7 @@ import { ProviderStatus } from '../components/ProviderStatus';
 // AIXORD Standard: $19.99/month
 // AIXORD Pro: $49.99/month
 const STRIPE_PRICES: Record<SubscriptionTier, string | null> = {
+  NONE: null, // No plan selected
   TRIAL: null, // Free
   MANUSCRIPT_BYOK: null, // One-time via Gumroad/KDP
   BYOK_STANDARD: 'price_1SwVtL1Uy2Gsjci2w3a8b5hX',
@@ -31,6 +32,11 @@ const STRIPE_PRICES: Record<SubscriptionTier, string | null> = {
 };
 
 const TIER_INFO: Record<SubscriptionTier, { name: string; price: string; features: string[] }> = {
+  NONE: {
+    name: 'No Plan',
+    price: 'Free',
+    features: ['No AI access', 'Select a plan to get started']
+  },
   TRIAL: {
     name: 'Trial',
     price: 'Free (14 days)',
@@ -328,7 +334,7 @@ export function Settings() {
   };
 
   const BYOK_TIERS = ['MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
-  const PLATFORM_TIERS = ['TRIAL', 'PLATFORM_STANDARD', 'PLATFORM_PRO', 'ENTERPRISE'];
+  const PLATFORM_TIERS = ['NONE', 'TRIAL', 'PLATFORM_STANDARD', 'PLATFORM_PRO', 'ENTERPRISE'];
   
   const isByokTier = BYOK_TIERS.includes(settings.subscription.tier);
   const isPlatformTier = PLATFORM_TIERS.includes(settings.subscription.tier);

@@ -28,7 +28,7 @@ interface ActiveAssignment {
 
 interface UseChatOptions {
   routerEndpoint: string;
-  subscriptionTier: 'TRIAL' | 'MANUSCRIPT_BYOK' | 'BYOK_STANDARD' | 'PLATFORM_STANDARD' | 'PLATFORM_PRO' | 'ENTERPRISE';
+  subscriptionTier: 'NONE' | 'TRIAL' | 'MANUSCRIPT_BYOK' | 'BYOK_STANDARD' | 'PLATFORM_STANDARD' | 'PLATFORM_PRO' | 'ENTERPRISE';
   keyMode: 'PLATFORM' | 'BYOK';
   userApiKey?: string;
   userId: string;

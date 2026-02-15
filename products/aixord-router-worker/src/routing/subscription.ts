@@ -5,7 +5,8 @@
  */
 
 import type { RouterRequest, Env, SubscriptionTier } from '../types';
-import { RouterError, TIER_LIMITS } from '../types';
+import { RouterError } from '../types';
+import { isByokTier, getTierLimits } from '../config/tiers';
 
 /**
  * Validate subscription before processing request
@@ -21,10 +22,9 @@ export async function validateSubscription(
   // The key-resolver.ts handles checking D1 database for BYOK keys
   // and throws BYOK_KEY_MISSING if not found
 
-  // 1. Verify BYOK tiers have correct mode
+  // 1. Verify BYOK tiers have correct mode (derived from config/tiers.ts)
   // TRIAL is excluded — trial users can use BYOK or platform keys (dual-mode)
-  const byokTiers: SubscriptionTier[] = ['MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
-  if (byokTiers.includes(tier) && key_mode !== 'BYOK') {
+  if (isByokTier(tier) && key_mode !== 'BYOK') {
     throw new RouterError(
       'BYOK_REQUIRED',
       `Subscription tier ${tier} requires BYOK mode`,
@@ -60,8 +60,8 @@ export async function validateSubscription(
     }
   }
 
-  // 3. Check usage limits
-  const limits = TIER_LIMITS[tier];
+  // 3. Check usage limits (derived from config/tiers.ts)
+  const limits = getTierLimits(tier);
   if (limits.maxRequests !== -1) { // -1 means unlimited
     const usage = await db.prepare(`
       SELECT requests_used FROM usage

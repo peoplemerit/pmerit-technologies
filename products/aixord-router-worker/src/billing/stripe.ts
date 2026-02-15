@@ -5,6 +5,7 @@
  */
 
 import type { SubscriptionTier } from '../types';
+import { STRIPE_PRICE_TO_TIER } from '../config/tiers';
 
 // =============================================================================
 // STRIPE TYPES
@@ -34,33 +35,39 @@ interface StripeCustomer {
   };
 }
 
+interface StripeCheckoutSession {
+  id: string;
+  customer: string;
+  subscription: string | null;
+  client_reference_id: string | null;
+  metadata: {
+    user_id?: string;
+    price_id?: string;
+  };
+  line_items?: {
+    data: Array<{
+      price: {
+        id: string;
+      };
+    }>;
+  };
+}
+
 interface StripeWebhookEvent {
   id: string;
   type: string;
   data: {
-    object: StripeSubscription | StripeCustomer;
+    object: StripeSubscription | StripeCustomer | StripeCheckoutSession;
   };
 }
 
 // =============================================================================
-// PRICE TO TIER MAPPING
+// PRICE TO TIER MAPPING — Imported from config/tiers.ts (Single Source of Truth)
+// STRIPE_PRICE_TO_TIER is derived from TIER_DEFINITIONS.stripePriceId
 // =============================================================================
 
-// Map Stripe price IDs to subscription tiers
-// Production price IDs from Stripe Dashboard (configured Session 12)
-const PRICE_TO_TIER: Record<string, SubscriptionTier> = {
-  // AIXORD Standard (BYOK) - $9.99/month
-  'price_1SwVtL1Uy2Gsjci2w3a8b5hX': 'BYOK_STANDARD',
-
-  // AIXORD Standard - $19.99/month
-  'price_1SwVsN1Uy2Gsjci2CHVecrv9': 'PLATFORM_STANDARD',
-
-  // AIXORD Pro - $49.99/month
-  'price_1SwVq61Uy2Gsjci2Wd6gxdAe': 'PLATFORM_PRO',
-
-  // Enterprise - Custom (future)
-  'price_enterprise_monthly': 'ENTERPRISE'
-};
+// Alias for backward compatibility within this file
+const PRICE_TO_TIER = STRIPE_PRICE_TO_TIER;
 
 // =============================================================================
 // WEBHOOK HANDLER
@@ -114,7 +121,12 @@ export async function handleStripeWebhook(
   event: StripeWebhookEvent,
   db: D1Database
 ): Promise<{ success: boolean; message: string }> {
+  console.log(`[WEBHOOK] Processing event: ${event.type} (${event.id})`);
+
   switch (event.type) {
+    case 'checkout.session.completed':
+      return handleCheckoutCompleted(event.data.object as StripeCheckoutSession, db);
+
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
       return handleSubscriptionUpdate(event.data.object as StripeSubscription, db);
@@ -126,12 +138,90 @@ export async function handleStripeWebhook(
       return handlePaymentFailed(event, db);
 
     default:
+      console.log(`[WEBHOOK] Ignored event type: ${event.type}`);
       return { success: true, message: `Ignored event type: ${event.type}` };
   }
 }
 
 /**
+ * Handle checkout.session.completed — First-time subscription activation
+ *
+ * CRITICAL: This is when a user first pays. We must:
+ * 1. Resolve the tier from the price ID
+ * 2. Upsert the subscriptions table
+ * 3. Update users.subscription_tier (THE MISSING STEP that caused 24h of debugging)
+ * 4. Store stripe_customer_id on the user for future webhook lookups
+ */
+async function handleCheckoutCompleted(
+  session: StripeCheckoutSession,
+  db: D1Database
+): Promise<{ success: boolean; message: string }> {
+  // Resolve user ID from metadata or client_reference_id
+  const userId = session.metadata?.user_id || session.client_reference_id;
+  if (!userId) {
+    console.error('[WEBHOOK] checkout.session.completed: No user_id in metadata or client_reference_id');
+    return { success: false, message: 'No user_id found in checkout session' };
+  }
+
+  // Resolve price ID from line_items or metadata
+  const priceId = session.line_items?.data?.[0]?.price?.id || session.metadata?.price_id;
+  if (!priceId) {
+    // Price ID may not be expanded in the webhook payload — we'll get it from
+    // the subsequent customer.subscription.created event. Log but don't fail.
+    console.warn('[WEBHOOK] checkout.session.completed: No price_id found, will rely on subscription.created event');
+  }
+
+  const tier = priceId ? PRICE_TO_TIER[priceId] : null;
+
+  // Store stripe_customer_id on user (needed for future subscription.updated/deleted events)
+  if (session.customer) {
+    await db.prepare(
+      'UPDATE users SET stripe_customer_id = ?, updated_at = datetime(\'now\') WHERE id = ?'
+    ).bind(session.customer, userId).run();
+    console.log(`[WEBHOOK] Stored stripe_customer_id=${session.customer} for user=${userId}`);
+  }
+
+  // If we have tier, update everything now. Otherwise wait for subscription.created.
+  if (tier) {
+    // Step 1: Upsert subscriptions table
+    const subId = crypto.randomUUID();
+    await db.prepare(`
+      INSERT INTO subscriptions (id, user_id, tier, status, stripe_customer_id, stripe_subscription_id, period_start, period_end)
+      VALUES (?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now', '+30 days'))
+      ON CONFLICT(user_id) DO UPDATE SET
+        tier = excluded.tier,
+        status = 'active',
+        stripe_customer_id = excluded.stripe_customer_id,
+        stripe_subscription_id = excluded.stripe_subscription_id,
+        period_start = datetime('now'),
+        period_end = datetime('now', '+30 days'),
+        updated_at = datetime('now')
+    `).bind(subId, userId, tier, session.customer, session.subscription || '').run();
+
+    // Step 2: CRITICAL — Update users.subscription_tier
+    await db.prepare(
+      'UPDATE users SET subscription_tier = ?, updated_at = datetime(\'now\') WHERE id = ?'
+    ).bind(tier, userId).run();
+
+    // Step 3: Reset usage tracking for new billing period
+    const now = new Date();
+    const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    await db.prepare(
+      'DELETE FROM usage_tracking WHERE user_id = ? AND period = ?'
+    ).bind(userId, currentPeriod).run();
+
+    console.log(`[WEBHOOK] Checkout completed: user=${userId}, tier=${tier}, customer=${session.customer}`);
+    return { success: true, message: `Checkout completed: user=${userId} activated ${tier}` };
+  }
+
+  console.log(`[WEBHOOK] Checkout completed (tier pending): user=${userId}, customer=${session.customer}`);
+  return { success: true, message: `Checkout completed: customer stored, tier will be set by subscription.created` };
+}
+
+/**
  * Handle subscription created/updated
+ *
+ * FIXED: Now also updates users.subscription_tier (was the #1 subscription bug)
  */
 async function handleSubscriptionUpdate(
   subscription: StripeSubscription,
@@ -190,23 +280,59 @@ async function handleSubscriptionUpdate(
     `).bind(subId, user.id, tier, status, subscription.customer, subscription.id, periodStart, periodEnd).run();
   }
 
+  // CRITICAL FIX: Also update users.subscription_tier
+  // Find user by stripe_customer_id to update their tier
+  const userForTierUpdate = await db.prepare(
+    'SELECT id FROM users WHERE stripe_customer_id = ?'
+  ).bind(subscription.customer).first<{ id: string }>();
+
+  if (userForTierUpdate) {
+    if (status === 'active') {
+      await db.prepare(
+        'UPDATE users SET subscription_tier = ?, updated_at = datetime(\'now\') WHERE id = ?'
+      ).bind(tier, userForTierUpdate.id).run();
+      console.log(`[WEBHOOK] Updated users.subscription_tier=${tier} for user=${userForTierUpdate.id}`);
+    } else if (status === 'cancelled' || status === 'expired') {
+      // Downgrade to TRIAL on cancellation/expiry
+      await db.prepare(
+        'UPDATE users SET subscription_tier = \'TRIAL\', updated_at = datetime(\'now\') WHERE id = ?'
+      ).bind(userForTierUpdate.id).run();
+      console.log(`[WEBHOOK] Downgraded users.subscription_tier to TRIAL for user=${userForTierUpdate.id}`);
+    }
+  }
+
   return { success: true, message: `Subscription ${subscription.id} updated to ${tier} (${status})` };
 }
 
 /**
- * Handle subscription deleted
+ * Handle subscription deleted (cancellation)
+ *
+ * FIXED: Now also downgrades users.subscription_tier to TRIAL
  */
 async function handleSubscriptionDeleted(
   subscription: StripeSubscription,
   db: D1Database
 ): Promise<{ success: boolean; message: string }> {
+  // Mark subscription as cancelled
   await db.prepare(`
     UPDATE subscriptions
     SET status = 'cancelled', updated_at = datetime('now')
     WHERE stripe_subscription_id = ?
   `).bind(subscription.id).run();
 
-  return { success: true, message: `Subscription ${subscription.id} cancelled` };
+  // CRITICAL FIX: Downgrade user tier to TRIAL
+  const user = await db.prepare(
+    'SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?'
+  ).bind(subscription.customer).first<{ user_id: string }>();
+
+  if (user) {
+    await db.prepare(
+      'UPDATE users SET subscription_tier = \'TRIAL\', updated_at = datetime(\'now\') WHERE id = ?'
+    ).bind(user.user_id).run();
+    console.log(`[WEBHOOK] Subscription deleted: downgraded user=${user.user_id} to TRIAL`);
+  }
+
+  return { success: true, message: `Subscription ${subscription.id} cancelled, user downgraded to TRIAL` };
 }
 
 /**
@@ -249,7 +375,9 @@ export async function createCheckoutSession(
       'success_url': successUrl,
       'cancel_url': cancelUrl,
       'client_reference_id': userId,
-      'metadata[user_id]': userId
+      'metadata[user_id]': userId,
+      'metadata[price_id]': priceId,
+      'subscription_data[metadata][user_id]': userId
     })
   });
 

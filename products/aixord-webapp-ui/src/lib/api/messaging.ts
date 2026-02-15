@@ -143,7 +143,7 @@ export interface RouterRequest {
   intent: RouterIntent;
   mode: RouterMode;
   subscription: {
-    tier: 'TRIAL' | 'MANUSCRIPT_BYOK' | 'BYOK_STANDARD' | 'PLATFORM_STANDARD' | 'PLATFORM_PRO' | 'ENTERPRISE';
+    tier: 'NONE' | 'TRIAL' | 'MANUSCRIPT_BYOK' | 'BYOK_STANDARD' | 'PLATFORM_STANDARD' | 'PLATFORM_PRO' | 'ENTERPRISE';
     key_mode: 'PLATFORM' | 'BYOK';
     user_api_key?: string;
   };

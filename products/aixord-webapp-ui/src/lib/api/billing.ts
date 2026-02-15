@@ -13,7 +13,7 @@ import { BILLING_BASE } from './config';
 /**
  * Subscription tier type
  */
-export type SubscriptionTier = 'TRIAL' | 'MANUSCRIPT_BYOK' | 'BYOK_STANDARD' | 'PLATFORM_STANDARD' | 'PLATFORM_PRO' | 'ENTERPRISE';
+export type SubscriptionTier = 'NONE' | 'TRIAL' | 'MANUSCRIPT_BYOK' | 'BYOK_STANDARD' | 'PLATFORM_STANDARD' | 'PLATFORM_PRO' | 'ENTERPRISE';
 
 /**
  * Subscription status type
@@ -132,6 +132,25 @@ export const billingApi = {
     }
 
     return { success: true, tier: data.tier || 'MANUSCRIPT_BYOK' };
+  },
+
+  /**
+   * Activate Free Trial (explicit opt-in)
+   * HANDOFF-SUBSCRIPTION-LOCKDOWN-01: Users must explicitly activate trial
+   */
+  async activateTrial(): Promise<{ success: boolean; tier: SubscriptionTier; expires_at: string }> {
+    const response = await fetch(`${BILLING_BASE}/activate/trial`, {
+      method: 'POST',
+      headers: getBillingAuthHeaders(),
+    });
+
+    const data = await response.json() as { success?: boolean; tier?: SubscriptionTier; expires_at?: string; error?: string };
+
+    if (!response.ok) {
+      throw new APIError(response.status, 'BILLING_ERROR', data.error || 'Failed to activate trial');
+    }
+
+    return { success: true, tier: data.tier || 'TRIAL', expires_at: data.expires_at || '' };
   },
 
   /**

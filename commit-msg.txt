@@ -1,0 +1,21 @@
+feat(subscription): HANDOFF-SUBSCRIPTION-LOCKDOWN-01
+
+- Create src/config/tiers.ts as single source of truth for all 6 tiers
+- Fix Stripe webhook: now updates users.subscription_tier (was the #1 bug)
+- Add checkout.session.completed handler for first-time payments
+- Fix subscription.deleted handler to downgrade user tier to TRIAL
+- Change registration to set tier=NONE (explicit trial activation required)
+- Add POST /v1/billing/activate/trial endpoint for explicit Free Trial opt-in
+- Replace all hardcoded tier arrays with imports from config/tiers.ts
+- Update frontend SubscriptionTier type to include NONE
+- Add billingApi.activateTrial() frontend method
+- Update Pricing page Start Free button to call trial activation endpoint
+- Update Settings, UpgradeBanner, and all tier display components
+
+Files changed (backend): config/tiers.ts (NEW), billing/stripe.ts, api/auth.ts,
+api/usage.ts, index.ts, middleware/entitlement.ts, routing/key-resolver.ts,
+routing/subscription.ts, schemas/router.ts, services/gateRules.ts
+
+Files changed (frontend): lib/api/billing.ts, pages/Pricing.tsx, pages/Settings.tsx,
+components/UpgradeBanner.tsx, contexts/UserSettingsContext.tsx, hooks/useChat.ts,
+lib/api/messaging.ts, lib/sdk.ts

@@ -9,6 +9,7 @@
 
 import { Context, Next } from 'hono';
 import type { Env } from '../types';
+import { getRequestLimit as getRequestLimitFromTiers, isValidTier } from '../config/tiers';
 
 interface EntitlementResult {
   allowed: boolean;
@@ -17,16 +18,6 @@ interface EntitlementResult {
   remaining_requests: number;
   trial_days_left?: number;
 }
-
-// Tier limits per month
-const TIER_LIMITS: Record<string, number> = {
-  'TRIAL': 50,            // 50 total during trial (not per month)
-  'MANUSCRIPT_BYOK': 500,
-  'BYOK_STANDARD': 1000,
-  'PLATFORM_STANDARD': 500,
-  'PLATFORM_PRO': 2000,
-  'ENTERPRISE': 999999,
-};
 
 /**
  * Middleware to check user entitlement before AI requests
@@ -49,9 +40,18 @@ export async function checkEntitlement(c: Context<{ Bindings: Env }>, next: Next
     return c.json({ error: 'USER_NOT_FOUND' }, 404);
   }
 
-  const tier = user.subscription_tier || 'TRIAL';
+  const tier = user.subscription_tier;
   const now = new Date();
   const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  // Check if user has no active subscription tier
+  if (!tier || tier === 'NONE' || !isValidTier(tier)) {
+    return c.json({
+      error: 'NO_ACTIVE_SUBSCRIPTION',
+      message: 'Please select a plan to start using AI features.',
+      redirect: '/pricing'
+    }, 403);
+  }
 
   // Check trial expiration
   if (tier === 'TRIAL') {
@@ -74,7 +74,7 @@ export async function checkEntitlement(c: Context<{ Bindings: Env }>, next: Next
   }>();
 
   const requestCount = usage?.request_count || 0;
-  const limit = TIER_LIMITS[tier] || 50;
+  const limit = getRequestLimitFromTiers(tier);
   const remaining = Math.max(0, limit - requestCount);
 
   if (remaining <= 0) {
@@ -133,7 +133,8 @@ export async function incrementUsage(
 
 /**
  * Get tier limit for a subscription tier
+ * Re-exports from config/tiers.ts for backward compatibility
  */
 export function getTierLimit(tier: string): number {
-  return TIER_LIMITS[tier] || 50;
+  return getRequestLimitFromTiers(tier);
 }

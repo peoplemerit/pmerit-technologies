@@ -17,6 +17,7 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { validateBody } from '../middleware/validateBody';
 import { loginSchema, registerSchema } from '../schemas/common';
+import { isByokTier } from '../config/tiers';
 
 const auth = new Hono<{ Bindings: Env }>();
 
@@ -156,17 +157,14 @@ auth.post('/register', validateBody(registerSchema), async (c) => {
 
   const userId = crypto.randomUUID();
 
-  // Calculate 14-day trial expiration (H1: Time-Limited Trial)
-  const trialExpiresAt = new Date();
-  trialExpiresAt.setDate(trialExpiresAt.getDate() + 14);
-
   // Sanitize display name (trim, cap length)
   const sanitizedName = name ? name.trim().slice(0, 100) : null;
 
-  // Insert user with email_verified = 1 (successful registration = valid email ownership)
+  // Insert user with NO subscription tier — user must explicitly activate Free Trial
+  // via POST /v1/billing/activate/trial (HANDOFF-SUBSCRIPTION-LOCKDOWN-01)
   await c.env.DB.prepare(
     'INSERT INTO users (id, email, password_hash, username, name, email_verified, subscription_tier, trial_expires_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)'
-  ).bind(userId, email.toLowerCase(), passwordHash, username?.toLowerCase() || null, sanitizedName, 'TRIAL', trialExpiresAt.toISOString()).run();
+  ).bind(userId, email.toLowerCase(), passwordHash, username?.toLowerCase() || null, sanitizedName, 'NONE', null).run();
 
   // Create email verification token
   const verificationToken = generateToken();
@@ -335,25 +333,29 @@ auth.get('/subscription', async (c) => {
   }>();
 
   if (!subscription) {
-    // No subscription found, return default TRIAL with PLATFORM keys
-    // TRIAL users get platform-provided keys (dual-mode: BYOK optional)
+    // No subscription record — return the user's current tier from users table
+    const userRecord = await c.env.DB.prepare(
+      'SELECT subscription_tier FROM users WHERE id = ?'
+    ).bind(session.user_id).first<{ subscription_tier: string | null }>();
+
+    const userTier = userRecord?.subscription_tier || 'NONE';
+
     c.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     c.header('Pragma', 'no-cache');
     c.header('Expires', '0');
 
     return c.json({
-      tier: 'TRIAL',
-      status: 'active',
-      keyMode: 'PLATFORM',
+      tier: userTier,
+      status: userTier === 'NONE' ? 'inactive' : 'active',
+      keyMode: isByokTier(userTier) ? 'BYOK' : 'PLATFORM',
       periodEnd: null,
       stripeCustomerId: null
     });
   }
 
-  // Determine key mode based on tier
+  // Determine key mode based on tier (derived from config/tiers.ts)
   // TRIAL is excluded from BYOK-only tiers — trial users use platform keys by default
-  const byokTiers = ['MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
-  const keyMode = byokTiers.includes(subscription.tier) ? 'BYOK' : 'PLATFORM';
+  const keyMode = isByokTier(subscription.tier) ? 'BYOK' : 'PLATFORM';
 
   // Set no-cache headers to prevent stale subscription data
   c.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');

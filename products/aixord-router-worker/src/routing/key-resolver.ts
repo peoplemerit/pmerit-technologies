@@ -12,16 +12,7 @@
 
 import type { Provider, Subscription, Env } from '../types';
 import { RouterError } from '../types';
-
-/**
- * BYOK tiers that REQUIRE user-provided API keys (no platform fallback).
- */
-const BYOK_TIERS = ['MANUSCRIPT_BYOK', 'BYOK_STANDARD'];
-
-/**
- * Platform tiers that use PMERIT-managed API keys.
- */
-const PLATFORM_TIERS = ['TRIAL', 'PLATFORM_STANDARD', 'PLATFORM_PRO', 'ENTERPRISE'];
+import { isByokTier, isPlatformTier } from '../config/tiers';
 
 /**
  * Cache for BYOK API keys
@@ -50,10 +41,10 @@ export async function resolveApiKey(
 ): Promise<string> {
   const tier = subscription.tier;
 
-  // Route based on tier classification
-  if (BYOK_TIERS.includes(tier)) {
+  // Route based on tier classification (derived from config/tiers.ts)
+  if (isByokTier(tier)) {
     return await resolveBYOKKey(provider, env, userId);
-  } else if (PLATFORM_TIERS.includes(tier)) {
+  } else if (isPlatformTier(tier)) {
     return resolvePlatformKey(provider, env, userId);
   } else {
     throw new RouterError(
