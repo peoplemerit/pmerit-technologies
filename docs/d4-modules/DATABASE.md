@@ -1,9 +1,9 @@
 # D4-CHAT: Database Architecture
 
-**Module:** D1 database schemas, R2 storage, all 59 tables across 33 migrations (§9)
+**Module:** D1 database schemas, R2 storage, all 61 tables across 35 migrations (§9)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** SLOW-GROWTH
-**Last Updated:** 2026-02-15 (Session 53)
+**Last Updated:** 2026-02-15 (Session 54)
 
 ---
 
@@ -18,7 +18,7 @@
 | Type | Cloudflare D1 (SQLite) |
 | Binding | `DB` |
 
-### 9.2 Table Schema (59 Tables — 33 Migrations + 3 Inline)
+### 9.2 Table Schema (61 Tables — 35 Migrations + 3 Inline)
 
 #### Core Tables (migrations 001-002)
 ```sql
@@ -228,6 +228,21 @@ agent_audit_log (id, project_id → projects, agent_id, task_id, event_type [23 
                  latency_ms, tokens_in, tokens_out, cost_usd, wu_delta,
                  security_classification, created_at)
 -- Indexes: project, agent, task, event_type, created_at, human_actor
+```
+
+#### Structured Audit Findings (migrations 040-041 — MOSA-AUDIT-01 Phase 2A)
+```sql
+audit_findings (id, audit_id → agent_audit_log, finding_type [8 types],
+               severity ['CRITICAL'|'HIGH'|'MEDIUM'|'LOW'|'INFO'],
+               title, description, file_path, line_number, code_snippet, recommendation,
+               disposition ['PENDING'|'FIX'|'ACCEPT'|'DEFER'|'INVALID'],
+               disposition_reason, triaged_by → users, triaged_at,
+               fixed_in_commit, prior_audit_match, created_at, updated_at)
+audit_config (project_id → projects, worker_model, auditor_model,
+             auto_audit_on_lock, incremental_by_module,
+             diminishing_returns_threshold, critical_auto_halt, high_severity_limit,
+             max_context_per_audit, created_at, updated_at)
+-- Indexes: audit_id, disposition, severity, file_path, prior_audit_match
 ```
 
 ### 9.3 R2 Object Storage

@@ -1,9 +1,9 @@
 # D4-CHAT: API Reference
 
-**Module:** Complete endpoint matrix (190+ endpoints across 24 modules), router execute contract (§10)
+**Module:** Complete endpoint matrix (197+ endpoints across 24 modules), router execute contract (§10)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** SLOW-GROWTH
-**Last Updated:** 2026-02-15 (Session 53)
+**Last Updated:** 2026-02-15 (Session 54)
 
 ---
 
@@ -127,6 +127,13 @@
 | | /api/v1/projects/:id/continuity/pins | GET | ✅ | continuity.ts |
 | | /api/v1/projects/:id/continuity/pins | POST | ✅ | continuity.ts |
 | | /api/v1/projects/:id/continuity/pins/:pinId | DELETE | ✅ | continuity.ts |
+| **Audit Findings (7)** | /api/v1/projects/:id/audit-findings | POST | ✅ | agents.ts |
+| | /api/v1/projects/:id/audit-findings | GET | ✅ | agents.ts |
+| | /api/v1/projects/:id/audit-findings/:fid/triage | PUT | ✅ | agents.ts |
+| | /api/v1/projects/:id/agents/audit-diff | POST | ✅ | agents.ts |
+| | /api/v1/projects/:id/audit-config | GET | ✅ | agents.ts |
+| | /api/v1/projects/:id/audit-config | PUT | ✅ | agents.ts |
+| | /api/v1/projects/:id/agents/context-budget | GET | ✅ | agents.ts |
 
 ### 10.2 Router Execute Contract
 
