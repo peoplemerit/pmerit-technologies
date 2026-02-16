@@ -10,16 +10,11 @@
 // =============================================================================
 
 export interface Env {
-  // API Keys (secrets) - Legacy platform keys
-  ANTHROPIC_API_KEY: string;
-  OPENAI_API_KEY: string;
-  GOOGLE_API_KEY: string;
-  DEEPSEEK_API_KEY?: string;
-
   // Platform-managed API keys (for non-BYOK tiers)
-  PLATFORM_ANTHROPIC_KEY?: string;
-  PLATFORM_OPENAI_KEY?: string;
-  PLATFORM_GOOGLE_KEY?: string;
+  // CLEANUP: Consolidated from dual naming. Only PLATFORM_* names used.
+  PLATFORM_ANTHROPIC_KEY: string;
+  PLATFORM_OPENAI_KEY: string;
+  PLATFORM_GOOGLE_KEY: string;
   PLATFORM_DEEPSEEK_KEY?: string;
 
   // Billing (secrets)

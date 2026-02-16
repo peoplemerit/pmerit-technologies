@@ -377,11 +377,12 @@ function runRouterHealthTest(): EnvTestResult {
 function runEnvConfigTest(env: Env): EnvTestResult {
   const start = Date.now();
   try {
+    // CLEANUP: Use PLATFORM_* naming convention
     const providers = [
-      !!env.ANTHROPIC_API_KEY,
-      !!env.OPENAI_API_KEY,
-      !!env.GOOGLE_API_KEY,
-      !!env.DEEPSEEK_API_KEY,
+      !!env.PLATFORM_ANTHROPIC_KEY,
+      !!env.PLATFORM_OPENAI_KEY,
+      !!env.PLATFORM_GOOGLE_KEY,
+      !!env.PLATFORM_DEEPSEEK_KEY,
     ].filter(Boolean).length;
     const hasEnv = !!env.ENVIRONMENT;
     return {

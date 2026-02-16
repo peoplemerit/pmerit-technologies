@@ -134,13 +134,12 @@ function resolvePlatformKey(
   env: Env,
   userId: string
 ): string {
-  // Use legacy secret names (ANTHROPIC_API_KEY, etc.) which are the actual
-  // wrangler secrets. PLATFORM_*_KEY was never configured as separate secrets.
+  // CLEANUP: Single naming convention — PLATFORM_* keys only
   const keyMap: Record<Provider, string | undefined> = {
-    anthropic: env.PLATFORM_ANTHROPIC_KEY || env.ANTHROPIC_API_KEY,
-    openai: env.PLATFORM_OPENAI_KEY || env.OPENAI_API_KEY,
-    google: env.PLATFORM_GOOGLE_KEY || env.GOOGLE_API_KEY,
-    deepseek: env.PLATFORM_DEEPSEEK_KEY || env.DEEPSEEK_API_KEY
+    anthropic: env.PLATFORM_ANTHROPIC_KEY,
+    openai: env.PLATFORM_OPENAI_KEY,
+    google: env.PLATFORM_GOOGLE_KEY,
+    deepseek: env.PLATFORM_DEEPSEEK_KEY
   };
 
   const key = keyMap[provider];

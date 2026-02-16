@@ -36,15 +36,16 @@ export interface WorkerAuditorResult {
  * Resolve the API key for a provider from the environment
  */
 function getApiKey(env: Env, provider: string): string {
+  // CLEANUP: Single naming convention — PLATFORM_* keys only
   switch (provider) {
     case 'anthropic':
-      return env.PLATFORM_ANTHROPIC_KEY || env.ANTHROPIC_API_KEY;
+      return env.PLATFORM_ANTHROPIC_KEY;
     case 'openai':
-      return env.PLATFORM_OPENAI_KEY || env.OPENAI_API_KEY;
+      return env.PLATFORM_OPENAI_KEY;
     case 'google':
-      return env.PLATFORM_GOOGLE_KEY || env.GOOGLE_API_KEY;
+      return env.PLATFORM_GOOGLE_KEY;
     case 'deepseek':
-      return env.PLATFORM_DEEPSEEK_KEY || env.DEEPSEEK_API_KEY || '';
+      return env.PLATFORM_DEEPSEEK_KEY || '';
     default:
       return '';
   }

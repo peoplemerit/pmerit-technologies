@@ -11,10 +11,10 @@ GITHUB_REDIRECT_URI = "https://aixord-router-worker.peoplemerit.workers.dev/api/
 FRONTEND_URL = "https://aixord.pmerit.com"
 
 # Secrets (set via wrangler secret put):
-# ANTHROPIC_API_KEY
-# OPENAI_API_KEY
-# GOOGLE_API_KEY
-# DEEPSEEK_API_KEY
+# PLATFORM_ANTHROPIC_KEY
+# PLATFORM_OPENAI_KEY
+# PLATFORM_GOOGLE_KEY
+# PLATFORM_DEEPSEEK_KEY
 # STRIPE_SECRET_KEY
 # STRIPE_WEBHOOK_SECRET
 # GUMROAD_PRODUCT_ID
