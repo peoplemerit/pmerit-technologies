@@ -122,10 +122,12 @@ app.use('/api/*', rateLimit({ windowMs: 60000, maxRequests: 200 }));
 app.use('/v1/*', rateLimit({ windowMs: 60000, maxRequests: 200 }));
 
 // Stricter rate limits for sensitive endpoints
-// Auth endpoints: 10 requests per minute (prevent brute force)
+// Login/register: 10 requests per minute (brute force protection)
 app.use('/api/v1/auth/login', rateLimit({ windowMs: 60000, maxRequests: 10 }));
 app.use('/api/v1/auth/register', rateLimit({ windowMs: 60000, maxRequests: 10 }));
-app.use('/api/v1/auth/*', rateLimit({ windowMs: 60000, maxRequests: 20 }));
+// Auth read endpoints (subscription, me, verify): 120/min to handle SPA page loads
+// FIX-STRIPE-PAYMENT-01: Was 20/min which caused cascading 429s on subscription checks
+app.use('/api/v1/auth/*', rateLimit({ windowMs: 60000, maxRequests: 120 }));
 
 // Router execute: 200 requests per minute (matches global limit — auth handles abuse)
 app.use('/v1/router/execute', rateLimit({ windowMs: 60000, maxRequests: 200 }));
@@ -186,13 +188,24 @@ app.post('/v1/router/execute', async (c) => {
         const now = new Date();
         const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-        // Check if user has no subscription tier (must activate via pricing page)
+        // FIX-SUBSCRIPTION-TIER-01: Auto-upgrade NONE users to TRIAL
+        // Legacy users registered before auto-trial activation may still have NONE tier
         if (!tier || tier === 'NONE') {
-          throw new RouterError(
-            'NO_ACTIVE_SUBSCRIPTION',
-            'Please select a plan to start using AI features.',
-            403
-          );
+          const trialExpiry = new Date();
+          trialExpiry.setDate(trialExpiry.getDate() + 14);
+          await c.env.DB.prepare(
+            "UPDATE users SET subscription_tier = 'TRIAL', trial_expires_at = ?, updated_at = datetime('now') WHERE id = ?"
+          ).bind(trialExpiry.toISOString(), userId).run();
+          await c.env.DB.prepare(`
+            INSERT INTO subscriptions (id, user_id, tier, status, period_start, period_end)
+            VALUES (?, ?, 'TRIAL', 'active', datetime('now'), ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+              tier = 'TRIAL', status = 'active',
+              period_end = excluded.period_end,
+              updated_at = datetime('now')
+          `).bind(crypto.randomUUID(), userId, trialExpiry.toISOString()).run();
+          console.log(`[FIX-TIER] Auto-upgraded NONE user ${userId.substring(0, 8)}... to TRIAL`);
+          // Continue processing — user now has TRIAL tier
         }
 
         // Check trial expiration

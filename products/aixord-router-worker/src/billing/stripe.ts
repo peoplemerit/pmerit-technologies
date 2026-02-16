@@ -265,9 +265,25 @@ async function handleSubscriptionUpdate(
     `).bind(tier, status, periodStart, periodEnd, subscription.id).run();
   } else {
     // Need to find user by Stripe customer ID
-    const user = await db.prepare(`
-      SELECT id FROM users WHERE stripe_customer_id = ?
-    `).bind(subscription.customer).first<{ id: string }>();
+    // FIX-STRIPE-PAYMENT-01: Check both users and subscriptions tables
+    let user = await db.prepare(
+      'SELECT id FROM users WHERE stripe_customer_id = ?'
+    ).bind(subscription.customer).first<{ id: string }>();
+
+    if (!user) {
+      // Fallback: lookup via subscriptions table (stripe_customer_id lives there too)
+      const subRecord = await db.prepare(
+        'SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?'
+      ).bind(subscription.customer).first<{ user_id: string }>();
+      if (subRecord) {
+        user = { id: subRecord.user_id };
+        // Backfill stripe_customer_id on users table for future lookups
+        await db.prepare(
+          'UPDATE users SET stripe_customer_id = ?, updated_at = datetime(\'now\') WHERE id = ?'
+        ).bind(subscription.customer, subRecord.user_id).run();
+        console.log(`[WEBHOOK] Backfilled stripe_customer_id on users table for user=${subRecord.user_id}`);
+      }
+    }
 
     if (!user) {
       return { success: false, message: `No user found for customer: ${subscription.customer}` };
@@ -281,16 +297,26 @@ async function handleSubscriptionUpdate(
   }
 
   // CRITICAL FIX: Also update users.subscription_tier
-  // Find user by stripe_customer_id to update their tier
-  const userForTierUpdate = await db.prepare(
+  // FIX-STRIPE-PAYMENT-01: Check both users and subscriptions tables for user lookup
+  let userForTierUpdate = await db.prepare(
     'SELECT id FROM users WHERE stripe_customer_id = ?'
   ).bind(subscription.customer).first<{ id: string }>();
+
+  if (!userForTierUpdate) {
+    // Fallback: lookup via subscriptions table
+    const subRecord = await db.prepare(
+      'SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?'
+    ).bind(subscription.customer).first<{ user_id: string }>();
+    if (subRecord) {
+      userForTierUpdate = { id: subRecord.user_id };
+    }
+  }
 
   if (userForTierUpdate) {
     if (status === 'active') {
       await db.prepare(
-        'UPDATE users SET subscription_tier = ?, updated_at = datetime(\'now\') WHERE id = ?'
-      ).bind(tier, userForTierUpdate.id).run();
+        'UPDATE users SET subscription_tier = ?, stripe_customer_id = ?, updated_at = datetime(\'now\') WHERE id = ?'
+      ).bind(tier, subscription.customer, userForTierUpdate.id).run();
       console.log(`[WEBHOOK] Updated users.subscription_tier=${tier} for user=${userForTierUpdate.id}`);
     } else if (status === 'cancelled' || status === 'expired') {
       // Downgrade to TRIAL on cancellation/expiry

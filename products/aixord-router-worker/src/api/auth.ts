@@ -179,12 +179,22 @@ auth.post('/register', validateBody(registerSchema), async (c) => {
   // Sanitize display name (trim, cap length)
   const sanitizedName = name ? name.trim().slice(0, 100) : null;
 
-  // Insert user with NO subscription tier — user must explicitly activate Free Trial
-  // via POST /v1/billing/activate/trial (HANDOFF-SUBSCRIPTION-LOCKDOWN-01)
+  // Auto-activate TRIAL at registration (FIX-SUBSCRIPTION-TIER-01)
+  // Previous: registered with 'NONE' which caused INVALID_TIER errors when users tried to chat
+  // Now: all new users get a 14-day free trial automatically
   // PBKDF2 with per-user salt (HANDOFF-COPILOT-AUDIT-01)
+  const trialExpiresAt = new Date();
+  trialExpiresAt.setDate(trialExpiresAt.getDate() + 14);
+
   await c.env.DB.prepare(
     'INSERT INTO users (id, email, password_hash, password_salt, hash_algorithm, username, name, email_verified, subscription_tier, trial_expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)'
-  ).bind(userId, email.toLowerCase(), passwordHash, passwordSalt, 'pbkdf2', username?.toLowerCase() || null, sanitizedName, 'NONE', null).run();
+  ).bind(userId, email.toLowerCase(), passwordHash, passwordSalt, 'pbkdf2', username?.toLowerCase() || null, sanitizedName, 'TRIAL', trialExpiresAt.toISOString()).run();
+
+  // Create subscription record for the trial
+  await c.env.DB.prepare(`
+    INSERT INTO subscriptions (id, user_id, tier, status, period_start, period_end)
+    VALUES (?, ?, 'TRIAL', 'active', datetime('now'), ?)
+  `).bind(crypto.randomUUID(), userId, trialExpiresAt.toISOString()).run();
 
   // Create email verification token
   const verificationToken = generateToken();
@@ -432,7 +442,26 @@ auth.get('/subscription', async (c) => {
       'SELECT subscription_tier FROM users WHERE id = ?'
     ).bind(session.user_id).first<{ subscription_tier: string | null }>();
 
-    const userTier = userRecord?.subscription_tier || 'NONE';
+    let userTier = userRecord?.subscription_tier || 'NONE';
+
+    // FIX-SUBSCRIPTION-TIER-01: Auto-upgrade NONE users to TRIAL
+    if (userTier === 'NONE') {
+      const trialExpiry = new Date();
+      trialExpiry.setDate(trialExpiry.getDate() + 14);
+      await c.env.DB.prepare(
+        "UPDATE users SET subscription_tier = 'TRIAL', trial_expires_at = ?, updated_at = datetime('now') WHERE id = ?"
+      ).bind(trialExpiry.toISOString(), session.user_id).run();
+      await c.env.DB.prepare(`
+        INSERT INTO subscriptions (id, user_id, tier, status, period_start, period_end)
+        VALUES (?, ?, 'TRIAL', 'active', datetime('now'), ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+          tier = 'TRIAL', status = 'active',
+          period_end = excluded.period_end,
+          updated_at = datetime('now')
+      `).bind(crypto.randomUUID(), session.user_id, trialExpiry.toISOString()).run();
+      console.log(`[FIX-TIER] Auto-upgraded NONE user ${session.user_id.substring(0, 8)}... to TRIAL via subscription endpoint`);
+      userTier = 'TRIAL';
+    }
 
     c.header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     c.header('Pragma', 'no-cache');
@@ -440,7 +469,7 @@ auth.get('/subscription', async (c) => {
 
     return c.json({
       tier: userTier,
-      status: userTier === 'NONE' ? 'inactive' : 'active',
+      status: 'active',
       keyMode: isByokTier(userTier) ? 'BYOK' : 'PLATFORM',
       periodEnd: null,
       stripeCustomerId: null
