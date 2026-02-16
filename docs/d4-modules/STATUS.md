@@ -3,7 +3,7 @@
 **Module:** Executive summary metrics, deliverable matrix, API endpoint status (§6)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** CAPPED (condensed metrics + pending deliverables only in future)
-**Last Updated:** 2026-02-15 (Session 53)
+**Last Updated:** 2026-02-15 (Session 59)
 
 ---
 
@@ -77,6 +77,16 @@
 | **Outdated Content Cleanup** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (JWT refs removed from TDD, Path B→85%, Activity tab→Implemented) | NEW |
 | **Fourth Audit Triage (COPILOT-AUDIT-04)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (13 findings: 1 inaccurate, 5 already documented, 5 accepted new, 1 partial, 1 resolved) | NEW |
 | **Fifth Audit Triage (COPILOT-AUDIT-05)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (9 findings: 1 inaccurate, 3 already documented, 2 fixed, 2 accepted new, 1 resolved) | NEW |
+| **MOSA Documentation Architecture** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (13 modules, manifest <150 lines, 90% context reduction) | NEW |
+| **Inter-Operative Audit Pattern** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Copilot agent audit pipeline, 5 audits completed) | NEW |
+| **API Key Masking (HANDOFF-SECURITY-CRITICAL-01)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (key_preview masking, reveal requires re-auth) | NEW |
+| **Backend Security Deployment** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (commit ed17f50 deployed to production) | NEW |
+| **Git History Purge (pmerit-ai-platform)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (git-filter-repo, 2 passes, force push) | NEW |
+| **Emergency Password Reset** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (PBKDF2 hash via D1 direct, 44 sessions invalidated) | NEW |
+| **Password Change Feature** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (POST /auth/change-password + Settings UI) | NEW |
+| **Credential Rotation** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Password + 4 AI keys + 2 Stripe secrets rotated) | NEW |
+| **Workspace Cleanup** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (66+ obsolete files deleted across root/sandbox) | NEW |
+| **Email Delivery Diagnostics** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (sendEmail logging, Resend domain verified, 234 tests) | NEW |
 
 ### 6.2 Deliverable Matrix
 
@@ -87,7 +97,7 @@
 | D3 | Chat UI Components | ✅ COMPLETE | 100% |
 | D4 | Gate Display | ✅ COMPLETE | 100% |
 | D5 | Phase Tracker | ✅ COMPLETE | 100% |
-| D6 | Settings Page | ✅ COMPLETE | 95% |
+| D6 | Settings Page | ✅ **COMPLETE** | **100%** |
 | D7 | State Persistence | ✅ DEPLOYED | 100% |
 | D8 | Subscription/Billing | ✅ DEPLOYED | 95% |
 | D9 | Message Persistence | ✅ DEPLOYED | 100% |
@@ -145,8 +155,15 @@
 | D61 | Outdated Content Cleanup (JWT corrections, Path B/Activity tab status fixes) | ✅ **COMPLETE** | **100%** |
 | D62 | Fourth Audit Triage (HANDOFF-COPILOT-AUDIT-04 — 13 findings validated, utils/ directory fix) | ✅ **COMPLETE** | **100%** |
 | D63 | Fifth Audit Triage (HANDOFF-COPILOT-AUDIT-05 — 9 findings validated, ResetPassword.tsx fix, App.css deletion) | ✅ **COMPLETE** | **100%** |
+| D64 | MOSA Documentation Architecture (13 modules, manifest + on-demand loading) | ✅ **COMPLETE** | **100%** |
+| D65 | Inter-Operative Audit Pattern (Copilot agent pipeline, 5 audits run) | ✅ **COMPLETE** | **100%** |
+| D66 | API Key Masking — Backend (HANDOFF-SECURITY-CRITICAL-01, key_preview + reveal re-auth) | ✅ **DEPLOYED** | **100%** |
+| D67 | Git History Purge (git-filter-repo on pmerit-ai-platform, force push) | ✅ **COMPLETE** | **100%** |
+| D68 | Emergency Password Reset (PBKDF2 hash via D1, session invalidation) | ✅ **DEPLOYED** | **100%** |
+| D69 | Password Change Feature — Full-Stack (POST /auth/change-password + Settings Account tab UI) | ✅ **DEPLOYED** | **100%** |
+| D70 | Credential Rotation (Password + 4 AI providers + 2 Stripe secrets, Worker secrets updated) | ✅ **COMPLETE** | **100%** |
 
-**Total Deliverables:** 63 (D1-D63)
+**Total Deliverables:** 70 (D1-D70)
 
 **Note (PATCH-CGC-01, GAP-9):** Session 23 sprint deliverables (§16.10) used internal numbering D7-D16 that maps to the main deliverable matrix as follows: Sprint-D10+D11 (Session Metrics) = main D10 (Usage Statistics). Sprint-D14+D15 (Prompt Caching) are implementation details within D1 (Model Router Worker). The main D1-D43 numbering is canonical.
 
@@ -154,7 +171,7 @@
 
 ```
 ROUTER ENDPOINTS (4):          ALL ✅ VERIFIED (incl. hard gate enforcement before AI call)
-AUTH ENDPOINTS (9):            ALL ✅ VERIFIED (incl. email verify, password reset, username recovery)
+AUTH ENDPOINTS (10):           ALL ✅ VERIFIED (incl. email verify, password reset, username recovery, change-password)
 PROJECTS ENDPOINTS (5):        ALL ✅ VERIFIED (incl. project_type field for non-software projects)
 STATE ENDPOINTS (5):           ALL ✅ VERIFIED (incl. GA:ENV, GA:FLD, GA:BP, GA:IVL auto-checks + POST finalize + brainstorm validation + fitness blocking + REASSESS protocol)
 DECISIONS ENDPOINTS (2):       ALL ✅ VERIFIED

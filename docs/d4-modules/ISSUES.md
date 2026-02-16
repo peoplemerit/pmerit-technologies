@@ -3,7 +3,7 @@
 **Module:** Fixed issues, known issues, technical debt, backlog items (§13)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** SHRINKING
-**Last Updated:** 2026-02-15 (Session 53)
+**Last Updated:** 2026-02-15 (Session 59)
 
 ---
 
@@ -30,6 +30,12 @@
 | 49 | Stale ChatWindow export | ChatWindow moved to `_orphaned/` but still in chat/index.ts barrel | Removed stale export | ✅ |
 | 49 | DB migration 027 column mismatch | Live knowledge_artifacts has 19 cols, migration expected 10 | Adapted migration to match live schema | ✅ |
 | 49 | DB migration 027 github_evidence mismatch | Live table has 17 cols, migration expected 9 | Adapted migration to match live schema | ✅ |
+| 56 | API keys returned as plaintext in GET /api-keys | Backend endpoint not deployed after fix | Deployed commit ed17f50 to Cloudflare Workers | ✅ |
+| 56 | Session 56 security fix code-complete but never deployed | Wrangler deploy not executed after git push | Deployed via `npx wrangler deploy` — Version 6db48da3 | ✅ |
+| 58 | Password exposed in git history (pmerit-ai-platform) | PMERIT_HANDOFF_SESSION_34 committed with password | git-filter-repo (2 passes) + force push to GitHub | ✅ |
+| 58 | No password change capability in platform | Missing backend endpoint + frontend UI | Built POST /auth/change-password + Settings Account tab | ✅ |
+| 58 | Credential files scattered across workspace | 64+ obsolete files with potential exposure | Comprehensive cleanup — 66+ files deleted | ✅ |
+| 59 | Forgot-password email not received | Resend service degradation (500 errors on queries) | Added sendEmail success/error logging, domain verified, Resend internal issue | ⚠️ Resend-side |
 
 ### 13.2 Known Issues
 
@@ -41,6 +47,11 @@
 | 4 | ~~Data classification UI missing~~ | Security | MEDIUM | ✅ RESOLVED (Session 7+) |
 
 **All critical issues resolved as of Session 10.**
+
+| 5 | ~~API Key Exposure (P0 Security)~~ | Production breach | HIGH | ✅ RESOLVED (Session 56-58) |
+| 6 | ~~No Password Change UI~~ | Security gap | HIGH | ✅ RESOLVED (Session 58) |
+| 7 | Forgot-password email delivery | Resend service degradation | MEDIUM | ⏳ MONITORING (Session 59) |
+| 8 | Dual API key naming (PLATFORM_* + legacy) | Code confusion | LOW | ⏳ DEFERRED (post-GT2UTM) |
 
 ### 13.3 Technical Debt
 

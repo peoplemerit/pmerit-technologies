@@ -1,10 +1,10 @@
 # D4-CHAT PROJECT PLAN — Manifest
 
 **Document Type:** Module Manifest (MOSA Architecture)
-**Version:** 18.0 (Session 54 — MOSA Baseline Formalization)
+**Version:** 19.0 (Session 59 — Security Remediation Complete)
 **Entity:** PMERIT Technologies LLC
 **Governance:** AIXORD v4.6
-**Last Updated:** 2026-02-15 (Session 54)
+**Last Updated:** 2026-02-15 (Session 59)
 
 > **This file is a manifest.** The full project plan has been decomposed into 13 independently-loadable modules using MOSA (Modular Open Systems Approach) to optimize AI context window usage. Load modules ON DEMAND based on the task at hand.
 
@@ -29,10 +29,11 @@
 | Metric | Value |
 |--------|-------|
 | **Completion** | ~100% Functional (All API Methods Wired) |
-| **Backend Tests** | 221/221 passing |
+| **Backend Tests** | 234/234 passing |
 | **API Endpoints** | 200+ across 24 modules |
-| **Database Tables** | 61 across 35 migrations |
-| **Security Audits** | 5 completed, all triaged |
+| **Database Tables** | 61 across 39 migrations |
+| **Security Audits** | 7 completed (5 Copilot + 1 Critical + 1 Emergency Remediation) |
+| **Credential Rotation** | ✅ Complete (Password + 4 AI + 2 Stripe secrets rotated) |
 | **Frontend** | React 19 + TypeScript + Vite + Tailwind |
 | **Backend** | Cloudflare Workers + Hono + D1 |
 
@@ -94,7 +95,7 @@ Load additional modules ON DEMAND based on the task directive. Maximum ~800 line
 
 ```bash
 # Backend — run from products/aixord-router-worker/
-npx vitest run                    # 193 tests
+npx vitest run                    # 234 tests
 npx wrangler d1 migrations list --local D4_CHAT_DB
 
 # Frontend — run from products/aixord-webapp-ui/
@@ -126,11 +127,12 @@ The webapp UI (`products/aixord-webapp-ui/docs/`) no longer maintains a duplicat
 | HANDOFF-COPILOT-AUDIT-03 | 13 triaged | `products/aixord-router-worker/docs/THIRD_AUDIT_DECISIONS.md` |
 | HANDOFF-COPILOT-AUDIT-04 | 13 triaged | `products/aixord-router-worker/docs/FOURTH_AUDIT_DECISIONS.md` |
 | HANDOFF-COPILOT-AUDIT-05 | 9 triaged | `products/aixord-router-worker/docs/FIFTH_AUDIT_DECISIONS.md` |
-| HANDOFF-SECURITY-CRITICAL-01 | P0 fix: API key exposure | `sandbox/HANDOFF-SECURITY-CRITICAL-01.md` |
+| HANDOFF-SECURITY-CRITICAL-01 | P0 fix: API key exposure + masking | `sandbox/HANDOFF-SECURITY-CRITICAL-01.md` |
+| Emergency Security Remediation | P0: Credential rotation, git history purge, password change feature | Sessions 56-59 |
 
 ---
 
-*MOSA Documentation Architecture — Session 56*
-*D4-CHAT Project Plan Manifest v18.2*
+*MOSA Documentation Architecture — Session 59*
+*D4-CHAT Project Plan Manifest v19.0*
 *AIXORD v4.6 — MOSA Baseline Formalized*
 *PMERIT Technologies LLC*

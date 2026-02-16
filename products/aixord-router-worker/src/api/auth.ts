@@ -81,9 +81,17 @@ async function sendEmail(
       }),
     });
 
-    const result = await response.json() as { id?: string; message?: string; error?: unknown };
+    const result = await response.json() as { id?: string; message?: string; error?: unknown; statusCode?: number; name?: string };
 
     if (response.ok && result.id) {
+      console.log(JSON.stringify({
+        type: 'email_sent_success',
+        to,
+        subject,
+        resend_id: result.id,
+        status: response.status,
+        timestamp: new Date().toISOString(),
+      }));
       return true;
     }
 
@@ -92,7 +100,10 @@ async function sendEmail(
       to,
       subject,
       status: response.status,
-      error: result.message || result.error,
+      resend_error: result.message || result.error,
+      resend_name: result.name,
+      resend_status_code: result.statusCode,
+      full_result: JSON.stringify(result),
       timestamp: new Date().toISOString(),
     }));
     return false;
