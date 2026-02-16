@@ -148,6 +148,9 @@ export function Project() {
   const [brainstormArtifactJustSaved, setBrainstormArtifactJustSaved] = useState(false);
   // Brainstorm readiness vector (HANDOFF-BQL-01)
   const [brainstormReadiness, setBrainstormReadiness] = useState<BrainstormReadinessData | null>(null);
+  // FIX-PERSIST-FINALIZE: Track if user explicitly dismissed the finalize prompt
+  // Prevents re-showing on state re-fetches within the same page session
+  const brainstormFinalizeDismissedRef = useRef(false);
 
   // REASSESS Protocol modal state (GFB-01 Task 3)
   const [reassessModal, setReassessModal] = useState<{
@@ -487,6 +490,37 @@ export function Project() {
     }
   }, [state, id, token, workspaceChecked]);
 
+  // FIX-PERSIST-FINALIZE: On page load / state change, check if brainstorm artifact
+  // already exists with all exit gates passed. If so, show the persistent finalize prompt.
+  // Root cause: brainstormArtifactJustSaved was only set during AI response parsing,
+  // so refreshing the page lost the prompt even though the artifact + gates were ready.
+  // See HANDOFF-PTX-02 for details.
+  useEffect(() => {
+    if (!state || !id || !token) return;
+    // Only relevant in BRAINSTORM phase
+    const phase = state.session.phase;
+    if (phase !== 'BRAINSTORM' && phase !== 'B') return;
+    // Don't re-show if user explicitly dismissed in this page session
+    if (brainstormFinalizeDismissedRef.current) return;
+    // Don't overwrite if already showing (e.g., from AI artifact extraction)
+    if (brainstormArtifactJustSaved) return;
+    // Check all 3 BRAINSTORM exit gates
+    const gates = state.gates || {};
+    const allExitGatesPassed = gates['GA:LIC'] && gates['GA:DIS'] && gates['GA:TIR'];
+    if (!allExitGatesPassed) return;
+    // All gates passed — check if brainstorm artifact exists via readiness API
+    brainstormApi.getReadiness(id, token)
+      .then((readiness) => {
+        if (readiness.artifact_exists) {
+          setBrainstormArtifactJustSaved(true);
+          setBrainstormReadiness(readiness);
+        }
+      })
+      .catch(() => {
+        // Non-blocking — if readiness API fails, don't show the prompt
+      });
+  }, [state, id, token, brainstormArtifactJustSaved]);
+
   // Cleanup blob URLs for evidence images on unmount
   useEffect(() => {
     return () => {
@@ -651,6 +685,9 @@ export function Project() {
         setOverrideReason('');
         setBrainstormArtifactJustSaved(false);
         setBrainstormReadiness(null);
+        // FIX-PERSIST-FINALIZE: Reset dismiss ref on successful finalization
+        // so it won't interfere with future brainstorm phases (e.g., after regression)
+        brainstormFinalizeDismissedRef.current = false;
       }
     } catch (err) {
       if (err instanceof APIError) {
@@ -1910,7 +1947,7 @@ export function Project() {
               {isFinalizing ? 'Finalizing...' : 'Finalize Brainstorm →'}
             </button>
             <button
-              onClick={() => { setBrainstormArtifactJustSaved(false); setBrainstormReadiness(null); }}
+              onClick={() => { setBrainstormArtifactJustSaved(false); setBrainstormReadiness(null); brainstormFinalizeDismissedRef.current = true; }}
               className="shrink-0 text-blue-400/50 hover:text-blue-300 transition-colors"
               title="Dismiss"
             >

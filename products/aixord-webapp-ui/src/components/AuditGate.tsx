@@ -7,7 +7,7 @@
  * bulk actions, and shows NEW/RECURRING badges from audit diff.
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { API_BASE } from '../lib/api/config';
 
 interface Finding {

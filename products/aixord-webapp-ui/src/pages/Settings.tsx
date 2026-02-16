@@ -71,7 +71,7 @@ const TIER_INFO: Record<SubscriptionTier, { name: string; price: string; feature
 
 export function Settings() {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
-  const { settings, billingInfo, apiKeyMetas, updateSubscription, updateApiKey, removeApiKey, updatePreferences, refreshSubscription, refreshApiKeys } = useUserSettings();
+  const { settings, billingInfo, apiKeyMetas, updateSubscription, updateApiKey, removeApiKey, updatePreferences, refreshSubscription, refreshApiKeys: _refreshApiKeys } = useUserSettings();
   const hasRedirected = useRef(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

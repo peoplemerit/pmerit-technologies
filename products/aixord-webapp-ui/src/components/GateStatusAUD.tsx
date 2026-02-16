@@ -7,7 +7,7 @@
  * with individual checklist items.
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { API_BASE } from '../lib/api/config';
 
 interface GateStatusProps {

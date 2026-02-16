@@ -8,7 +8,7 @@
  * - Diminishing returns detection alert
  */
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { API_BASE } from '../lib/api/config';
 
 interface AuditSummary {
@@ -37,7 +37,7 @@ interface AuditHistoryProps {
   onCompareAudits?: (audit1Id: string, audit2Id: string) => void;
 }
 
-export function AuditHistory({ projectId, onSelectAudit, onCompareAudits }: AuditHistoryProps) {
+export function AuditHistory({ projectId, onSelectAudit, onCompareAudits: _onCompareAudits }: AuditHistoryProps) {
   const [audits, setAudits] = useState<AuditSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [compareMode, setCompareMode] = useState(false);
