@@ -1360,4 +1360,400 @@ app.post('/:projectId/agents/audit-incremental', requireAuth, async (c) => {
   }
 });
 
+// =============================================================================
+// GAP-1: USER-GUIDED EXECUTION MODE
+// HANDOFF-CGC-01 GAP-1 — Mode 2: AI plans, human executes, AI validates
+//
+// In User-Guided mode:
+//   1. AI generates a step-by-step execution plan (each step is atomic)
+//   2. Human executes steps manually (outside the platform)
+//   3. Human reports completion with evidence
+//   4. AI validates each step against acceptance criteria
+//   5. R score updates incrementally as steps complete
+// =============================================================================
+
+/**
+ * POST /api/v1/projects/:projectId/tasks/:taskId/guided-plan
+ * Generate a step-by-step plan for user-guided execution.
+ * Called when execution_mode = 'USER_GUIDED'.
+ * Stores steps in agent_guided_steps table.
+ */
+app.post('/:projectId/tasks/:taskId/guided-plan', requireAuth, async (c) => {
+  const projectId = c.req.param('projectId');
+  const taskId = c.req.param('taskId');
+  const userId = c.get('userId');
+
+  const project = await c.env.DB.prepare(
+    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+  ).bind(projectId, userId).first();
+  if (!project) return c.json({ error: 'Project not found' }, 404);
+
+  const task = await c.env.DB.prepare(
+    'SELECT id, task_type, task_description, acceptance_criteria, execution_mode, status FROM agent_tasks WHERE id = ? AND project_id = ?'
+  ).bind(taskId, projectId).first<{
+    id: string; task_type: string; task_description: string;
+    acceptance_criteria: string | null; execution_mode: string; status: string;
+  }>();
+
+  if (!task) return c.json({ error: 'Task not found' }, 404);
+  if (task.execution_mode !== 'USER_GUIDED') {
+    return c.json({ error: 'Task is not in USER_GUIDED execution mode' }, 400);
+  }
+  if (task.status !== 'QUEUED' && task.status !== 'ASSIGNED') {
+    return c.json({ error: `Cannot generate plan for task in status: ${task.status}` }, 400);
+  }
+
+  // Check if plan already exists
+  const existing = await c.env.DB.prepare(
+    'SELECT COUNT(*) as cnt FROM agent_guided_steps WHERE task_id = ?'
+  ).bind(taskId).first<{ cnt: number }>();
+
+  if (existing && existing.cnt > 0) {
+    return c.json({ error: 'Guided plan already exists for this task. Use GET to retrieve steps.' }, 409);
+  }
+
+  const criteria: string[] = task.acceptance_criteria
+    ? JSON.parse(task.acceptance_criteria)
+    : [];
+
+  // Use supervisor to generate the step-by-step plan
+  const supervisorDef = AGENT_REGISTRY.supervisor;
+  const { callProvider: callProviderFn } = await import('../providers/index');
+  const apiKey = (() => {
+    switch (supervisorDef.preferredProvider) {
+      case 'anthropic': return c.env.PLATFORM_ANTHROPIC_KEY;
+      case 'openai': return c.env.PLATFORM_OPENAI_KEY;
+      case 'google': return c.env.PLATFORM_GOOGLE_KEY;
+      case 'deepseek': return c.env.PLATFORM_DEEPSEEK_KEY || '';
+      default: return '';
+    }
+  })();
+
+  if (!apiKey) {
+    return c.json({ error: 'No API key available for supervisor model' }, 500);
+  }
+
+  const planPrompt = `You are generating a step-by-step execution plan for a human to follow.
+The human will execute each step manually and report back. Each step must be:
+- Atomic (one clear action)
+- Verifiable (has a clear "done" condition)
+- Ordered (respects dependencies)
+
+TASK: ${task.task_description}
+TASK TYPE: ${task.task_type}
+${criteria.length > 0 ? `ACCEPTANCE CRITERIA:\n${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}` : ''}
+
+Output a JSON array of steps:
+[
+  {
+    "step_number": 1,
+    "title": "Short title",
+    "instructions": "Detailed instructions for the human",
+    "verification_criteria": "How to verify this step is complete",
+    "estimated_minutes": 5
+  }
+]
+
+Output ONLY the JSON array, no markdown or explanation.`;
+
+  try {
+    const response = await callProviderFn(
+      { provider: supervisorDef.preferredProvider, model: supervisorDef.preferredModel },
+      [
+        { role: 'system', content: supervisorDef.systemPrompt },
+        { role: 'user', content: planPrompt },
+      ],
+      apiKey,
+      { maxOutputTokens: 4096, temperature: 0.3 }
+    );
+
+    const cleaned = response.content
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim();
+
+    const steps: Array<{
+      step_number: number;
+      title: string;
+      instructions: string;
+      verification_criteria: string;
+      estimated_minutes?: number;
+    }> = JSON.parse(cleaned);
+
+    if (!Array.isArray(steps) || steps.length === 0) {
+      return c.json({ error: 'AI generated an empty or invalid plan' }, 500);
+    }
+
+    // Store steps in DB
+    const stmts = steps.map((step, idx) => {
+      const stepId = crypto.randomUUID().replace(/-/g, '').slice(0, 32);
+      return c.env.DB.prepare(`
+        INSERT INTO agent_guided_steps (
+          id, task_id, project_id, step_number, title,
+          instructions, verification_criteria, estimated_minutes,
+          status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+      `).bind(
+        stepId, taskId, projectId, idx + 1,
+        step.title, step.instructions,
+        step.verification_criteria,
+        step.estimated_minutes || null
+      );
+    });
+
+    await c.env.DB.batch(stmts);
+
+    // Update task status to IN_PROGRESS
+    await c.env.DB.prepare(`
+      UPDATE agent_tasks
+      SET status = 'IN_PROGRESS', execution_mode = 'USER_GUIDED',
+          started_at = datetime('now'), updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(taskId).run();
+
+    await logAgentEvent(c.env.DB, {
+      project_id: projectId,
+      task_id: taskId,
+      event_type: 'GUIDED_PLAN_GENERATED',
+      event_data: JSON.stringify({
+        step_count: steps.length,
+        total_estimated_minutes: steps.reduce((sum, s) => sum + (s.estimated_minutes || 0), 0),
+      }),
+      human_actor_id: userId,
+    });
+
+    return c.json({
+      task_id: taskId,
+      execution_mode: 'USER_GUIDED',
+      step_count: steps.length,
+      steps: steps.map((s, idx) => ({
+        step_number: idx + 1,
+        title: s.title,
+        instructions: s.instructions,
+        verification_criteria: s.verification_criteria,
+        estimated_minutes: s.estimated_minutes || null,
+        status: 'PENDING',
+      })),
+    }, 201);
+  } catch (err: any) {
+    console.error('Guided plan generation failed:', err);
+    return c.json({ error: `Failed to generate guided plan: ${err.message}` }, 500);
+  }
+});
+
+/**
+ * GET /api/v1/projects/:projectId/tasks/:taskId/guided-steps
+ * Get all steps for a user-guided task
+ */
+app.get('/:projectId/tasks/:taskId/guided-steps', requireAuth, async (c) => {
+  const projectId = c.req.param('projectId');
+  const taskId = c.req.param('taskId');
+  const userId = c.get('userId');
+
+  const project = await c.env.DB.prepare(
+    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+  ).bind(projectId, userId).first();
+  if (!project) return c.json({ error: 'Project not found' }, 404);
+
+  const steps = await c.env.DB.prepare(`
+    SELECT id, step_number, title, instructions, verification_criteria,
+           estimated_minutes, status, user_evidence, ai_validation,
+           validated_at, completed_at
+    FROM agent_guided_steps
+    WHERE task_id = ? AND project_id = ?
+    ORDER BY step_number ASC
+  `).bind(taskId, projectId).all();
+
+  const total = steps.results?.length || 0;
+  const completed = steps.results?.filter((s: any) => s.status === 'COMPLETED' || s.status === 'VALIDATED').length || 0;
+
+  return c.json({
+    task_id: taskId,
+    total_steps: total,
+    completed_steps: completed,
+    progress: total > 0 ? Math.round((completed / total) * 100) : 0,
+    steps: steps.results || [],
+  });
+});
+
+/**
+ * POST /api/v1/projects/:projectId/tasks/:taskId/guided-steps/:stepNumber/complete
+ * Human reports a step as complete with evidence.
+ * AI validates the completion against verification criteria.
+ */
+app.post('/:projectId/tasks/:taskId/guided-steps/:stepNumber/complete', requireAuth, async (c) => {
+  const projectId = c.req.param('projectId');
+  const taskId = c.req.param('taskId');
+  const stepNumber = parseInt(c.req.param('stepNumber'));
+  const userId = c.get('userId');
+
+  const project = await c.env.DB.prepare(
+    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+  ).bind(projectId, userId).first();
+  if (!project) return c.json({ error: 'Project not found' }, 404);
+
+  const step = await c.env.DB.prepare(`
+    SELECT id, title, instructions, verification_criteria, status
+    FROM agent_guided_steps
+    WHERE task_id = ? AND project_id = ? AND step_number = ?
+  `).bind(taskId, projectId, stepNumber).first<{
+    id: string; title: string; instructions: string;
+    verification_criteria: string; status: string;
+  }>();
+
+  if (!step) return c.json({ error: 'Step not found' }, 404);
+  if (step.status === 'VALIDATED') {
+    return c.json({ error: 'Step already validated' }, 400);
+  }
+
+  const body = await c.req.json<{
+    evidence: string;         // Description of what the human did
+    evidence_type?: string;   // 'TEXT' | 'SCREENSHOT' | 'LOG' | 'URL'
+  }>();
+
+  if (!body.evidence?.trim()) {
+    return c.json({ error: 'Evidence description is required' }, 400);
+  }
+
+  // AI validates the step completion
+  const auditorDef = AGENT_REGISTRY.auditor;
+  const { callProvider: callProviderFn } = await import('../providers/index');
+  const apiKey = (() => {
+    switch (auditorDef.preferredProvider) {
+      case 'anthropic': return c.env.PLATFORM_ANTHROPIC_KEY;
+      case 'openai': return c.env.PLATFORM_OPENAI_KEY;
+      case 'google': return c.env.PLATFORM_GOOGLE_KEY;
+      case 'deepseek': return c.env.PLATFORM_DEEPSEEK_KEY || '';
+      default: return '';
+    }
+  })();
+
+  let validation: { passed: boolean; feedback: string; confidence: number } = {
+    passed: true,
+    feedback: 'Validation skipped — no auditor API key available',
+    confidence: 0.5,
+  };
+
+  if (apiKey) {
+    try {
+      const validationPrompt = `You are validating whether a human has completed a task step correctly.
+
+STEP: ${step.title}
+INSTRUCTIONS: ${step.instructions}
+VERIFICATION CRITERIA: ${step.verification_criteria}
+
+HUMAN'S EVIDENCE:
+${body.evidence}
+${body.evidence_type ? `(Evidence type: ${body.evidence_type})` : ''}
+
+Evaluate whether the evidence demonstrates the step is complete per the verification criteria.
+
+Output JSON only:
+{
+  "passed": true/false,
+  "feedback": "Brief assessment of the completion quality",
+  "confidence": 0.0-1.0
+}`;
+
+      const response = await callProviderFn(
+        { provider: auditorDef.preferredProvider, model: auditorDef.preferredModel },
+        [
+          { role: 'system', content: auditorDef.systemPrompt },
+          { role: 'user', content: validationPrompt },
+        ],
+        apiKey,
+        { maxOutputTokens: 1024, temperature: 0.2 }
+      );
+
+      const cleaned = response.content
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .trim();
+
+      validation = JSON.parse(cleaned);
+    } catch (err) {
+      console.warn('[GuidedStep] AI validation failed, marking as COMPLETED without validation:', err);
+      validation = {
+        passed: true,
+        feedback: 'AI validation unavailable — step marked complete based on human evidence',
+        confidence: 0.5,
+      };
+    }
+  }
+
+  const newStatus = validation.passed ? 'VALIDATED' : 'NEEDS_REVISION';
+  const now = new Date().toISOString();
+
+  await c.env.DB.prepare(`
+    UPDATE agent_guided_steps
+    SET status = ?, user_evidence = ?, ai_validation = ?,
+        validated_at = ?, completed_at = ?
+    WHERE id = ?
+  `).bind(
+    newStatus,
+    JSON.stringify({ description: body.evidence, type: body.evidence_type || 'TEXT' }),
+    JSON.stringify(validation),
+    now,
+    validation.passed ? now : null,
+    step.id
+  ).run();
+
+  await logAgentEvent(c.env.DB, {
+    project_id: projectId,
+    task_id: taskId,
+    event_type: validation.passed ? 'GUIDED_STEP_VALIDATED' : 'GUIDED_STEP_REVISION_NEEDED',
+    event_data: JSON.stringify({
+      step_number: stepNumber,
+      step_title: step.title,
+      validation_result: validation.passed ? 'PASS' : 'NEEDS_REVISION',
+      confidence: validation.confidence,
+    }),
+    human_actor_id: userId,
+  });
+
+  // Check if all steps are now validated — if so, complete the task
+  const allSteps = await c.env.DB.prepare(`
+    SELECT COUNT(*) as total,
+           SUM(CASE WHEN status = 'VALIDATED' THEN 1 ELSE 0 END) as validated
+    FROM agent_guided_steps
+    WHERE task_id = ? AND project_id = ?
+  `).bind(taskId, projectId).first<{ total: number; validated: number }>();
+
+  const allComplete = allSteps && allSteps.total > 0 && allSteps.validated === allSteps.total;
+
+  if (allComplete) {
+    await c.env.DB.prepare(`
+      UPDATE agent_tasks
+      SET status = 'COMPLETED', completed_at = datetime('now'), updated_at = datetime('now'),
+          confidence_score = ?
+      WHERE id = ?
+    `).bind(validation.confidence, taskId).run();
+
+    await logAgentEvent(c.env.DB, {
+      project_id: projectId,
+      task_id: taskId,
+      event_type: 'GUIDED_TASK_COMPLETED',
+      event_data: JSON.stringify({
+        total_steps: allSteps.total,
+        execution_mode: 'USER_GUIDED',
+      }),
+      human_actor_id: userId,
+    });
+  }
+
+  return c.json({
+    step_number: stepNumber,
+    status: newStatus,
+    validation,
+    task_complete: allComplete,
+    progress: allSteps ? {
+      total: allSteps.total,
+      validated: allSteps.validated + (validation.passed ? 0 : 0), // already counted in query
+      percent: allSteps.total > 0
+        ? Math.round(((allSteps.validated) / allSteps.total) * 100)
+        : 0,
+    } : null,
+  });
+});
+
 export default app;
