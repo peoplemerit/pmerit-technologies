@@ -1,7 +1,10 @@
 /**
  * GovernanceRibbon Component (Detail Panel — Compact)
  *
- * Phase stepper + gate pills in compact layout for 140px detail panel.
+ * UI-GOV-001: Authority Clarity Doctrine
+ *   Phases = breadcrumb progress (informational, non-blocking)
+ *   Gates  = blocking authority checkpoints (red=required, green=passed)
+ *
  * Phase stepper is condensed (MiniBar shows the primary view).
  * Work Gates only shown during Execute/Review phases.
  */
@@ -93,10 +96,10 @@ export function GovernanceRibbon({
 
   return (
     <div className="space-y-2">
-      {/* Phase Row — compact clickable pills */}
+      {/* Phase Row — breadcrumb progress indicator (UI-GOV-001: informational, non-blocking) */}
       <div className="flex items-center gap-2">
         <span className="text-gray-500 text-xs shrink-0">Phase:</span>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0">
           {phases.map((phase, index) => {
             const isActive = index === currentPhaseIndex;
             const isCompleted = index < currentPhaseIndex;
@@ -109,20 +112,23 @@ export function GovernanceRibbon({
                   onClick={() => isClickable && onSetPhase(phase.id)}
                   disabled={!isClickable}
                   title={isBlocked ? `Blocked: missing ${missingGates.join(', ')}` : phase.label}
-                  className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                  className={`flex items-center gap-1 px-2 py-0.5 text-xs transition-colors ${
                     isActive
-                      ? 'bg-violet-600 text-white'
+                      ? 'text-white font-semibold'
                       : isCompleted
-                      ? 'bg-green-500/20 text-green-400'
+                      ? 'text-gray-400'
                       : isBlocked
-                      ? 'bg-gray-700/30 text-gray-600 cursor-not-allowed'
-                      : 'bg-gray-700/50 text-gray-400 hover:text-white'
+                      ? 'text-gray-600 cursor-not-allowed'
+                      : 'text-gray-500 hover:text-gray-300'
                   }`}
                 >
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${
+                    isActive ? 'bg-violet-400' : isCompleted ? 'bg-green-500' : 'bg-gray-600'
+                  }`} />
                   {phase.label}
                 </button>
                 {index < phases.length - 1 && (
-                  <div className={`w-3 h-px mx-0.5 ${isCompleted ? 'bg-green-500' : 'bg-gray-700'}`} />
+                  <span className={`text-xs ${isCompleted ? 'text-green-600' : 'text-gray-700'}`}>›</span>
                 )}
               </div>
             );
@@ -135,12 +141,13 @@ export function GovernanceRibbon({
         )}
       </div>
 
-      {/* Setup Gates */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <span className="text-gray-500 text-xs w-16 shrink-0">Setup:</span>
+      {/* Setup Gates (UI-GOV-001: gates are blocking authority checkpoints) */}
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className="text-gray-500 text-xs w-14 shrink-0 font-medium">Setup</span>
         {setupGates.map((gate) => {
           const isPassed = gates[gate.id];
           const isWorkspaceGate = WORKSPACE_GATES.has(gate.id);
+          const isRequired = (PHASE_EXIT_REQUIREMENTS[currentPhase] || []).includes(gate.id);
           const handleClick = () => {
             if (isWorkspaceGate && !isPassed && onOpenWorkspaceSetup) {
               onOpenWorkspaceSetup();
@@ -154,39 +161,44 @@ export function GovernanceRibbon({
               onClick={handleClick}
               disabled={isLoading || (!onToggleGate && !onOpenWorkspaceSetup)}
               title={isWorkspaceGate && !isPassed ? `${gate.title} — Click to configure workspace` : gate.title}
-              className={`px-1.5 py-0.5 text-xs rounded transition-colors ${
+              className={`px-1.5 py-0.5 text-xs rounded font-medium transition-colors ${
                 isPassed
-                  ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                  ? 'bg-green-900/40 text-green-400 border border-green-500/40'
+                  : isRequired
+                  ? 'bg-red-900/30 text-red-400 border border-red-500/40 hover:bg-red-900/40'
                   : isWorkspaceGate
-                  ? 'bg-violet-500/10 text-violet-400 border border-violet-500/30 hover:bg-violet-500/20'
-                  : 'bg-gray-700/50 text-gray-400 border border-gray-600/50 hover:border-gray-500'
+                  ? 'bg-violet-900/20 text-violet-400 border border-violet-500/30 hover:bg-violet-900/30'
+                  : 'bg-gray-800/50 text-gray-500 border border-gray-700/50 hover:border-gray-600'
               }`}
             >
-              {isPassed ? '✓' : isWorkspaceGate ? '⚙' : '○'} {gate.label}
+              {isPassed ? '✓' : isRequired ? '✗' : isWorkspaceGate ? '⚙' : '○'} {gate.label}
             </button>
           );
         })}
       </div>
 
-      {/* Work Gates (only in Execute/Review) */}
+      {/* Work Gates (UI-GOV-001: blocking checkpoints, only in Execute/Review) */}
       {showWorkGates && (
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-gray-500 text-xs w-16 shrink-0">Work:</span>
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-gray-500 text-xs w-14 shrink-0 font-medium">Work</span>
           {workGates.map((gate) => {
             const isPassed = gates[gate.id];
+            const isRequired = (PHASE_EXIT_REQUIREMENTS[currentPhase] || []).includes(gate.id);
             return (
               <button
                 key={gate.id}
                 onClick={() => onToggleGate && onToggleGate(gate.id)}
                 disabled={isLoading || !onToggleGate}
                 title={gate.title}
-                className={`px-1.5 py-0.5 text-xs rounded transition-colors ${
+                className={`px-1.5 py-0.5 text-xs rounded font-medium transition-colors ${
                   isPassed
-                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                    : 'bg-gray-700/50 text-gray-400 border border-gray-600/50 hover:border-gray-500'
+                    ? 'bg-green-900/40 text-green-400 border border-green-500/40'
+                    : isRequired
+                    ? 'bg-red-900/30 text-red-400 border border-red-500/40 hover:bg-red-900/40'
+                    : 'bg-gray-800/50 text-gray-500 border border-gray-700/50 hover:border-gray-600'
                 }`}
               >
-                {isPassed ? '✓' : '○'} {gate.label}
+                {isPassed ? '✓' : isRequired ? '✗' : '○'} {gate.label}
               </button>
             );
           })}
