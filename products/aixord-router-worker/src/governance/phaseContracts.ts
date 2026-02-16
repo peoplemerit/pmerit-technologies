@@ -64,9 +64,15 @@ export async function enforceL_BRN(
 
 /**
  * L-PLN: Planning Contract
- * Requirement: Must include DAG before BLUEPRINT phase
+ * Requirement: Must have scopes with deliverables before EXECUTE phase
  *
- * Checks blueprint_scopes for DAG dependencies on tier-1 scopes.
+ * ROOT-CAUSE-FIX: Previously queried non-existent `dag_json` column on
+ * `blueprint_scopes`, causing "no such column: dag_json" SQLite error
+ * that crashed the finalize handler with a generic 500.
+ *
+ * Fixed to check actual schema: scopes must exist with deliverables.
+ * The DAG structure is validated by the blueprint integrity report (GA:IVL),
+ * not by this contract. L-PLN's role is ensuring the plan has substance.
  */
 export async function enforceL_PLN(
   db: D1Database,
@@ -74,9 +80,9 @@ export async function enforceL_PLN(
 ): Promise<PhaseContractViolation[]> {
   // Check if any tier-1 scopes exist
   const scopes = await db.prepare(`
-    SELECT id, name, dag_json FROM blueprint_scopes
+    SELECT id, name FROM blueprint_scopes
     WHERE project_id = ? AND parent_scope_id IS NULL
-  `).bind(projectId).all<{ id: string; name: string; dag_json: string | null }>();
+  `).bind(projectId).all<{ id: string; name: string }>();
 
   if (!scopes.results || scopes.results.length === 0) {
     return [{
@@ -86,21 +92,16 @@ export async function enforceL_PLN(
     }];
   }
 
-  // Check that at least one scope has a DAG
-  const withDAG = scopes.results.filter(s => {
-    if (!s.dag_json) return false;
-    try {
-      const dag = JSON.parse(s.dag_json);
-      return Array.isArray(dag) && dag.length > 0;
-    } catch {
-      return false;
-    }
-  });
+  // Check that scopes have deliverables (plan has substance)
+  const deliverableCheck = await db.prepare(`
+    SELECT COUNT(*) as count FROM blueprint_deliverables
+    WHERE project_id = ?
+  `).bind(projectId).first<{ count: number }>();
 
-  if (withDAG.length === 0) {
+  if (!deliverableCheck || deliverableCheck.count === 0) {
     return [{
       law: 'L-PLN',
-      description: 'Planning contract violated: No scopes have DAG dependencies defined',
+      description: 'Planning contract violated: No deliverables defined for any scope',
       severity: 'BLOCKING'
     }];
   }
@@ -183,10 +184,101 @@ export async function enforceL_IVL(
 }
 
 /**
+ * GAP-3: R-Based Tollgate Enforcement
+ * HANDOFF-CGC-01 GAP-3
+ *
+ * Enforces readiness thresholds at phase boundaries:
+ *   EXECUTE → REVIEW: R ≥ 0.6 (internal staging threshold)
+ *   REVIEW  → LOCK:   R ≥ 0.8 (production-ready threshold)
+ *
+ * Checks are BLOCKING — must be met before phase advance.
+ * This runs as part of phase contract validation, ensuring
+ * the R score is a first-class governance law, not just
+ * an advisory metric.
+ */
+async function enforceR_TOLLGATE(
+  db: D1Database,
+  projectId: string,
+  fromPhase: string,
+  toPhase: string
+): Promise<PhaseContractViolation[]> {
+  // Import readiness engine (dynamic to avoid circular deps)
+  const { computeProjectReadiness } = await import('../services/readinessEngine');
+
+  // R-based tollgates only apply when mathematical governance is active
+  // (i.e., when scopes with WU exist)
+  const readiness = await computeProjectReadiness(db, projectId);
+
+  // If no scopes or no WU allocated, skip R-based enforcement
+  if (readiness.scopes.length === 0) return [];
+  const hasWU = readiness.scopes.some(s => s.allocated_wu > 0);
+  if (!hasWU) return [];
+
+  const violations: PhaseContractViolation[] = [];
+
+  // EXECUTE → REVIEW: R ≥ 0.6 (staging/internal review threshold)
+  if (fromPhase === 'EXECUTE' && (toPhase === 'VERIFY' || toPhase === 'REVIEW')) {
+    if (readiness.project_R < 0.6) {
+      violations.push({
+        law: 'R-TOLL-STAGING',
+        description: `R-Tollgate (staging): Project R=${readiness.project_R} is below 0.6 threshold. All scopes need higher L×P×V scores before proceeding to Review.`,
+        severity: 'BLOCKING',
+      });
+    }
+
+    // Individual scope check: no scope below 0.4
+    const criticalScopes = readiness.scopes.filter(s => s.R < 0.4 && s.allocated_wu > 0);
+    if (criticalScopes.length > 0) {
+      violations.push({
+        law: 'R-TOLL-SCOPE-MIN',
+        description: `R-Tollgate (scope minimum): ${criticalScopes.length} scope(s) below R=0.4: ${criticalScopes.map(s => `${s.scope_name}(R=${s.R})`).join(', ')}. Each scope must reach at least R≥0.4 before phase advance.`,
+        severity: 'BLOCKING',
+      });
+    }
+  }
+
+  // REVIEW → LOCK (or terminal): R ≥ 0.8 (production-ready threshold)
+  if (fromPhase === 'REVIEW' || (fromPhase === 'VERIFY' && toPhase === 'LOCK')) {
+    if (readiness.project_R < 0.8) {
+      violations.push({
+        law: 'R-TOLL-PRODUCTION',
+        description: `R-Tollgate (production): Project R=${readiness.project_R} is below 0.8 threshold. Project must reach R≥0.8 before closure/production release.`,
+        severity: 'BLOCKING',
+      });
+    }
+
+    // For production: all scopes with WU must have verified WU (WU transfer completed)
+    const unverifiedScopes = readiness.scopes.filter(s => s.allocated_wu > 0 && s.verified_wu === 0);
+    if (unverifiedScopes.length > 0) {
+      violations.push({
+        law: 'R-TOLL-VERIFIED',
+        description: `R-Tollgate (verification): ${unverifiedScopes.length} scope(s) have allocated WU but no verified WU: ${unverifiedScopes.map(s => s.scope_name).join(', ')}. WU transfer required before production release.`,
+        severity: 'BLOCKING',
+      });
+    }
+
+    // Conservation law must hold at production boundary
+    if (!readiness.conservation.valid) {
+      violations.push({
+        law: 'R-TOLL-CONSERVATION',
+        description: `R-Tollgate (conservation): WU conservation violation at production boundary. delta=${readiness.conservation.delta} (must be <0.01).`,
+        severity: 'BLOCKING',
+      });
+    }
+  }
+
+  return violations;
+}
+
+/**
  * Validate all phase contracts for a phase transition.
  *
  * Called by the finalize endpoint to enforce governance laws
  * before allowing phase advancement.
+ *
+ * Enforces:
+ *   - L-BRN, L-PLN, L-BPX, L-IVL (artifact contracts)
+ *   - R-TOLL-* (readiness tollgates — GAP-3)
  */
 export async function validatePhaseTransition(
   db: D1Database,
@@ -221,6 +313,10 @@ export async function validatePhaseTransition(
   if (fromPhase === 'REVIEW') {
     violations.push(...await enforceL_IVL(db, projectId));
   }
+
+  // GAP-3: R-Based Tollgate Enforcement
+  // Enforces R thresholds at EXECUTE→REVIEW and REVIEW→LOCK boundaries
+  violations.push(...await enforceR_TOLLGATE(db, projectId, fromPhase, toPhase));
 
   // Blocking violations prevent transition
   const blocking = violations.filter(v => v.severity === 'BLOCKING');

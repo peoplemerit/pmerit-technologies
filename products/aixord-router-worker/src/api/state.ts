@@ -336,6 +336,7 @@ state.put('/:projectId/gates/:gateId', async (c) => {
   const userId = c.get('userId');
   const projectId = c.req.param('projectId');
   const gateId = c.req.param('gateId');
+  try {
 
   if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
     return c.json({ error: 'Project not found' }, 404);
@@ -424,6 +425,14 @@ state.put('/:projectId/gates/:gateId', async (c) => {
   `).bind(JSON.stringify(gates), now, projectId).run();
 
   return c.json({ success: true, gates, updated_at: now });
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(JSON.stringify({
+      type: 'gate_toggle_error', projectId, gateId, userId,
+      error: errMsg, timestamp: new Date().toISOString(),
+    }));
+    return c.json({ error: `Gate toggle failed: ${errMsg}` }, 500);
+  }
 });
 
 /**
@@ -632,6 +641,13 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
     override_warnings?: boolean;
     override_reason?: string;
   }>().catch(() => ({}));
+
+  // ROOT-CAUSE-FIX: Top-level try/catch for the entire finalize handler.
+  // Without this, any uncaught DB exception (missing column, constraint violation,
+  // transient D1 error) falls through to Hono's global app.onError handler,
+  // returning a generic "Internal server error" with no diagnostic context.
+  // This was the root cause of the undebugable 500 errors reported by testers.
+  try {
 
   // 1. Authority check — must be project owner (Director)
   if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
@@ -1194,6 +1210,28 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
       ? `Phase ${currentPhase} finalized. Advanced to ${nextPhase}.`
       : `Phase ${currentPhase} finalized. Project complete.`,
   });
+
+  } catch (err) {
+    // ROOT-CAUSE-FIX: Capture detailed error context for debugging.
+    // Previously, uncaught exceptions here produced a generic "Internal server error"
+    // via app.onError with no way to diagnose the failure remotely.
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const errStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join(' | ') : undefined;
+    console.error(JSON.stringify({
+      type: 'finalize_error',
+      projectId,
+      phase: requestedPhase,
+      userId,
+      error: errMsg,
+      stack: errStack,
+      timestamp: new Date().toISOString(),
+    }));
+    return c.json({
+      error: `Phase finalization failed: ${errMsg}`,
+      phase: requestedPhase,
+      projectId,
+    }, 500);
+  }
 });
 
 /**
@@ -1216,8 +1254,17 @@ state.post('/:projectId/gates/evaluate', async (c) => {
     return c.json({ error: 'Project not found' }, 404);
   }
 
-  const result = await evaluateAllGates(c.env.DB, projectId, userId);
-  return c.json(result);
+  try {
+    const result = await evaluateAllGates(c.env.DB, projectId, userId);
+    return c.json(result);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error(JSON.stringify({
+      type: 'gate_evaluate_error', projectId, userId,
+      error: errMsg, timestamp: new Date().toISOString(),
+    }));
+    return c.json({ error: `Gate evaluation failed: ${errMsg}` }, 500);
+  }
 });
 
 export default state;

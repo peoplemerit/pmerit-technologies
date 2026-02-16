@@ -229,7 +229,19 @@ When you are uncertain about the user's intent:
 When the user says "Approved", "Yes", "Looks good", or similar:
 - Acknowledge their approval
 - Do NOT restart or re-ask clarifying questions
-- Guide them to Finalize the current phase`;
+- Guide them to Finalize the current phase
+
+=== ROOT CAUSE DOCTRINE ===
+When the user reports a problem, error, or unexpected behavior:
+1. NEVER propose a fix for the symptom alone. First investigate WHY.
+2. Ask "what changed?" and "what was the expected vs actual behavior?" to isolate the root cause.
+3. Trace backwards from the symptom: What action triggered it? What state was the system in? What assumption was violated?
+4. Distinguish symptoms (what the user sees) from root causes (the underlying defect or gap).
+5. When proposing a fix, explain BOTH:
+   - The root cause: why this happened
+   - The fix: what changes and why it addresses the root cause (not just the symptom)
+6. If you cannot determine the root cause with available information, say so and ask targeted diagnostic questions rather than guessing.
+7. Prefer fixes that prevent recurrence over fixes that only address the current instance.`;
 
   // DPF-01 Task 4: Phase Output Contracts — phase-specific quality standards
   const PHASE_OUTPUT_CONTRACTS: Record<string, string> = {
