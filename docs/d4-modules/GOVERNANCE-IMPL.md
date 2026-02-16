@@ -3,7 +3,7 @@
 **Module:** AIXORD gate chain, gate UI components, enforcement logic, security & privacy governance (§11-12)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** SEMI-STATIC
-**Last Updated:** 2026-02-15 (Session 53)
+**Last Updated:** 2026-02-16 (Session 10)
 
 ---
 
@@ -194,6 +194,37 @@ D4-CHAT is classified as **COMPLEX** (multi-component, multi-provider, persisten
 | P3 | Produce knowledge transfer artifact | §67.6 | ✅ **IMPLEMENTED** (Session 22) |
 
 **All 9 Part XIV roadmap items closed in Session 22. Full-stack CRUD infrastructure deployed.**
+
+---
+
+## GT2UTM: Governance → UI Traceability Matrix
+
+**Reference:** PATCH-D4-PERSIST-GT2UTM-01
+**Status:** Infrastructure complete, integration layer pending (Session 10 audit: 2.5/7 criteria)
+
+### Governance-to-UI Mapping Table
+
+| Governance Law | Backend Artifact | UI Confirmation | Status |
+|----------------|-----------------|-----------------|--------|
+| GA:ENV | workspace_binding | ENV Pill (GovernanceRibbon) | ✅ Implemented |
+| GA:FLD | folder_name | FLD Pill (GovernanceRibbon) | ✅ Implemented |
+| L-SSC | HANDOFF artifact | SessionList component | ⚠️ UI exists, no URL session param |
+| L-AVL | DTL entry (audit_log) | Audit Ribbon (AuditHistory) | ✅ Implemented |
+| Artifact Commit | Hash Evidence (artifact_commits) | EvidenceRibbon | ✅ Implemented |
+| L-PS | Path validation | ErrorBoundary / GovernanceBlockError | ✅ Implemented |
+| L-BRN | brainstorm_artifacts | Brainstorm Finalize prompt | ✅ Implemented |
+| L-PLN | blueprint_scopes + deliverables | BlueprintPanel | ✅ Implemented |
+| L-BPX | blueprint_integrity_reports | GA:BP pill | ✅ Implemented |
+| L-IVL | Integrity validation | GA:IVL pill | ✅ Implemented |
+
+### Pending Integration (Blocking GT2UTM Certification)
+
+| Gap | Description | Blocking |
+|-----|-------------|----------|
+| Auto-commit | AI output does not trigger artifact persistence automatically | Yes |
+| EAR-01 | Environment Awareness Report backend not implemented | Yes |
+| Session URL | `?session=<id>` URL parameter not supported | No |
+| Phase artifact evidence | Phase finalize does not check artifact_commit_evidence | Yes |
 
 ---
 

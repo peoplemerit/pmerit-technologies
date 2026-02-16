@@ -3,7 +3,7 @@
 **Module:** Fixed issues, known issues, technical debt, backlog items (§13)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** SHRINKING
-**Last Updated:** 2026-02-15 (Session 59)
+**Last Updated:** 2026-02-16 (Session 10)
 
 ---
 
@@ -50,8 +50,8 @@
 
 | 5 | ~~API Key Exposure (P0 Security)~~ | Production breach | HIGH | ✅ RESOLVED (Session 56-58) |
 | 6 | ~~No Password Change UI~~ | Security gap | HIGH | ✅ RESOLVED (Session 58) |
-| 7 | Forgot-password email delivery | Resend service degradation | MEDIUM | ⏳ MONITORING (Session 59) |
-| 8 | Dual API key naming (PLATFORM_* + legacy) | Code confusion | LOW | ⏳ DEFERRED (post-GT2UTM) |
+| ~~7~~ | ~~Forgot-password email delivery~~ | ~~Resend service degradation~~ | MEDIUM | ✅ VERIFIED (Session 10) — alugejoy3 token used in <1min |
+| ~~8~~ | ~~Dual API key naming (PLATFORM_* + legacy)~~ | ~~Code confusion~~ | LOW | ✅ RESOLVED (Session 9) — Consolidated to PLATFORM_* only |
 
 ### 13.3 Technical Debt
 
