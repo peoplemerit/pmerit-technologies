@@ -288,4 +288,46 @@ governance.get('/:projectId/governance/audit', async (c) => {
   });
 });
 
+// =============================================================================
+// GAP-2: Readiness Escalation Status
+// =============================================================================
+
+/**
+ * GET /:projectId/governance/escalation
+ * Get current escalation level and recent events.
+ */
+governance.get('/:projectId/governance/escalation', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId');
+
+  const project = await verifyProjectOwnership(c.env.DB, projectId, userId);
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const { getEscalationStatus } = await import('../services/readinessEscalation');
+  const status = await getEscalationStatus(c.env.DB, projectId);
+
+  return c.json(status);
+});
+
+/**
+ * POST /:projectId/governance/escalation/check
+ * Manually trigger an escalation check (for testing or Director override).
+ */
+governance.post('/:projectId/governance/escalation/check', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId');
+
+  const project = await verifyProjectOwnership(c.env.DB, projectId, userId);
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const { checkReadinessEscalation } = await import('../services/readinessEscalation');
+  const result = await checkReadinessEscalation(c.env.DB, projectId, userId);
+
+  return c.json(result);
+});
+
 export default governance;

@@ -403,6 +403,9 @@ export async function evaluateAllGates(
  * Quick fire-and-forget gate evaluation.
  * Used as a hook after mutations — doesn't block the response.
  * Returns void, swallows errors.
+ *
+ * GAP-2: Also triggers readiness escalation check after gate evaluation
+ * to auto-flip gates and log threshold crossings.
  */
 export async function triggerGateEvaluation(
   db: D1Database,
@@ -410,7 +413,19 @@ export async function triggerGateEvaluation(
   userId: string
 ): Promise<void> {
   try {
-    await evaluateAllGates(db, projectId, userId);
+    const result = await evaluateAllGates(db, projectId, userId);
+
+    // GAP-2: Check readiness escalation only during EXECUTE/REVIEW phases
+    // (R-scores are only meaningful when execution has started)
+    if (result.phase === 'EXECUTE' || result.phase === 'E' ||
+        result.phase === 'REVIEW' || result.phase === 'R') {
+      try {
+        const { checkReadinessEscalation } = await import('./readinessEscalation');
+        await checkReadinessEscalation(db, projectId, userId);
+      } catch (escalationErr) {
+        console.warn('[GateRules] Escalation check failed (non-blocking):', escalationErr);
+      }
+    }
   } catch (err) {
     console.warn('[GateRules] Background evaluation failed:', err);
   }
