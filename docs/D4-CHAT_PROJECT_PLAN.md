@@ -1,10 +1,10 @@
 # D4-CHAT PROJECT PLAN — Manifest
 
 **Document Type:** Module Manifest (MOSA Architecture)
-**Version:** 19.0 (Session 59 — Security Remediation Complete)
+**Version:** 20.0 (Session 10 — Governance UI + GT2UTM Audit)
 **Entity:** PMERIT Technologies LLC
 **Governance:** AIXORD v4.6
-**Last Updated:** 2026-02-15 (Session 59)
+**Last Updated:** 2026-02-16 (Session 10)
 
 > **This file is a manifest.** The full project plan has been decomposed into 13 independently-loadable modules using MOSA (Modular Open Systems Approach) to optimize AI context window usage. Load modules ON DEMAND based on the task at hand.
 
@@ -16,8 +16,8 @@
 
 | Metric | Target | Actual | Status |
 |--------|--------|--------|--------|
-| Manifest size | ≤150 lines | 135 lines | PASS |
-| Startup context | ≤500 lines | ~322 lines | PASS |
+| Manifest size | ≤150 lines | 141 lines | PASS |
+| Startup context | ≤500 lines | ~340 lines | PASS |
 | Module count | N/A | 13 modules | PASS |
 | Dual-copy elimination | Required | Implemented | PASS |
 | Growth classes defined | Required | All 13 classified | PASS |
@@ -34,6 +34,7 @@
 | **Database Tables** | 61 across 39 migrations |
 | **Security Audits** | 7 completed (5 Copilot + 1 Critical + 1 Emergency Remediation) |
 | **Credential Rotation** | ✅ Complete (Password + 4 AI + 2 Stripe secrets rotated) |
+| **GT2UTM Readiness** | 2.5/7 (36%) — infrastructure exists, integration layer pending |
 | **Frontend** | React 19 + TypeScript + Vite + Tailwind |
 | **Backend** | Cloudflare Workers + Hono + D1 |
 
@@ -50,11 +51,11 @@
 | [ARCHITECTURE.md](d4-modules/ARCHITECTURE.md) | 329 | SEMI-STATIC | Adding files/routes, refactoring |
 | [DATABASE.md](d4-modules/DATABASE.md) | 244 | SLOW-GROWTH | Schema changes, migrations |
 | [API-REFERENCE.md](d4-modules/API-REFERENCE.md) | 159 | SLOW-GROWTH | Adding/modifying endpoints |
-| [GOVERNANCE-IMPL.md](d4-modules/GOVERNANCE-IMPL.md) | 199 | SEMI-STATIC | Gate/security work |
-| [ISSUES.md](d4-modules/ISSUES.md) | 67 | SHRINKING | Bug fixes, tech debt |
-| [SESSION-HISTORY.md](d4-modules/SESSION-HISTORY.md) | 83 | ROLLING | Context recovery |
+| [GOVERNANCE-IMPL.md](d4-modules/GOVERNANCE-IMPL.md) | 230 | SEMI-STATIC | Gate/security work |
+| [ISSUES.md](d4-modules/ISSUES.md) | 78 | SHRINKING | Bug fixes, tech debt |
+| [SESSION-HISTORY.md](d4-modules/SESSION-HISTORY.md) | 91 | ROLLING | Context recovery |
 | [RELATED-ASSETS.md](d4-modules/RELATED-ASSETS.md) | 58 | STATIC | Finding governance docs |
-| [ROADMAP.md](d4-modules/ROADMAP.md) | 38 | ROTATING | **Every session startup** |
+| [ROADMAP.md](d4-modules/ROADMAP.md) | 59 | ROTATING | **Every session startup** |
 | [IMPLEMENTATION-LOG.md](d4-modules/IMPLEMENTATION-LOG.md) | 1119 | ARCHIVAL | Never on startup — on-demand only |
 | [DEPLOYMENT.md](d4-modules/DEPLOYMENT.md) | 54 | SEMI-STATIC | Deployment, recovery |
 | [RECONCILIATION.md](d4-modules/RECONCILIATION.md) | 126 | SEMI-STATIC | Audit reconciliation |
@@ -72,7 +73,7 @@ The AIXORD Official Acceptable Baseline v4.6 (6,534 lines) will be decomposed in
 2. `d4-modules/STATUS.md` (~184 lines)
 3. `d4-modules/ROADMAP.md` (~38 lines)
 
-**Total startup context: ~302 lines** (down from 2,962 lines — **90% reduction**)
+**Total startup context: ~340 lines** (down from 2,962 lines — **89% reduction**)
 
 Load additional modules ON DEMAND based on the task directive. Maximum ~800 lines of docs loaded simultaneously.
 
@@ -82,12 +83,12 @@ Load additional modules ON DEMAND based on the task directive. Maximum ~800 line
 
 | Scenario | Modules to Load | Lines |
 |----------|----------------|-------|
-| Session startup | Manifest + STATUS + ROADMAP | ~302 |
-| API endpoint work | + API-REFERENCE + ARCHITECTURE | ~790 |
-| Schema change | + DATABASE + ARCHITECTURE | ~875 |
-| Security/audit work | + GOVERNANCE-IMPL + RECONCILIATION | ~627 |
-| Bug fix | + ISSUES + ARCHITECTURE | ~698 |
-| Full audit | All except IMPLEMENTATION-LOG | ~1,926 |
+| Session startup | Manifest + STATUS + ROADMAP | ~340 |
+| API endpoint work | + API-REFERENCE + ARCHITECTURE | ~828 |
+| Schema change | + DATABASE + ARCHITECTURE | ~913 |
+| Security/audit work | + GOVERNANCE-IMPL + RECONCILIATION | ~696 |
+| Bug fix | + ISSUES + ARCHITECTURE | ~747 |
+| Full audit | All except IMPLEMENTATION-LOG | ~2,010 |
 
 ---
 
@@ -132,7 +133,7 @@ The webapp UI (`products/aixord-webapp-ui/docs/`) no longer maintains a duplicat
 
 ---
 
-*MOSA Documentation Architecture — Session 59*
-*D4-CHAT Project Plan Manifest v19.0*
-*AIXORD v4.6 — MOSA Baseline Formalized*
+*MOSA Documentation Architecture — Session 10*
+*D4-CHAT Project Plan Manifest v20.0*
+*AIXORD v4.6 — Governance UI + GT2UTM Audit*
 *PMERIT Technologies LLC*

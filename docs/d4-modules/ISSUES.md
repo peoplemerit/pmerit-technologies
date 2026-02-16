@@ -66,13 +66,14 @@
 
 | ID | Title | Source | Priority | Status |
 |----|-------|--------|----------|--------|
-| UI-GOV-001 | Differentiate phase indicators from gate checkpoints in UI | HO-BASELINE-UPDATE-01, PATCH-UI-GOVERNANCE-01 | P2 | OPEN |
+| ~~UI-GOV-001~~ | ~~Differentiate phase indicators from gate checkpoints in UI~~ | HO-BASELINE-UPDATE-01, PATCH-UI-GOVERNANCE-01 | P2 | ✅ RESOLVED (Session 10) |
 
-**UI-GOV-001 Detail:**
+**UI-GOV-001 Detail:** ✅ **IMPLEMENTED**
 - **Requirement:** Gates must be visually distinct from phases.
-  - Gates: prominent, blocking (red/green status, requires action)
-  - Phases: informational, non-blocking (breadcrumb or progress indicator)
+  - Gates: prominent, blocking (red=required/unfulfilled, green=passed) — `GovernanceRibbon.tsx`
+  - Phases: informational, non-blocking (breadcrumb with dot indicators + `›` separators)
 - **Doctrine Reference:** AIXORD Baseline §10.11.5.5 — Authority Clarity Doctrine ("Phase != Authority", "Gates Grant Permission")
+- **Commit:** `a5dfc21` — feat: UI-GOV-001 Authority Clarity Doctrine for GovernanceRibbon
 
 ---
 

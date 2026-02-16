@@ -3,7 +3,7 @@
 **Module:** Session timeline and key learnings (§14)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** ROLLING-WINDOW (last 10 sessions kept here; older sessions archived to IMPLEMENTATION-LOG.md)
-**Last Updated:** 2026-02-15 (Session 59)
+**Last Updated:** 2026-02-16 (Session 10)
 
 ---
 
@@ -76,6 +76,8 @@
 | **57_*** | **02/15** | **Workspace Cleanup** | **Cataloged all files across root pmerit/, sandbox/. Deleted 66+ obsolete files (old session histories, duplicated governance docs, outdated templates, credential-containing files).** |
 | **58_*** | **02/15** | **Emergency Security Remediation (Sessions 8+9 History)** | **Git history purge: git-filter-repo on pmerit-ai-platform (2 passes for PMERIT_HANDOFF_SESSION_34_FINAL.md in original + archive paths). Force push to GitHub. Emergency password reset: PBKDF2 hash generated via Node.js, updated D1 directly, invalidated 44 sessions. Password change feature: POST /auth/change-password endpoint (verify current password PBKDF2/SHA-256, hash new password, invalidate all sessions, audit log) + Settings Account tab UI (current/new/confirm fields, validation, auto-redirect). Credential rotation: All 4 AI provider keys rotated + PLATFORM_* and legacy Worker secrets updated. Stripe secrets rotated. 234/234 tests passing. Backend deployed (23eaa769). Frontend deployed (6b1e1ef8). Commit 05c94ad.** |
 | **59_*** | **02/15** | **Email Delivery Debugging + Project Plan Update** | **Forgot-password email not received. Investigated: RESEND_API_KEY configured, domain pmerit.com verified in Resend (status: verified, sending: enabled), DNS records correct (SPF, DKIM, MX, DMARC). Resend API accepts emails (HTTP 200 + ID returned). Added sendEmail success/error logging. Discovered Resend experiencing service degradation (internal DB 500 errors on all query endpoints). Diagnostic endpoint created/used/removed. Backend deployed (b4f1a2ae). Updated D4-CHAT_PROJECT_PLAN v18→v19, STATUS.md (D64-D70), ROADMAP.md, ISSUES.md, SESSION-HISTORY.md.** |
+| **9_*** | **02/16** | **Session 9 Backlog — Subscription, Stripe, GAPs, Root Cause** | **Subscription tier NONE→TRIAL auto-upgrade (register + execute). Stripe webhook fallback lookup via subscriptions table. Rate limit 20→120/min. Legacy key consolidation to PLATFORM_*. Finalize error handling + dag_json ghost column fix. Root Cause Doctrine in system prompt + Auditor agent. GAP-1 User-Guided Execution Mode (3 endpoints). GAP-2 R-Threshold Escalation (readinessEscalation.ts, 5 levels). Frontend persistent finalize prompt fix. 6 commits pushed (638f0a2..fa18413).** |
+| **10_*** | **02/16** | **Governance UI + GT2UTM Audit + Cleanup** | **Forgot-password verified (Resend recovered, token used <1min). Stripe E2E verified (all endpoints auth-enforced, webhook sig validated, trial expiry enforced). GT2UTM readiness audit: 2.5/7 (36%) — infrastructure exists, integration layer pending. UI-GOV-001 Authority Clarity Doctrine: GovernanceRibbon phases→breadcrumbs, gates→red/green blocking checkpoints. Dependabot 7 stale branches pruned. D71-D78 deliverables. Project plan v19→v20. 2 commits pushed (59edbff, a5dfc21).** |
 
 ### 14.2 Key Learnings (Aligned with L-GCP)
 

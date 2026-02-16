@@ -3,7 +3,7 @@
 **Module:** Executive summary metrics, deliverable matrix, API endpoint status (§6)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** CAPPED (condensed metrics + pending deliverables only in future)
-**Last Updated:** 2026-02-15 (Session 59)
+**Last Updated:** 2026-02-16 (Session 10)
 
 ---
 
@@ -11,7 +11,7 @@
 
 ### 6.1 Executive Summary
 
-| Metric | V5.0 Audit | V6.0 Audit | V7.0 | V8.0 | V9.0 | V10.0 | V11.0 | V12.0 | V13.0 (Current) | Change |
+| Metric | V5.0 Audit | V6.0 Audit | V7.0 | V8.0 | V9.0 | V10.0 | V11.0 | V12.0 | V14.0 (Current) | Change |
 |--------|------------|------------|------|------|------|-------|-------|------|------------------|--------|
 | **Code Written** | ~96% | ~98% | ~99% | ~99%+ | ~99.5% | ~99.8% | ~99.9% | ~100% | **~100%** | — |
 | **Functional E2E** | ~96% | ~98% | ~99% | ~99%+ | ~99.5% | ~99.8% | ~99.9% | ~100% | **~100%** | — |
@@ -86,7 +86,15 @@
 | **Password Change Feature** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (POST /auth/change-password + Settings UI) | NEW |
 | **Credential Rotation** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Password + 4 AI keys + 2 Stripe secrets rotated) | NEW |
 | **Workspace Cleanup** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (66+ obsolete files deleted across root/sandbox) | NEW |
-| **Email Delivery Diagnostics** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (sendEmail logging, Resend domain verified, 234 tests) | NEW |
+| **Email Delivery Diagnostics** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (sendEmail logging, Resend domain verified, 234 tests) | — |
+| **Subscription Tier Fix (NONE→TRIAL)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Auto-activate TRIAL on register + auto-upgrade NONE→TRIAL) | NEW |
+| **Stripe Webhook Fallback** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Lookup via subscriptions table when stripe_customer_id missing) | NEW |
+| **Rate Limit Fix** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Auth endpoints 20→120/min) | NEW |
+| **Root Cause Doctrine** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (System prompt + Auditor agent integration) | NEW |
+| **GAP-1 User-Guided Execution** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (guided-plan, guided-steps, step completion endpoints) | NEW |
+| **GAP-2 R-Threshold Escalation** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (5-level escalation, auto-gate-flipping at R thresholds) | NEW |
+| **UI-GOV-001 Authority Clarity** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Phases=breadcrumbs, Gates=red/green blocking checkpoints) | NEW |
+| **GT2UTM Readiness Audit** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **36%** (2.5/7 criteria — infrastructure exists, integration pending) | NEW |
 
 ### 6.2 Deliverable Matrix
 
@@ -162,8 +170,16 @@
 | D68 | Emergency Password Reset (PBKDF2 hash via D1, session invalidation) | ✅ **DEPLOYED** | **100%** |
 | D69 | Password Change Feature — Full-Stack (POST /auth/change-password + Settings Account tab UI) | ✅ **DEPLOYED** | **100%** |
 | D70 | Credential Rotation (Password + 4 AI providers + 2 Stripe secrets, Worker secrets updated) | ✅ **COMPLETE** | **100%** |
+| D71 | Subscription Tier Fix — NONE→TRIAL auto-upgrade (register + execute endpoint) | ✅ **DEPLOYED** | **100%** |
+| D72 | Stripe Webhook Fallback (subscriptions table lookup when stripe_customer_id null) | ✅ **DEPLOYED** | **100%** |
+| D73 | Rate Limit Fix (auth endpoints 20→120/min) | ✅ **DEPLOYED** | **100%** |
+| D74 | Root Cause Doctrine (system prompt + Auditor agent root_cause field) | ✅ **DEPLOYED** | **100%** |
+| D75 | GAP-1 User-Guided Execution Mode (guided-plan, guided-steps, step completion) | ✅ **DEPLOYED** | **100%** |
+| D76 | GAP-2 R-Threshold Automatic Escalation (readinessEscalation.ts, 5 levels) | ✅ **DEPLOYED** | **100%** |
+| D77 | UI-GOV-001 Authority Clarity Doctrine (GovernanceRibbon phase/gate visual differentiation) | ✅ **DEPLOYED** | **100%** |
+| D78 | GT2UTM Readiness Audit (2.5/7 criteria, traceability matrix documented) | ✅ **COMPLETE** | **36%** |
 
-**Total Deliverables:** 70 (D1-D70)
+**Total Deliverables:** 78 (D1-D78)
 
 **Note (PATCH-CGC-01, GAP-9):** Session 23 sprint deliverables (§16.10) used internal numbering D7-D16 that maps to the main deliverable matrix as follows: Sprint-D10+D11 (Session Metrics) = main D10 (Usage Statistics). Sprint-D14+D15 (Prompt Caching) are implementation details within D1 (Model Router Worker). The main D1-D43 numbering is canonical.
 
