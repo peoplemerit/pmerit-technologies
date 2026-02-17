@@ -29,6 +29,7 @@ import { ImageUpload, type PendingImage } from '../components/chat/ImageUpload';
 import { formatAttachmentsForContext, type AttachedFile } from '../components/FileAttachment';
 import { detectAndResolveFiles } from '../lib/fileDetection';
 import { fileSystemStorage, readDirectory, readFileContent, verifyPermission } from '../lib/fileSystem';
+import { ExecutionEngine } from '../lib/executionEngine';
 import { CCSIncidentBanner } from '../components/CCSIncidentBanner';
 import { CCSIncidentPanel } from '../components/CCSIncidentPanel';
 import { CCSCreateIncidentModal } from '../components/CCSCreateIncidentModal';
@@ -1347,6 +1348,33 @@ export function Project() {
           }
         } catch {
           console.warn('Failed to process TDL structured blocks from AI response');
+        }
+
+        // EXE-GAP-001: Write file deliverables to workspace
+        try {
+          const fileResult = await ExecutionEngine.processFilesOnly(assistantContent, id);
+          if (fileResult.filesCreated.length > 0 || fileResult.errors.length > 0) {
+            assistantMessage.metadata = {
+              ...assistantMessage.metadata,
+              executionResult: {
+                filesCreated: fileResult.filesCreated,
+                filesUpdated: fileResult.filesUpdated,
+                progressUpdates: 0,
+                submissions: 0,
+                escalations: 0,
+                errors: fileResult.errors,
+              }
+            };
+            // Re-save message with executionResult metadata
+            await api.messages.create(id, {
+              role: 'assistant',
+              content: assistantContent,
+              metadata: assistantMessage.metadata as Record<string, unknown>,
+              session_id: activeSession?.id,
+            }, token);
+          }
+        } catch (err) {
+          console.warn('ExecutionEngine file processing failed:', err);
         }
       }
 

@@ -293,4 +293,56 @@ export class ExecutionEngine {
 
     return result;
   }
+
+  /**
+   * Process ONLY file deliverables from AI response.
+   * Use this in Project.tsx where TDL structured blocks are already
+   * handled inline — avoids double-processing submissions/progress/escalations.
+   */
+  static async processFilesOnly(
+    content: string,
+    projectId: string
+  ): Promise<{ filesCreated: string[]; filesUpdated: string[]; errors: string[] }> {
+    const result = {
+      filesCreated: [] as string[],
+      filesUpdated: [] as string[],
+      errors: [] as string[],
+    };
+
+    // Parse code fences with file path headers: ```language:path/to/file.ext
+    const codeFenceRegex = /```(\w+):([^\n]+)\n([\s\S]*?)```/g;
+    let match;
+    const fileSpecs: FileSpec[] = [];
+
+    while ((match = codeFenceRegex.exec(content)) !== null) {
+      const [, language, path, code] = match;
+      fileSpecs.push({
+        path: path.trim(),
+        language: language.trim(),
+        content: code.trim(),
+        action: 'create',
+      });
+    }
+
+    if (fileSpecs.length === 0) return result;
+
+    // Write files to workspace
+    for (const fileSpec of fileSpecs) {
+      const writeResult = await this.writeFileToWorkspace(
+        projectId,
+        fileSpec.path,
+        fileSpec.content
+      );
+
+      if (writeResult.success) {
+        result.filesCreated.push(fileSpec.path);
+      } else {
+        result.errors.push(
+          `Failed to write ${fileSpec.path}: ${writeResult.error}`
+        );
+      }
+    }
+
+    return result;
+  }
 }

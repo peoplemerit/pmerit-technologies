@@ -525,6 +525,25 @@ blocked: [any blockers]
 next: [planned next actions]
 estimate: [rough time/effort to completion]
 === END STANDUP ===`;
+
+    // EXE-GAP-001/002: File deliverable format + size guard
+    systemPrompt += `
+
+=== FILE DELIVERABLES ===
+When producing code files, output them using this format so the system can write them to the workspace automatically:
+
+\`\`\`language:path/to/file.ext
+file content here
+\`\`\`
+
+RULES:
+- One file per code fence — do NOT combine multiple files in one fence
+- Path is relative to project root (e.g., src/App.tsx, package.json)
+- Language must match the file extension (js, ts, tsx, html, css, json, etc.)
+- Keep each file under 150 lines — if larger, split into logical modules
+- Deliver files ONE AT A TIME: output one file, then describe what it does, then the next
+- Do NOT dump all project files in a single response — work through deliverables sequentially
+=== END FILE DELIVERABLES ===`;
   }
 
   // Response guidelines (compact)

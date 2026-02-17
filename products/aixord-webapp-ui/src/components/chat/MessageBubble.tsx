@@ -139,6 +139,7 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
         .replace(/=== STANDUP ===[\s\S]*?=== END STANDUP ===/g, '')
         .replace(/=== RETRIEVE:\s*[\s\S]*?===/g, '')
         .replace(/=== CONTINUITY CONFLICT ===[\s\S]*?===/g, '')
+        .replace(/```\w+:[^\n]+\n[\s\S]*?```/g, '') // Strip file deliverable fences (shown in execution card)
         .trim()
     : message.content;
 
@@ -363,6 +364,36 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
             </div>
           </div>
         ))}
+
+        {/* EXE-GAP-001: File operation results */}
+        {message.metadata?.executionResult && (
+          message.metadata.executionResult.filesCreated.length > 0 ||
+          message.metadata.executionResult.errors.length > 0
+        ) && (
+          <div className={`mt-2 p-3 rounded-lg border text-xs ${
+            message.metadata.executionResult.errors.length > 0
+              ? 'bg-red-500/10 border-red-500/30'
+              : 'bg-emerald-500/10 border-emerald-500/30'
+          }`}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`font-semibold ${
+                message.metadata.executionResult.errors.length > 0 ? 'text-red-400' : 'text-emerald-400'
+              }`}>
+                {message.metadata.executionResult.errors.length > 0 ? 'FILE OPERATIONS (with errors)' : 'FILES WRITTEN'}
+              </span>
+            </div>
+            {message.metadata.executionResult.filesCreated.map((f: string) => (
+              <div key={f} className="flex items-center gap-1 text-emerald-300">
+                <span>+</span><span className="font-mono">{f}</span>
+              </div>
+            ))}
+            {message.metadata.executionResult.errors.map((e: string, i: number) => (
+              <div key={i} className="flex items-center gap-1 text-red-300">
+                <span>!</span><span>{e}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Image attachments (ENH-4) */}
         {message.metadata?.images && message.metadata.images.length > 0 && (
