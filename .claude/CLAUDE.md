@@ -140,6 +140,44 @@ You are the **Technologies Assistant** for PMERIT TECHNOLOGIES LLC. Your job is 
 
 ---
 
+## CANONICAL PATHS (D4-CHAT Platform)
+
+**CRITICAL: Use these exact paths. Do NOT use `packages/worker/` or `packages/webapp-ui/` — those paths do not exist.**
+
+| Component | Canonical Path |
+|-----------|---------------|
+| **Backend Worker** | `products/aixord-router-worker/src/` |
+| **Frontend UI** | `products/aixord-webapp-ui/src/` |
+| **Chrome Extension** | `products/aixord-companion/src/` |
+| **Tier Config (SSoT)** | `products/aixord-router-worker/src/config/tiers.ts` |
+| **Stripe Billing** | `products/aixord-router-worker/src/billing/stripe.ts` |
+| **Rate Limiting** | `products/aixord-router-worker/src/middleware/rateLimit.ts` |
+| **Auth Routes** | `products/aixord-router-worker/src/api/auth.ts` |
+| **AI Providers** | `products/aixord-router-worker/src/providers/` |
+| **Router Fallback** | `products/aixord-router-worker/src/routing/fallback.ts` |
+| **Frontend Auth Context** | `products/aixord-webapp-ui/src/contexts/AuthContext.tsx` |
+| **Frontend Settings Context** | `products/aixord-webapp-ui/src/contexts/UserSettingsContext.tsx` |
+| **Frontend API Layer** | `products/aixord-webapp-ui/src/lib/api.ts` |
+| **Wrangler Config** | `products/aixord-router-worker/wrangler.toml` |
+| **D1 Migrations** | `products/aixord-router-worker/migrations/` |
+| **Backend Tests** | `products/aixord-router-worker/tests/` |
+| **Frontend Tests** | `products/aixord-webapp-ui/tests/` |
+| **E2E Tests** | `products/aixord-webapp-ui/e2e/` |
+
+### IGNORE THESE DIRECTORIES (historical — NOT active code)
+
+These directories exist on disk but are **not tracked in git**. Do NOT reference them as current:
+
+| Directory | Why It Exists | Status |
+|-----------|--------------|--------|
+| `Chat-Histories/` | Old AI session transcripts (ChatGPT, Gemini) | **UNTRACKED — ignore** |
+| `products/ARCHIVE/` | Frozen v3.3 product snapshot | **UNTRACKED — ignore** |
+| `products/Execution-files/` | Old setup scripts from prior sessions | **UNTRACKED — ignore** |
+| `REVIEW-FEEDBACK-OUTPUT/` | Old ChatGPT review output | **UNTRACKED — ignore** |
+| `Product-Stock/` | Physical product inventory | **UNTRACKED — ignore** |
+
+---
+
 ## DIRECTORY STRUCTURE
 
 ```
@@ -147,6 +185,9 @@ pmerit-technologies/                    <- PMERIT TECHNOLOGIES LLC
 +-- .claude/
 |   +-- CLAUDE.md                       <- This file
 |   +-- scopes/
+|
++-- .github/
+|   +-- workflows/                      <- CI/CD pipelines (Session 11)
 |
 +-- docs/                               <- CANONICAL documentation
 |   +-- D4-CHAT_PROJECT_PLAN.md         <- Module Manifest (start here)
@@ -157,17 +198,12 @@ pmerit-technologies/                    <- PMERIT TECHNOLOGIES LLC
 +-- products/                           <- ALL product folders
 |   +-- aixord-router-worker/           <- D4-CHAT Backend (Workers + Hono + D1)
 |   +-- aixord-webapp-ui/              <- D4-CHAT Frontend (React 19 + Vite)
-|   +-- AIXORD-Variants/                <- KDP Tools
-|   |   +-- staging/                    <- Input files
-|   |   +-- output/                     <- Generated DOCX
-|   |   +-- tools/                      <- Python scripts
-|   |   +-- mcp-server/                 <- MCP Server for Claude
+|   +-- aixord-companion/              <- Chrome Extension
+|   +-- AIXORD-Variants/                <- KDP Tools + MCP Server
 |   +-- ai-for-curious-minds/           <- AI book product
-|   +-- ARCHIVE/                        <- Archived products
+|   +-- variant-bundles/               <- Variant packaging tools
 |
-+-- Chat-Histories/                     <- Brainstorming sessions
 +-- templates/                          <- Shared templates
-+-- Product-Stock/                      <- Raw assets
 ```
 
 ---

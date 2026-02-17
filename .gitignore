@@ -29,3 +29,17 @@ npm-debug.log*
 .vscode/
 .idea/
 *.sw?
+
+# Test artifacts
+test_output.txt
+playwright-report/
+
+# Temporary scripts (session-specific, not canonical)
+temp-*.bat
+
+# Historical/non-code directories (kept on disk, not in repo)
+Chat-Histories/
+REVIEW-FEEDBACK-OUTPUT/
+Product-Stock/
+products/ARCHIVE/
+products/Execution-files/
