@@ -1232,9 +1232,10 @@ export function Settings() {
 
       {/* Upgrade Plan Modal */}
       {showUpgradeModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-xl border border-gray-700 max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-gray-800 rounded-xl border border-gray-700 max-w-md w-full p-6 my-auto flex flex-col max-h-[calc(100vh-2rem)]">
+            {/* Header — sticky */}
+            <div className="flex justify-between items-center mb-6 shrink-0">
               <h2 className="text-xl font-semibold text-white">Upgrade Your Plan</h2>
               <button
                 onClick={() => {
@@ -1251,13 +1252,13 @@ export function Settings() {
             </div>
 
             {billingError && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-4 shrink-0">
                 <p className="text-red-400 text-sm">{billingError}</p>
               </div>
             )}
 
-            {/* Plan selector */}
-            <div className="space-y-3 mb-6">
+            {/* Plan selector — scrollable */}
+            <div className="space-y-3 mb-6 overflow-y-auto min-h-0 flex-1">
               {(Object.entries(TIER_INFO) as [SubscriptionTier, typeof TIER_INFO[SubscriptionTier]][])
                 .filter(([tier]) => tier !== 'TRIAL' && tier !== settings.subscription.tier)
                 .map(([tier, info]) => (
@@ -1290,7 +1291,8 @@ export function Settings() {
                 ))}
             </div>
 
-            <div className="flex gap-3">
+            {/* Buttons — always visible at bottom */}
+            <div className="flex gap-3 shrink-0 pt-2">
               <button
                 type="button"
                 onClick={() => {
