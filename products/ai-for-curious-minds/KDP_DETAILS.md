@@ -104,12 +104,31 @@
 
 ---
 
+## Remaining Steps (Manual — KDP Dashboard)
+
+1. **Login** to [kdp.amazon.com](https://kdp.amazon.com) → Bookshelf
+2. **Create Paperback** → Enter title, subtitle, author, ISBN (9798317144074)
+3. **Upload Interior PDF**: Use `ai-for-curious-minds.pdf` (284 KB, 63 pages)
+4. **Upload Cover**: Use KDP Cover Creator with specs from `COVER_SPECIFICATION.md`
+   - Or design in Canva (6" x 9") and export as PDF
+5. **Set Categories**: See "Recommended Categories" section above
+6. **Set Keywords**: See "Keywords" section above (7 max)
+7. **Paste Description**: Copy from `AMAZON_DESCRIPTION.html`
+8. **Set Pricing**: $12.99 USD / £9.99 GBP / $16.99 CAD (60% royalty)
+9. **AI Disclosure**: Check yes — see "AI-Generated Content Disclosure" above
+10. **Preview & Publish**
+
+**Estimated time:** 15-20 minutes of manual KDP dashboard work.
+
+---
+
 ## Notes
 
-The book has an existing print-ready interior PDF (`KDP_PRINT_INTERIOR_SPREAD.pdf`). If making content updates to the manuscript, you'll need to regenerate the PDF from the updated markdown file.
+The book has an existing print-ready interior PDF (`ai-for-curious-minds.pdf`). If making content updates to the manuscript, regenerate the PDF from the updated markdown file.
 
-**Cover:** Existing cover is professional and on-brand. No changes needed.
+**Cover:** Existing cover specification is professional and on-brand. No changes needed.
 
 ---
 
 *Prepared: December 14, 2025*
+*Updated: February 17, 2026 — Added step-by-step launch instructions*

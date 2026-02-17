@@ -8,7 +8,22 @@
  * - Session notes persistence
  */
 
-const API_BASE = 'https://aixord-router-worker.peoplemerit.workers.dev/api/v1';
+/**
+ * API base URL — defaults to production, override via Chrome storage
+ * key 'apiBaseOverride' for development/staging.
+ */
+const API_BASE_DEFAULT = 'https://aixord-router-worker.peoplemerit.workers.dev/api/v1';
+let API_BASE = API_BASE_DEFAULT;
+
+// Allow runtime override for dev/staging (checked once on module load)
+if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+  chrome.storage.local.get('apiBaseOverride', (result) => {
+    if (result.apiBaseOverride) {
+      API_BASE = result.apiBaseOverride;
+      console.debug('[API] Using override base:', API_BASE);
+    }
+  });
+}
 
 export interface ApiError {
   error: string;

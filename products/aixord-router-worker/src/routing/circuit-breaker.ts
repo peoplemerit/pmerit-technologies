@@ -18,6 +18,7 @@
  */
 
 import type { Provider } from '../types';
+import { log } from '../utils/logger';
 
 // =============================================================================
 // Types
@@ -106,7 +107,7 @@ export function isCircuitClosed(
         // Cooldown elapsed — transition to HALF_OPEN, allow one probe
         entry.state = 'HALF_OPEN';
         entry.consecutiveSuccesses = 0;
-        console.log(`[CIRCUIT] ${provider}: OPEN → HALF_OPEN (cooldown elapsed, allowing probe)`);
+        log.info('circuit_transition', { provider, from: 'OPEN', to: 'HALF_OPEN', reason: 'cooldown_elapsed' });
         return true;
       }
       // Still in cooldown
@@ -135,7 +136,7 @@ export function recordSuccess(
         entry.state = 'CLOSED';
         entry.failureCount = 0;
         entry.consecutiveSuccesses = 0;
-        console.log(`[CIRCUIT] ${provider}: HALF_OPEN → CLOSED (probe succeeded)`);
+        log.info('circuit_transition', { provider, from: 'HALF_OPEN', to: 'CLOSED', reason: 'probe_succeeded' });
       }
       break;
 
@@ -170,14 +171,14 @@ export function recordFailure(
       entry.failureCount++;
       if (entry.failureCount >= config.failureThreshold) {
         entry.state = 'OPEN';
-        console.log(`[CIRCUIT] ${provider}: CLOSED → OPEN (${entry.failureCount} consecutive failures)`);
+        log.warn('circuit_transition', { provider, from: 'CLOSED', to: 'OPEN', reason: 'failure_threshold', failure_count: entry.failureCount });
       }
       break;
 
     case 'HALF_OPEN':
       // Probe failed — back to OPEN
       entry.state = 'OPEN';
-      console.log(`[CIRCUIT] ${provider}: HALF_OPEN → OPEN (probe failed)`);
+      log.warn('circuit_transition', { provider, from: 'HALF_OPEN', to: 'OPEN', reason: 'probe_failed' });
       break;
 
     case 'OPEN':
@@ -222,5 +223,5 @@ export function getProviderHealth(): Record<Provider, {
  */
 export function resetCircuit(provider: Provider): void {
   circuitState.delete(provider);
-  console.log(`[CIRCUIT] ${provider}: Reset to CLOSED`);
+  log.info('circuit_reset', { provider });
 }

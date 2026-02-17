@@ -18,6 +18,7 @@ import { resolveApiKey, isProviderAvailable } from './key-resolver';
 import { callProvider, estimateCost } from '../providers';
 import { redactContent } from '../utils/redaction';
 import { isCircuitClosed, recordSuccess, recordFailure } from './circuit-breaker';
+import { log } from '../utils/logger';
 
 // Phase 1.4: Re-export for /health endpoint
 export { getProviderHealth } from './circuit-breaker';
@@ -1034,8 +1035,9 @@ export async function executeWithFallback(
   const messages = buildMessages(request);
   let lastError: Error | null = null;
   let fallbackCount = 0;
-  const providerErrors: Array<{ provider: string; error: string }> = [];
+  const providerErrors: Array<{ provider: string; error: string; latency_ms?: number }> = [];
   let circuitSkipped = 0;
+  const requestId = request.trace.request_id;
 
   for (const candidate of availableCandidates) {
     // Phase 1.4: Circuit breaker check — skip providers with open circuits
@@ -1044,6 +1046,14 @@ export async function executeWithFallback(
       providerErrors.push({
         provider: candidate.provider,
         error: 'Circuit OPEN (provider temporarily unavailable, will probe after cooldown)'
+      });
+      // Phase 2: Log circuit skip as structured event
+      log.info('provider_skipped', {
+        request_id: requestId,
+        provider: candidate.provider,
+        model: candidate.model,
+        reason: 'circuit_open',
+        model_class: modelClass,
       });
       continue;
     }
@@ -1084,6 +1094,20 @@ export async function executeWithFallback(
       // Phase 1.4: Record success — closes circuit if in HALF_OPEN
       recordSuccess(candidate.provider);
 
+      // Phase 2: Log successful provider attempt with full context
+      log.info('provider_success', {
+        request_id: requestId,
+        provider: candidate.provider,
+        model: candidate.model,
+        model_class: modelClass,
+        latency_ms: latencyMs,
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+        cost_usd: costUsd,
+        fallback_count: fallbackCount,
+        circuit_skipped: circuitSkipped,
+      });
+
       return {
         status: fallbackCount > 0 ? 'RETRIED' : 'OK',
         content: response.content,
@@ -1105,16 +1129,32 @@ export async function executeWithFallback(
         }
       };
     } catch (error) {
+      const attemptLatencyMs = Date.now() - startTime;
       lastError = error as Error;
       fallbackCount++;
 
       // Phase 1.4: Record failure — may trip circuit to OPEN
       recordFailure(candidate.provider);
 
-      // Track provider-specific error
+      const errorMsg = error instanceof Error ? error.message : String(error);
+
+      // Track provider-specific error (Phase 2: include latency)
       providerErrors.push({
         provider: candidate.provider,
-        error: error instanceof Error ? error.message : String(error)
+        error: errorMsg,
+        latency_ms: attemptLatencyMs,
+      });
+
+      // Phase 2: Log failed provider attempt with latency + error detail
+      log.warn('provider_failure', {
+        request_id: requestId,
+        provider: candidate.provider,
+        model: candidate.model,
+        model_class: modelClass,
+        latency_ms: attemptLatencyMs,
+        error: errorMsg,
+        fallback_index: fallbackCount,
+        will_retry: request.policy_flags.allow_retry && !(error instanceof RouterError && ['BUDGET_EXCEEDED', 'BYOK_KEY_MISSING', 'BYOK_REQUIRED'].includes(error.code)),
       });
 
       // Don't retry on budget/policy errors
@@ -1136,6 +1176,16 @@ export async function executeWithFallback(
   // All candidates failed - provide detailed per-provider breakdown
   const errorMessage = `No available providers worked for ${modelClass}. Details:\n` +
     providerErrors.map(e => `  • ${e.provider}: ${e.error}`).join('\n');
+
+  // Phase 2: Log the complete fallback chain failure with all attempts
+  log.error('all_providers_failed', {
+    request_id: requestId,
+    model_class: modelClass,
+    total_candidates: availableCandidates.length,
+    circuit_skipped: circuitSkipped,
+    fallback_count: fallbackCount,
+    provider_errors: providerErrors,
+  });
 
   throw new RouterError(
     'ALL_PROVIDERS_FAILED',

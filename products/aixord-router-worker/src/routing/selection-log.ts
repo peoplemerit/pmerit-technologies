@@ -8,6 +8,7 @@
  */
 
 import type { ModelSelectionLog } from '../types';
+import { log as logger } from '../utils/logger';
 
 /**
  * Log model selection decision to database
@@ -16,7 +17,7 @@ import type { ModelSelectionLog } from '../types';
  */
 export async function logModelSelection(
   db: D1Database,
-  log: ModelSelectionLog
+  entry: ModelSelectionLog
 ): Promise<void> {
   try {
     await db.prepare(`
@@ -25,19 +26,22 @@ export async function logModelSelection(
        selected_provider, selected_model, rationale)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      log.request_id,
-      log.timestamp,
-      log.intent,
-      log.mode,
-      log.tier,
-      log.affinity_matched ? 1 : 0,
-      log.selected_provider,
-      log.selected_model,
-      log.rationale
+      entry.request_id,
+      entry.timestamp,
+      entry.intent,
+      entry.mode,
+      entry.tier,
+      entry.affinity_matched ? 1 : 0,
+      entry.selected_provider,
+      entry.selected_model,
+      entry.rationale
     ).run();
   } catch (error) {
-    // Log failure should not break routing (fail-safe)
-    console.error('Failed to log model selection:', error);
+    // Phase 2: Use structured logging for audit failures (fail-safe, don't block routing)
+    logger.error('selection_log_failed', {
+      request_id: entry.request_id,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
