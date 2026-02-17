@@ -3,7 +3,7 @@
 **Module:** Executive summary metrics, deliverable matrix, API endpoint status (§6)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** CAPPED (condensed metrics + pending deliverables only in future)
-**Last Updated:** 2026-02-17 (Session 11)
+**Last Updated:** 2026-02-17 (Session 12)
 
 ---
 
@@ -96,7 +96,9 @@
 | **UI-GOV-001 Authority Clarity** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Phases=breadcrumbs, Gates=red/green blocking checkpoints) | NEW |
 | **GT2UTM Readiness Audit** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **36%** (2.5/7 criteria — infrastructure exists, integration pending) | NEW |
 | **Root Cause Doctrine Phase 2 (D79)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Swiss Cheese Model: migration 045, registry, L-RCD, 43 tests) | NEW |
-| **PantryOS EXECUTE Phase Diagnostic** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Root cause analysis: no file-writing in EXECUTE, response truncation) | NEW |
+| **PantryOS EXECUTE Phase Diagnostic** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Root cause analysis: no file-writing in EXECUTE, response truncation) | — |
+| **EXECUTE File-Writing Mechanism (D80)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (ExecutionEngine wired, FILE DELIVERABLES prompt, workspace banner, 12 tests) | NEW |
+| **Scaffold Plan Gate (D81)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Swiss Cheese PROCESS layer: plan-before-execute, Approve/Modify UI, file-write gating) | NEW |
 
 ### 6.2 Deliverable Matrix
 
@@ -181,9 +183,10 @@
 | D77 | UI-GOV-001 Authority Clarity Doctrine (GovernanceRibbon phase/gate visual differentiation) | ✅ **DEPLOYED** | **100%** |
 | D78 | GT2UTM Readiness Audit (2.5/7 criteria, traceability matrix documented) | ✅ **COMPLETE** | **36%** |
 | D79 | Root Cause Doctrine Phase 2 — Swiss Cheese Model Structural Enforcement (migration 045, root_cause_registry, L-RCD governance, AuditHistory badges, 43 tests) | ✅ **DEPLOYED** | **100%** |
-| D80 | PantryOS EXECUTE Phase Diagnostic (Root cause: no file-writing mechanism in EXECUTE, response truncation, missing recovery UX) | ✅ **COMPLETE** | **100%** |
+| D80 | PantryOS EXECUTE Phase Diagnostic + File-Writing Mechanism (ExecutionEngine wired, FILE DELIVERABLES prompt, workspace banner, 12 tests) | ✅ **DEPLOYED** | **100%** |
+| D81 | Scaffold Plan Gate — Swiss Cheese PROCESS Layer (plan-before-execute, SCAFFOLD PLAN block, Approve/Modify UI, file-write gating, 14 tests) | ✅ **DEPLOYED** | **100%** |
 
-**Total Deliverables:** 80 (D1-D80)
+**Total Deliverables:** 81 (D1-D81)
 
 **Note (PATCH-CGC-01, GAP-9):** Session 23 sprint deliverables (§16.10) used internal numbering D7-D16 that maps to the main deliverable matrix as follows: Sprint-D10+D11 (Session Metrics) = main D10 (Usage Statistics). Sprint-D14+D15 (Prompt Caching) are implementation details within D1 (Model Router Worker). The main D1-D43 numbering is canonical.
 

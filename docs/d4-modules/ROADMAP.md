@@ -3,7 +3,7 @@
 **Module:** Immediate, short-term, and medium-term priorities (§16.1-16.3)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** CAPPED (active priorities only; completed items move to IMPLEMENTATION-LOG.md)
-**Last Updated:** 2026-02-16 (Session 10)
+**Last Updated:** 2026-02-17 (Session 12)
 
 ---
 
@@ -37,6 +37,8 @@
 
 | Priority | Task | AIXORD Alignment | Status |
 |----------|------|------------------|--------|
+| ~~P1~~ | ~~EXECUTE File-Writing Mechanism (D80)~~ | Swiss Cheese OBSERVABILITY | ✅ DEPLOYED (Session 12) |
+| ~~P1~~ | ~~Scaffold Plan Gate (D81)~~ | Swiss Cheese PROCESS | ✅ DEPLOYED (Session 12) |
 | P2 | Full SPG-01 Security Gates enforcement | L-SPG1-10 | ⏳ UI done, enforcement pending |
 | P2 | Manuscript redemption E2E | Business value | ⏳ Endpoints ready |
 | ~~P3~~ | ~~Remove PLATFORM_*/legacy key dual naming~~ | Code hygiene | ✅ DONE (Session 9) |

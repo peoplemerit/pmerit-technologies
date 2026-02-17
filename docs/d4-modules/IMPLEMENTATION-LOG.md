@@ -1117,3 +1117,57 @@ All security upgrades use **zero-downtime transparent migration**:
 
 ---
 
+### Session 12 (02/17) — EXECUTE File-Writing + Scaffold Plan Gate (D80-D81)
+
+#### D80: EXECUTE File-Writing Mechanism
+
+**Problem:** PantryOS user session showed AI producing code in EXECUTE phase, but no files were written to the user's workspace. The `ExecutionEngine` class existed but wasn't wired into the governed chat path (`Project.tsx`).
+
+**Root Causes (from PantryOS diagnostic):**
+1. `ExecutionEngine` not imported or called in the governed chat path
+2. AI system prompt had no FILE DELIVERABLES instructions — AI used plain code fences without path headers
+3. No UI feedback showing file operations to the user
+
+**Implementation:**
+
+| File | Changes |
+|------|---------|
+| `executionEngine.ts` | Added `processFilesOnly()` — file-only processing that avoids double-processing TDL blocks |
+| `Project.tsx` | Import ExecutionEngine, call processFilesOnly() in EXECUTE phase, render executionResult metadata |
+| `fallback.ts` | Added FILE DELIVERABLES section to EXECUTE phase system prompt (workspace-aware) |
+| `MessageBubble.tsx` | executionResult card showing files written with workspace folder prefix |
+| `executionEngine.test.ts` | 12 tests covering parseResponse, processFilesOnly, edge cases |
+
+**D80 Follow-up Fix:** FILE DELIVERABLES prompt was nested inside `if (td.assignments.length > 0)` — projects without TDL assignments never got file format instructions. Moved outside TDL guard, conditioned only on EXECUTE phase. Added green/red workspace banners.
+
+**Commits:** `8f63c25` (D80 main), `39fa2fb` (follow-up fix)
+
+#### D81: Scaffold Plan — Swiss Cheese PROCESS Layer
+
+**Problem:** User feedback: "The system is not showing how infrastructure will be built and where and how. It needs to list what it's about to do and what to expect. The user will review the plan and approve it."
+
+**Design:** Plan-before-execute gate following Swiss Cheese Model's PROCESS defense layer. AI must present a SCAFFOLD PLAN block showing all planned files before writing anything. User approves or requests modifications.
+
+**Implementation:**
+
+| File | Changes |
+|------|---------|
+| `types.ts` | Added `scaffoldPlan` to `MessageMetadata` (deliverable, projectName, files[], tree, dependencies, totalFiles, estimatedTokens, status) |
+| `fallback.ts` | Replaced EXECUTE OUTPUT CONTRACT with SCAFFOLD PLAN mandate — AI outputs JSON between `=== SCAFFOLD PLAN ===` markers before any code fences. Added scaffold reminder to FILE DELIVERABLES section. |
+| `Project.tsx` | Scaffold plan regex parsing, `hasScaffoldPlan` flag gates auto file-writing, `handleApproveScaffoldPlan` (triggers ExecutionEngine after user clicks Approve), `handleModifyScaffoldPlan` (sends feedback to AI via ref pattern to avoid forward-declaration issue) |
+| `MessageBubble.tsx` | Cyan scaffold plan card: file tree preview, file list with purposes/sizes/languages, dependency pills, Approve & Write Files button (emerald, disabled without workspace), Modify Plan button (opens textarea), status badges for approved/modified states |
+| `executionEngine.test.ts` | 2 new tests (14 total): scaffold plan block not parsed as file spec, processFilesOnly still works alongside scaffold plan |
+
+**Key Design Decisions:**
+- Gate logic lives in `Project.tsx` (not ExecutionEngine) — ExecutionEngine remains a pure file-writing tool
+- Scaffold plan status persists in message metadata — survives page reload
+- Modify handler uses `useRef` pattern to reference `handleSendMessage` without forward-declaration
+- Card disabled when no workspace bound (shows "Link Folder First" instead of Approve)
+
+**Commit:** `e876aa1`
+**Files Changed:** 5 (+401 insertions, -31 deletions)
+**Tests:** Backend 277/277, Frontend 14/14
+**Deployed:** Worker + Pages
+
+---
+
