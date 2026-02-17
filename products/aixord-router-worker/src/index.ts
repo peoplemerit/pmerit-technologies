@@ -62,6 +62,7 @@ import apiKeys from './api/api-keys';
 import agents from './api/agents';
 import { decryptAESGCM } from './utils/crypto';
 import { trackError } from './utils/errorTracker';
+import { log } from './utils/logger';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -70,6 +71,24 @@ app.use('*', async (c, next) => {
   const requestId = c.req.header('X-Request-ID') || crypto.randomUUID();
   c.header('X-Request-ID', requestId);
   await next();
+});
+
+// Phase 5.1: Request timing middleware — structured log for every request
+app.use('*', async (c, next) => {
+  const start = Date.now();
+  await next();
+  const latency = Date.now() - start;
+  // Only log non-health-check requests to avoid noise
+  if (c.req.path !== '/v1/router/health') {
+    log.info('request', {
+      method: c.req.method,
+      path: c.req.path,
+      status: c.res.status,
+      latency_ms: latency,
+      request_id: c.res.headers.get('X-Request-ID') || undefined,
+      user_id: c.get('userId') || undefined,
+    });
+  }
 });
 
 // Global error tracking middleware — captures unhandled errors with structured logging
@@ -140,12 +159,47 @@ app.use('/v1/router/execute', rateLimit({ windowMs: 60000, maxRequests: 200 }));
 // Billing endpoints: 20 requests per minute (prevent payment fraud attempts)
 app.use('/api/v1/billing/*', rateLimit({ windowMs: 60000, maxRequests: 20 }));
 
-// Health check
-app.get('/v1/router/health', (c) => {
+// Health check — Phase 5.2: Enhanced with D1, R2, and provider checks
+app.get('/v1/router/health', async (c) => {
+  const checks: Record<string, { status: 'ok' | 'error'; latency_ms?: number; detail?: string }> = {};
+
+  // D1 Database check
+  const d1Start = Date.now();
+  try {
+    await c.env.DB.prepare('SELECT 1').first();
+    checks.d1 = { status: 'ok', latency_ms: Date.now() - d1Start };
+  } catch (e) {
+    checks.d1 = { status: 'error', latency_ms: Date.now() - d1Start, detail: (e as Error).message };
+  }
+
+  // R2 Bucket check (list with limit 1)
+  const r2Start = Date.now();
+  try {
+    await c.env.IMAGES.list({ limit: 1 });
+    checks.r2 = { status: 'ok', latency_ms: Date.now() - r2Start };
+  } catch (e) {
+    checks.r2 = { status: 'error', latency_ms: Date.now() - r2Start, detail: (e as Error).message };
+  }
+
+  // Provider key availability (checks if keys are configured, not validity)
+  checks.providers = {
+    status: 'ok',
+    detail: [
+      c.env.PLATFORM_ANTHROPIC_KEY ? 'anthropic' : null,
+      c.env.PLATFORM_OPENAI_KEY ? 'openai' : null,
+      c.env.PLATFORM_GOOGLE_KEY ? 'google' : null,
+      c.env.PLATFORM_DEEPSEEK_KEY ? 'deepseek' : null,
+    ].filter(Boolean).join(',') || 'none',
+  };
+
+  const overallStatus = Object.values(checks).every(c => c.status === 'ok') ? 'healthy' : 'degraded';
+
   return c.json({
-    status: 'healthy',
+    status: overallStatus,
     version: '1.0.0',
-    timestamp: new Date().toISOString()
+    environment: c.env.ENVIRONMENT || 'unknown',
+    timestamp: new Date().toISOString(),
+    checks,
   });
 });
 
