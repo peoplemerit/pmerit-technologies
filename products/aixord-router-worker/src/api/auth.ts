@@ -2,16 +2,18 @@
  * Auth API
  *
  * Endpoints:
- * - POST /api/v1/auth/register
- * - POST /api/v1/auth/login
- * - GET  /api/v1/auth/me
- * - POST /api/v1/auth/logout
- * - POST /api/v1/auth/verify-email
- * - POST /api/v1/auth/resend-verification
- * - POST /api/v1/auth/forgot-password
- * - POST /api/v1/auth/reset-password
- * - POST /api/v1/auth/change-password
- * - POST /api/v1/auth/recover-username
+ * - POST   /api/v1/auth/register
+ * - POST   /api/v1/auth/login
+ * - GET    /api/v1/auth/me
+ * - POST   /api/v1/auth/logout
+ * - POST   /api/v1/auth/verify-email
+ * - POST   /api/v1/auth/resend-verification
+ * - POST   /api/v1/auth/forgot-password
+ * - POST   /api/v1/auth/reset-password
+ * - POST   /api/v1/auth/change-password
+ * - POST   /api/v1/auth/recover-username
+ * - GET    /api/v1/auth/export          (GDPR data export)
+ * - DELETE /api/v1/auth/account         (GDPR account deletion)
  */
 
 import { Hono } from 'hono';
@@ -901,6 +903,147 @@ auth.post('/recover-username', async (c) => {
   return c.json({
     success: true,
     message: 'If an account exists with this email, username information has been sent.'
+  });
+});
+
+// ============================================================================
+// GDPR Compliance Endpoints (Phase 6.2)
+// ============================================================================
+
+/**
+ * GET /api/v1/auth/export — Export all user data (GDPR Article 20)
+ * Returns a JSON payload with all personal data associated with the user.
+ */
+auth.get('/export', async (c) => {
+  const userId = c.get('userId');
+  if (!userId) return c.json({ error: 'Authentication required' }, 401);
+
+  // Gather all user data across tables
+  const user = await c.env.DB.prepare(
+    'SELECT id, email, name, username, subscription_tier, trial_expires_at, email_verified, created_at, updated_at FROM users WHERE id = ?'
+  ).bind(userId).first();
+
+  const subscriptions = await c.env.DB.prepare(
+    'SELECT tier, status, period_start, period_end, created_at FROM subscriptions WHERE user_id = ?'
+  ).bind(userId).all();
+
+  const projects = await c.env.DB.prepare(
+    'SELECT id, name, objective, reality_classification, project_type, created_at, updated_at FROM projects WHERE user_id = ?'
+  ).bind(userId).all();
+
+  const sessions = await c.env.DB.prepare(
+    'SELECT id, created_at, expires_at FROM sessions WHERE user_id = ?'
+  ).bind(userId).all();
+
+  const usageTracking = await c.env.DB.prepare(
+    'SELECT period, request_count, token_count, estimated_cost_cents, code_task_count FROM usage_tracking WHERE user_id = ?'
+  ).bind(userId).all();
+
+  const apiKeys = await c.env.DB.prepare(
+    'SELECT id, provider, key_alias, created_at FROM user_api_keys WHERE user_id = ?'
+  ).bind(userId).all();
+
+  return c.json({
+    exported_at: new Date().toISOString(),
+    user: user || null,
+    subscriptions: subscriptions.results || [],
+    projects: projects.results || [],
+    sessions: (sessions.results || []).map((s: any) => ({
+      id: s.id,
+      created_at: s.created_at,
+      expires_at: s.expires_at,
+    })),
+    usage: usageTracking.results || [],
+    api_keys: (apiKeys.results || []).map((k: any) => ({
+      id: k.id,
+      provider: k.provider,
+      key_alias: k.key_alias,
+      created_at: k.created_at,
+      // Never export the actual encrypted key
+    })),
+  });
+});
+
+/**
+ * DELETE /api/v1/auth/account — Delete user account and all data (GDPR Article 17)
+ * Cascading deletion of all user-owned data.
+ * Requires the user to confirm with their password.
+ */
+auth.delete('/account', async (c) => {
+  const userId = c.get('userId');
+  if (!userId) return c.json({ error: 'Authentication required' }, 401);
+
+  // Require password confirmation for account deletion
+  let body: { password?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Request body must be JSON with password confirmation' }, 400);
+  }
+
+  const password = body.password;
+  if (!password) {
+    return c.json({ error: 'Password confirmation required for account deletion' }, 400);
+  }
+
+  // Verify password
+  const user = await c.env.DB.prepare(
+    'SELECT id, password_hash, password_salt, hash_algorithm FROM users WHERE id = ?'
+  ).bind(userId).first<{
+    id: string;
+    password_hash: string;
+    password_salt: string;
+    hash_algorithm: string | null;
+  }>();
+
+  if (!user) {
+    return c.json({ error: 'User not found' }, 404);
+  }
+
+  // Check password with appropriate algorithm
+  let passwordValid = false;
+  if (user.hash_algorithm === 'pbkdf2') {
+    passwordValid = await verifyPasswordPBKDF2(password, user.password_hash, user.password_salt);
+  } else {
+    // Legacy SHA-256 hash
+    const legacyHash = await hashPasswordLegacy(password, c.env.AUTH_SALT || '');
+    passwordValid = legacyHash === user.password_hash;
+  }
+
+  if (!passwordValid) {
+    return c.json({ error: 'Incorrect password' }, 401);
+  }
+
+  // Cascade delete all user data
+  // Order matters: delete child records before parent
+  const deletions = [
+    c.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(userId).run(),
+    c.env.DB.prepare('DELETE FROM user_api_keys WHERE user_id = ?').bind(userId).run(),
+    c.env.DB.prepare('DELETE FROM usage_tracking WHERE user_id = ?').bind(userId).run(),
+    c.env.DB.prepare('DELETE FROM usage WHERE user_id = ?').bind(userId).run(),
+    c.env.DB.prepare('DELETE FROM subscriptions WHERE user_id = ?').bind(userId).run(),
+    c.env.DB.prepare('DELETE FROM email_verification_tokens WHERE user_id = ?').bind(userId).run(),
+    c.env.DB.prepare('DELETE FROM password_reset_tokens WHERE user_id = ?').bind(userId).run(),
+    c.env.DB.prepare('DELETE FROM rate_limits WHERE user_id = ?').bind(userId).run(),
+  ];
+
+  await Promise.all(deletions);
+
+  // Delete projects (cascade will handle child records: messages, sessions, etc.)
+  await c.env.DB.prepare('DELETE FROM projects WHERE user_id = ?').bind(userId).run();
+
+  // Finally, delete the user record itself
+  await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
+
+  console.log(JSON.stringify({
+    type: 'account_deleted',
+    user_id: userId.substring(0, 8) + '...',
+    timestamp: new Date().toISOString(),
+  }));
+
+  return c.json({
+    success: true,
+    message: 'Your account and all associated data have been permanently deleted.',
   });
 });
 
