@@ -1,14 +1,15 @@
 /**
  * Phase Contract Law Enforcement
- * AIXORD v4.5.1 — L-BRN, L-PLN, L-BPX, L-IVL
+ * AIXORD v4.5.1 — L-BRN, L-PLN, L-BPX, L-IVL, L-RCD
  *
  * Runtime enforcement of phase transition contracts:
  *   L-BRN: BRAINSTORM → PLAN requires ≥3 brainstorm options
  *   L-PLN: PLAN → BLUEPRINT requires DAG dependencies defined
  *   L-BPX: EXECUTE → VERIFY requires all deliverables complete
  *   L-IVL: VERIFY → LOCK requires integration tests passing
+ *   L-RCD: Root Cause Doctrine — blocks if recurring CRITICAL/HIGH root causes unaddressed (D79)
  *
- * Source: HANDOFF-CGC-01 GAP-3
+ * Source: HANDOFF-CGC-01 GAP-3, D79 Swiss Cheese Model
  */
 
 export interface PhaseContractViolation {
@@ -271,6 +272,45 @@ async function enforceR_TOLLGATE(
 }
 
 /**
+ * L-RCD: Root Cause Doctrine Enforcement
+ * D79 — Swiss Cheese Model governance law
+ *
+ * Blocks phase transition if recurring CRITICAL/HIGH root causes
+ * are unaddressed in the root_cause_registry. Prevents the same
+ * structural defect from passing through multiple governance layers
+ * (the "aligned holes" anti-pattern in Swiss Cheese Model).
+ *
+ * Enforced at: EXECUTE→REVIEW and REVIEW finalize boundaries.
+ */
+async function enforceL_RCD(
+  db: D1Database,
+  projectId: string
+): Promise<PhaseContractViolation[]> {
+  try {
+    const recurring = await db.prepare(`
+      SELECT canonical_description, category, occurrence_count, max_severity
+      FROM root_cause_registry
+      WHERE project_id = ? AND status = 'OPEN'
+        AND occurrence_count >= 2
+        AND max_severity IN ('CRITICAL', 'HIGH')
+      ORDER BY occurrence_count DESC
+      LIMIT 10
+    `).bind(projectId).all();
+
+    if (!recurring.results || recurring.results.length === 0) return [];
+
+    return (recurring.results as any[]).map(rc => ({
+      law: 'L-RCD',
+      description: `Root Cause Doctrine: "${rc.canonical_description}" (${rc.category || 'UNCATEGORIZED'}) recurred ${rc.occurrence_count}× at ${rc.max_severity} severity — address root cause before phase advance`,
+      severity: 'BLOCKING' as const
+    }));
+  } catch {
+    // Table may not exist yet (pre-migration 045) — graceful skip
+    return [];
+  }
+}
+
+/**
  * Validate all phase contracts for a phase transition.
  *
  * Called by the finalize endpoint to enforce governance laws
@@ -279,6 +319,7 @@ async function enforceR_TOLLGATE(
  * Enforces:
  *   - L-BRN, L-PLN, L-BPX, L-IVL (artifact contracts)
  *   - R-TOLL-* (readiness tollgates — GAP-3)
+ *   - L-RCD (Root Cause Doctrine — D79)
  */
 export async function validatePhaseTransition(
   db: D1Database,
@@ -317,6 +358,12 @@ export async function validatePhaseTransition(
   // GAP-3: R-Based Tollgate Enforcement
   // Enforces R thresholds at EXECUTE→REVIEW and REVIEW→LOCK boundaries
   violations.push(...await enforceR_TOLLGATE(db, projectId, fromPhase, toPhase));
+
+  // D79: Root Cause Doctrine Enforcement (L-RCD)
+  // Blocks if recurring CRITICAL/HIGH root causes are unaddressed
+  if (fromPhase === 'EXECUTE' || fromPhase === 'REVIEW') {
+    violations.push(...await enforceL_RCD(db, projectId));
+  }
 
   // Blocking violations prevent transition
   const blocking = violations.filter(v => v.severity === 'BLOCKING');

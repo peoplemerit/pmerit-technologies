@@ -18,6 +18,9 @@ export interface AuditReport {
     severity: 'High' | 'Medium' | 'Low';
     description: string;
     remediation?: string;
+    root_cause?: string;
+    root_cause_category?: 'INTEGRITY' | 'VALIDATION' | 'ISOLATION' | 'OBSERVABILITY' | 'PROCESS' | 'DESIGN';
+    is_symptom?: boolean;
   }>;
   criteria_met?: boolean[];
   owner_summary: string;

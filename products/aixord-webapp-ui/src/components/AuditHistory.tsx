@@ -1,15 +1,37 @@
 /**
  * AuditHistory — Audit Timeline with Diff Comparison
  * AIXORD v4.6 — HANDOFF-AUDIT-FRONTEND-01 Phase 2B.2
+ * D79: Root Cause Doctrine — Swiss Cheese category badges + recurring root cause warnings
  *
  * Timeline view of all audits for a project with:
  * - Metrics per audit (total, new, recurring, severity/disposition breakdown)
  * - Compare any two audits (visual diff: NEW/RECURRING/RESOLVED)
  * - Diminishing returns detection alert
+ * - Swiss Cheese root cause category breakdown
+ * - Recurring root cause warning banner
  */
 
 import { useState, useEffect } from 'react';
 import { API_BASE } from '../lib/api/config';
+
+/** Swiss Cheese Model — Root Cause Category Colors (D79) */
+const RCA_COLORS: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  INTEGRITY:     { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/30', label: 'Integrity' },
+  VALIDATION:    { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30', label: 'Validation' },
+  ISOLATION:     { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30', label: 'Isolation' },
+  OBSERVABILITY: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-cyan-500/30', label: 'Observability' },
+  PROCESS:       { bg: 'bg-pink-500/20', text: 'text-pink-400', border: 'border-pink-500/30', label: 'Process' },
+  DESIGN:        { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30', label: 'Design' },
+};
+
+interface RecurringRootCause {
+  id: string;
+  canonical_description: string;
+  category: string;
+  occurrence_count: number;
+  max_severity: string;
+  status: string;
+}
 
 interface AuditSummary {
   id: string;
@@ -29,6 +51,9 @@ interface AuditSummary {
   accept_count: number;
   defer_count: number;
   invalid_count: number;
+  // D79: Swiss Cheese category counts
+  rca_counts: Record<string, number>;
+  symptom_count: number;
 }
 
 interface AuditHistoryProps {
@@ -43,9 +68,11 @@ export function AuditHistory({ projectId, onSelectAudit, onCompareAudits: _onCom
   const [compareMode, setCompareMode] = useState(false);
   const [selectedAudits, setSelectedAudits] = useState<string[]>([]);
   const [diffData, setDiffData] = useState<any>(null);
+  const [recurringRootCauses, setRecurringRootCauses] = useState<RecurringRootCause[]>([]);
 
   useEffect(() => {
     loadAuditHistory();
+    loadRecurringRootCauses();
   }, [projectId]);
 
   async function loadAuditHistory() {
@@ -87,6 +114,16 @@ export function AuditHistory({ projectId, onSelectAudit, onCompareAudits: _onCom
         const findingsData = await findingsResponse.json();
         const findings = findingsData.findings || [];
 
+        // D79: Count findings per Swiss Cheese category
+        const rcaCounts: Record<string, number> = {};
+        let symptomCount = 0;
+        for (const f of findings) {
+          if (f.root_cause_category) {
+            rcaCounts[f.root_cause_category] = (rcaCounts[f.root_cause_category] || 0) + 1;
+          }
+          if (f.is_symptom) symptomCount++;
+        }
+
         const summary: AuditSummary = {
           id: audit.id,
           created_at: audit.created_at,
@@ -104,7 +141,9 @@ export function AuditHistory({ projectId, onSelectAudit, onCompareAudits: _onCom
           fix_count: findings.filter((f: any) => f.disposition === 'FIX').length,
           accept_count: findings.filter((f: any) => f.disposition === 'ACCEPT').length,
           defer_count: findings.filter((f: any) => f.disposition === 'DEFER').length,
-          invalid_count: findings.filter((f: any) => f.disposition === 'INVALID').length
+          invalid_count: findings.filter((f: any) => f.disposition === 'INVALID').length,
+          rca_counts: rcaCounts,
+          symptom_count: symptomCount,
         };
 
         summaries.push(summary);
@@ -118,6 +157,22 @@ export function AuditHistory({ projectId, onSelectAudit, onCompareAudits: _onCom
       console.error('Load audit history error:', error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadRecurringRootCauses() {
+    try {
+      const token = localStorage.getItem('session_token');
+      const response = await fetch(
+        `${API_BASE}/projects/${projectId}/root-cause-registry?status=OPEN`,
+        { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      );
+      if (!response.ok) return;
+      const data = await response.json();
+      const causes = (data.root_causes || []).filter((rc: any) => rc.occurrence_count >= 2);
+      setRecurringRootCauses(causes);
+    } catch {
+      // Registry may not exist yet — graceful skip
     }
   }
 
@@ -236,6 +291,40 @@ export function AuditHistory({ projectId, onSelectAudit, onCompareAudits: _onCom
           </div>
         )}
 
+        {/* D79: Recurring Root Causes Alert */}
+        {recurringRootCauses.length > 0 && (
+          <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg mb-3">
+            <div className="flex items-start gap-2">
+              <span className="text-red-400 text-sm shrink-0">⚠</span>
+              <div className="flex-1">
+                <h4 className="text-xs font-semibold text-red-400">
+                  Recurring Root Causes ({recurringRootCauses.length})
+                </h4>
+                <p className="text-[10px] text-red-400/70 mt-0.5 mb-2">
+                  These root causes have appeared across multiple audits. Phase transition may be blocked (L-RCD).
+                </p>
+                <div className="space-y-1">
+                  {recurringRootCauses.slice(0, 5).map((rc) => {
+                    const colors = RCA_COLORS[rc.category] || { bg: 'bg-gray-500/20', text: 'text-gray-400', border: 'border-gray-500/30', label: rc.category };
+                    return (
+                      <div key={rc.id} className="flex items-center gap-1.5 text-[10px]">
+                        <span className={`px-1 py-0.5 rounded ${colors.bg} ${colors.text} ${colors.border} border`}>
+                          {colors.label}
+                        </span>
+                        <span className="text-gray-300 truncate flex-1">{rc.canonical_description}</span>
+                        <span className="text-red-400 shrink-0">{rc.occurrence_count}×</span>
+                        <span className={`shrink-0 ${rc.max_severity === 'CRITICAL' ? 'text-red-400' : 'text-orange-400'}`}>
+                          {rc.max_severity}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Diff View (if active) */}
         {diffData && (
           <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg mb-3">
@@ -345,6 +434,25 @@ export function AuditHistory({ projectId, onSelectAudit, onCompareAudits: _onCom
                       </span>
                     )}
                   </div>
+
+                  {/* D79: Swiss Cheese Category Breakdown */}
+                  {Object.keys(audit.rca_counts).length > 0 && (
+                    <div className="flex gap-1 flex-wrap mb-1.5">
+                      {Object.entries(audit.rca_counts).map(([cat, count]) => {
+                        const colors = RCA_COLORS[cat] || { bg: 'bg-gray-500/20', text: 'text-gray-400', border: 'border-gray-500/30', label: cat };
+                        return (
+                          <span key={cat} className={`px-1.5 py-0.5 text-[10px] rounded border ${colors.bg} ${colors.text} ${colors.border}`}>
+                            {count} {colors.label}
+                          </span>
+                        );
+                      })}
+                      {audit.symptom_count > 0 && (
+                        <span className="px-1.5 py-0.5 text-[10px] rounded border bg-gray-600/20 text-gray-500 border-gray-600/30">
+                          {audit.symptom_count} Symptom
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {/* Disposition Breakdown */}
                   <div className="flex gap-3 text-[10px] text-gray-500">

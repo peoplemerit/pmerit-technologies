@@ -747,6 +747,9 @@ app.post('/:projectId/audit-findings', requireAuth, async (c) => {
       line_number?: number;
       code_snippet?: string;
       recommendation?: string;
+      root_cause?: string;
+      root_cause_category?: string;
+      is_symptom?: boolean;
     }>;
   }>();
 
@@ -754,14 +757,24 @@ app.post('/:projectId/audit-findings', requireAuth, async (c) => {
     return c.json({ error: 'audit_id and non-empty findings array required' }, 400);
   }
 
+  // Resolve projectId for registry upserts
+  const auditLog = await c.env.DB.prepare(
+    `SELECT project_id FROM agent_audit_log WHERE id = ?`
+  ).bind(body.audit_id).first<{ project_id: string }>();
+
   const created = [];
   for (const f of body.findings) {
     const id = crypto.randomUUID().replace(/-/g, '').slice(0, 32);
+    const validCategories = ['INTEGRITY', 'VALIDATION', 'ISOLATION', 'OBSERVABILITY', 'PROCESS', 'DESIGN'];
+    const category = f.root_cause_category && validCategories.includes(f.root_cause_category)
+      ? f.root_cause_category : null;
+
     await c.env.DB.prepare(`
       INSERT INTO audit_findings (
         id, audit_id, finding_type, severity, title, description,
-        file_path, line_number, code_snippet, recommendation
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        file_path, line_number, code_snippet, recommendation,
+        root_cause, root_cause_category, is_symptom
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
       body.audit_id,
@@ -772,9 +785,55 @@ app.post('/:projectId/audit-findings', requireAuth, async (c) => {
       f.file_path || null,
       f.line_number || null,
       f.code_snippet || null,
-      f.recommendation || null
+      f.recommendation || null,
+      f.root_cause || null,
+      category,
+      f.is_symptom ? 1 : 0
     ).run();
-    created.push({ id, title: f.title, severity: f.severity });
+
+    // Root Cause Registry: track recurrence across audits
+    if (f.root_cause && auditLog) {
+      const normalized = f.root_cause.trim().toLowerCase().replace(/\s+/g, ' ');
+      const encoder = new TextEncoder();
+      const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(normalized));
+      const signature = Array.from(new Uint8Array(hashBuffer))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+
+      const existing = await c.env.DB.prepare(
+        `SELECT id, occurrence_count, max_severity FROM root_cause_registry
+         WHERE project_id = ? AND signature = ?`
+      ).bind(auditLog.project_id, signature).first<{
+        id: string; occurrence_count: number; max_severity: string;
+      }>();
+
+      const severityRank: Record<string, number> = { CRITICAL: 5, HIGH: 4, MEDIUM: 3, LOW: 2, INFO: 1 };
+      const currentRank = severityRank[f.severity?.toUpperCase()] || 1;
+
+      if (existing) {
+        const existingRank = severityRank[existing.max_severity] || 1;
+        const newMax = currentRank > existingRank ? f.severity.toUpperCase() : existing.max_severity;
+        await c.env.DB.prepare(`
+          UPDATE root_cause_registry
+          SET occurrence_count = occurrence_count + 1,
+              last_seen_audit_id = ?,
+              max_severity = ?
+          WHERE id = ?
+        `).bind(body.audit_id, newMax, existing.id).run();
+      } else {
+        const regId = crypto.randomUUID().replace(/-/g, '').slice(0, 32);
+        await c.env.DB.prepare(`
+          INSERT INTO root_cause_registry (
+            id, project_id, signature, canonical_description, category,
+            first_seen_audit_id, last_seen_audit_id, occurrence_count, max_severity
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+        `).bind(
+          regId, auditLog.project_id, signature, f.root_cause.trim(),
+          category, body.audit_id, body.audit_id, f.severity?.toUpperCase() || 'LOW'
+        ).run();
+      }
+    }
+
+    created.push({ id, title: f.title, severity: f.severity, root_cause_category: category });
   }
 
   return c.json({ success: true, count: created.length, findings: created }, 201);
@@ -825,7 +884,7 @@ app.get('/:projectId/audit-findings', requireAuth, async (c) => {
   params.push(limit);
 
   const results = await c.env.DB.prepare(sql).bind(...params).all();
-  return c.json(results.results || []);
+  return c.json({ findings: results.results || [] });
 });
 
 /**
@@ -885,6 +944,97 @@ app.put('/:projectId/audit-findings/:findingId/triage', requireAuth, async (c) =
     finding_id: findingId,
     disposition: body.disposition,
     triaged_at: now,
+  });
+});
+
+// =============================================================================
+// ROOT CAUSE REGISTRY (D79 — Swiss Cheese Model)
+// =============================================================================
+
+/**
+ * GET /api/v1/projects/:projectId/root-cause-registry
+ * List recurring root causes with occurrence counts and Swiss Cheese categories
+ */
+app.get('/:projectId/root-cause-registry', requireAuth, async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId');
+
+  const project = await c.env.DB.prepare(
+    `SELECT id FROM projects WHERE id = ? AND user_id = ?`
+  ).bind(projectId, userId).first();
+
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const status = c.req.query('status');
+  const category = c.req.query('category');
+
+  let sql = `SELECT * FROM root_cause_registry WHERE project_id = ?`;
+  const params: (string | number)[] = [projectId];
+
+  if (status) {
+    sql += ` AND status = ?`;
+    params.push(status);
+  }
+  if (category) {
+    sql += ` AND category = ?`;
+    params.push(category);
+  }
+
+  sql += ` ORDER BY occurrence_count DESC, max_severity DESC`;
+
+  const results = await c.env.DB.prepare(sql).bind(...params).all();
+  return c.json({ root_causes: results.results || [] });
+});
+
+/**
+ * PUT /api/v1/projects/:projectId/root-cause-registry/:registryId/resolve
+ * Mark a root cause as ADDRESSED or ACCEPTED
+ */
+app.put('/:projectId/root-cause-registry/:registryId/resolve', requireAuth, async (c) => {
+  const projectId = c.req.param('projectId');
+  const registryId = c.req.param('registryId');
+  const userId = c.get('userId');
+
+  const project = await c.env.DB.prepare(
+    `SELECT id FROM projects WHERE id = ? AND user_id = ?`
+  ).bind(projectId, userId).first();
+
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const body = await c.req.json<{
+    status: 'ADDRESSED' | 'ACCEPTED';
+    resolution_commit?: string;
+    resolution_note?: string;
+  }>();
+
+  if (!['ADDRESSED', 'ACCEPTED'].includes(body.status)) {
+    return c.json({ error: 'status must be ADDRESSED or ACCEPTED' }, 400);
+  }
+
+  const result = await c.env.DB.prepare(`
+    UPDATE root_cause_registry
+    SET status = ?, resolution_commit = ?, resolution_note = ?
+    WHERE id = ? AND project_id = ?
+  `).bind(
+    body.status,
+    body.resolution_commit || null,
+    body.resolution_note || null,
+    registryId,
+    projectId
+  ).run();
+
+  if (!result.meta.changes || result.meta.changes === 0) {
+    return c.json({ error: 'Root cause entry not found' }, 404);
+  }
+
+  return c.json({
+    success: true,
+    registry_id: registryId,
+    status: body.status,
   });
 });
 

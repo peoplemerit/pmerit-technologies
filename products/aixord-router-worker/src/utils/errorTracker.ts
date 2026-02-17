@@ -4,7 +4,17 @@
  * Lightweight structured error logging for Cloudflare Workers.
  * Outputs JSON-structured logs visible via `wrangler tail`.
  * Designed to be extended with external services (Sentry, LogTail) when needed.
+ *
+ * D79: Swiss Cheese Model root cause categorization
+ *   INTEGRITY     — Type/logic errors (code quality layer)
+ *   VALIDATION    — Testing/CI gaps (validation layer)
+ *   ISOLATION     — Blast radius / compartmentalization failures
+ *   OBSERVABILITY — Monitoring/detection gaps
+ *   PROCESS       — Human/workflow errors
+ *   DESIGN        — Architectural/specification flaws
  */
+
+export type RootCauseCategory = 'INTEGRITY' | 'VALIDATION' | 'ISOLATION' | 'OBSERVABILITY' | 'PROCESS' | 'DESIGN';
 
 export interface ErrorReport {
   level: 'error' | 'warn' | 'info';
@@ -16,6 +26,7 @@ export interface ErrorReport {
   path?: string;
   method?: string;
   statusCode?: number;
+  root_cause_category?: RootCauseCategory;
   context?: Record<string, unknown>;
   timestamp: string;
 }
@@ -32,6 +43,7 @@ export function trackError(
     path?: string;
     method?: string;
     statusCode?: number;
+    root_cause_category?: RootCauseCategory;
     extra?: Record<string, unknown>;
   }
 ): void {
@@ -47,6 +59,7 @@ export function trackError(
     path: context?.path,
     method: context?.method,
     statusCode: context?.statusCode,
+    root_cause_category: context?.root_cause_category,
     context: context?.extra,
     timestamp: new Date().toISOString(),
   };
