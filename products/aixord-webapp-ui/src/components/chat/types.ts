@@ -63,6 +63,23 @@ export interface MessageMetadata {
     escalations: number;
     errors: string[];
   };
+  // Scaffold plan (D81: Swiss Cheese PROCESS layer — plan-before-execute gate)
+  scaffoldPlan?: {
+    deliverable: string;
+    projectName: string;
+    description: string;
+    files: Array<{
+      path: string;
+      purpose: string;
+      language: string;
+      estimatedLines: number;
+    }>;
+    tree: string;
+    dependencies: string[];
+    totalFiles: number;
+    estimatedTokens: number;
+    status: 'pending' | 'approved' | 'modified';
+  };
 }
 
 export interface MessageOption {

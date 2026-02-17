@@ -279,15 +279,35 @@ If the brainstorm artifact is not available in context, tell the user:
 === EXECUTE OUTPUT CONTRACT ===
 Work from the Plan artifact. Each response must advance a specific deliverable.
 
-When producing work:
-- Name which deliverable you're working on
-- Reference the plan's specification for that deliverable
-- Produce concrete output (code, content, configuration — not descriptions of what you would do)
-- Report what's done and what remains for this deliverable
+MANDATORY FIRST STEP — SCAFFOLD PLAN:
+Before writing ANY code files for a deliverable, you MUST output a SCAFFOLD PLAN block.
+This shows the user what you will build so they can review and approve before files are created.
 
-CRITICAL — FILE DELIVERY FORMAT:
-When producing code files, you MUST use this tagged format so the system writes them to the user's workspace automatically:
+=== SCAFFOLD PLAN ===
+{
+  "deliverable": "Name of the deliverable",
+  "project_name": "folder-name",
+  "description": "1-2 sentence summary of what these files create",
+  "files": [
+    { "path": "src/App.tsx", "purpose": "Main application component", "language": "tsx", "estimated_lines": 45 },
+    { "path": "package.json", "purpose": "Project dependencies and scripts", "language": "json", "estimated_lines": 20 }
+  ],
+  "tree": "project-root/\\n  src/\\n    App.tsx\\n  package.json",
+  "dependencies": ["react", "react-dom", "vite"],
+  "total_files": 2,
+  "estimated_tokens": 1500
+}
+=== END SCAFFOLD PLAN ===
 
+SCAFFOLD PLAN RULES:
+- Output this BEFORE any code fences — the user sees a preview card with Approve/Modify buttons
+- List EVERY file you plan to create with its purpose and estimated size
+- The "tree" field shows the folder structure (use \\n for newlines, 2-space indent)
+- After outputting the scaffold plan, STOP and WAIT — do NOT write any code fences yet
+- When the user approves, they will tell you to proceed — then write files using the format below
+- If the user requests modifications, output an updated SCAFFOLD PLAN block
+
+AFTER APPROVAL — FILE DELIVERY FORMAT:
 \`\`\`language:path/to/file.ext
 file content here
 \`\`\`
@@ -556,6 +576,9 @@ Format each code file as:
 \`\`\`language:path/to/file.ext
 file content here
 \`\`\`
+
+IMPORTANT: For each new deliverable, output a === SCAFFOLD PLAN === block first.
+The user must approve before files are written to "${folderName}".
 
 RULES:
 - One file per code fence — do NOT combine multiple files in one fence

@@ -24,6 +24,10 @@ interface MessageBubbleProps {
   onEdit?: (newContent: string) => void;
   /** EXE-GAP-001: Workspace folder name for file operation cards */
   workspaceFolderName?: string;
+  /** D81: Scaffold plan approval gate */
+  workspaceBound?: boolean;
+  onApproveScaffoldPlan?: (messageId: string) => void;
+  onModifyScaffoldPlan?: (messageId: string, feedback: string) => void;
 }
 
 // Check if message content looks like an error
@@ -44,7 +48,7 @@ function isErrorMessage(content: string): boolean {
   return errorPatterns.some(pattern => pattern.test(content));
 }
 
-export function MessageBubble({ message, onSelectOption, onRetry, token, onPhaseAdvance, onCopy, onRegenerate, onEdit, workspaceFolderName }: MessageBubbleProps) {
+export function MessageBubble({ message, onSelectOption, onRetry, token, onPhaseAdvance, onCopy, onRegenerate, onEdit, workspaceFolderName, workspaceBound, onApproveScaffoldPlan, onModifyScaffoldPlan }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const isError = (isSystem || message.role === 'assistant') && isErrorMessage(message.content);
@@ -53,6 +57,10 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const editRef = useRef<HTMLTextAreaElement>(null);
+
+  // D81: Scaffold plan modify state
+  const [scaffoldModifyOpen, setScaffoldModifyOpen] = useState(false);
+  const [scaffoldModifyText, setScaffoldModifyText] = useState('');
 
   // Auto-focus and auto-resize textarea when editing
   useEffect(() => {
@@ -98,6 +106,9 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
   // FIX-PLAN: Detect plan artifact block
   const hasPlanArtifact = !isUser && /=== PLAN ARTIFACT ===/.test(message.content);
 
+  // D81: Detect scaffold plan from metadata (parsed in Project.tsx)
+  const scaffoldPlan = message.metadata?.scaffoldPlan;
+
   // HANDOFF-TDL-01 Task 7 + HANDOFF-PCC-01: Parse structured AI output blocks
   interface ParsedBlock {
     type: 'PROGRESS UPDATE' | 'SUBMISSION' | 'ESCALATION' | 'STANDUP' | 'RETRIEVE' | 'CONTINUITY CONFLICT';
@@ -141,6 +152,7 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
         .replace(/=== STANDUP ===[\s\S]*?=== END STANDUP ===/g, '')
         .replace(/=== RETRIEVE:\s*[\s\S]*?===/g, '')
         .replace(/=== CONTINUITY CONFLICT ===[\s\S]*?===/g, '')
+        .replace(/=== SCAFFOLD PLAN ===[\s\S]*?=== END SCAFFOLD PLAN ===/g, '')
         .replace(/```\w+:[^\n]+\n[\s\S]*?```/g, '') // Strip file deliverable fences (shown in execution card)
         .trim()
     : message.content;
@@ -330,6 +342,145 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
             <p className="text-gray-400 text-xs mt-1">
               Scopes, deliverables, and definitions of done have been imported. Review in the Blueprint panel, then click Finalize Plan.
             </p>
+          </div>
+        )}
+
+        {/* D81: Scaffold Plan card — plan-before-execute gate */}
+        {scaffoldPlan && (
+          <div className="mt-3 p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
+                <span className="text-cyan-300 text-sm font-semibold">SCAFFOLD PLAN</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-400">
+                <span>{scaffoldPlan.totalFiles} files</span>
+                <span className="text-gray-600">|</span>
+                <span>~{scaffoldPlan.estimatedTokens.toLocaleString()} tokens</span>
+              </div>
+            </div>
+
+            {/* Deliverable + description */}
+            <div className="mb-3">
+              <h4 className="text-gray-200 text-sm font-medium">{scaffoldPlan.deliverable}</h4>
+              {scaffoldPlan.projectName && (
+                <span className="text-cyan-400/70 text-xs font-mono">{scaffoldPlan.projectName}/</span>
+              )}
+              <p className="text-gray-400 text-xs mt-1">{scaffoldPlan.description}</p>
+            </div>
+
+            {/* File tree */}
+            {scaffoldPlan.tree && (
+              <div className="mb-3 bg-gray-900/50 rounded p-2.5 border border-gray-700/30">
+                <pre className="text-xs text-gray-300 font-mono whitespace-pre leading-relaxed">
+                  {scaffoldPlan.tree.replace(/\\n/g, '\n')}
+                </pre>
+              </div>
+            )}
+
+            {/* File list */}
+            <div className="mb-3 space-y-1">
+              {scaffoldPlan.files.map((file, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  <span className="text-cyan-400/60 font-mono min-w-[12px]">+</span>
+                  <span className="text-cyan-300 font-mono min-w-[140px] shrink-0">{file.path}</span>
+                  <span className="text-gray-500">—</span>
+                  <span className="text-gray-400 flex-1">{file.purpose}</span>
+                  <span className="text-gray-600 text-[10px]">{file.language} ~{file.estimatedLines}L</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Dependencies */}
+            {scaffoldPlan.dependencies.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                <span className="text-gray-500 text-xs">deps:</span>
+                {scaffoldPlan.dependencies.map((dep, i) => (
+                  <span key={i} className="px-1.5 py-0.5 text-[10px] bg-cyan-500/15 text-cyan-400 rounded font-mono">
+                    {dep}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Status badges + action buttons */}
+            {scaffoldPlan.status === 'approved' ? (
+              <div className="flex items-center gap-2 mt-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-emerald-400 text-xs font-medium">Approved — files written</span>
+              </div>
+            ) : scaffoldPlan.status === 'modified' ? (
+              <div className="flex items-center gap-2 mt-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded">
+                <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                <span className="text-amber-400 text-xs font-medium">Modified — see updated plan below</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 mt-3">
+                {workspaceBound ? (
+                  <button
+                    onClick={() => onApproveScaffoldPlan?.(message.id)}
+                    className="px-4 py-1.5 text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors"
+                  >
+                    Approve & Write Files
+                  </button>
+                ) : (
+                  <button
+                    disabled
+                    className="px-4 py-1.5 text-xs font-medium bg-gray-700 text-gray-500 rounded-lg cursor-not-allowed"
+                    title="Link a workspace folder in project settings first"
+                  >
+                    Link Folder First
+                  </button>
+                )}
+                <button
+                  onClick={() => setScaffoldModifyOpen(prev => !prev)}
+                  className="px-4 py-1.5 text-xs font-medium bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-lg transition-colors"
+                >
+                  Modify Plan
+                </button>
+              </div>
+            )}
+
+            {/* Modify textarea */}
+            {scaffoldModifyOpen && scaffoldPlan.status === 'pending' && (
+              <div className="mt-3 space-y-2">
+                <textarea
+                  value={scaffoldModifyText}
+                  onChange={(e) => setScaffoldModifyText(e.target.value)}
+                  placeholder="Describe what to change (e.g., 'Add a utils/ directory', 'Use Tailwind instead of plain CSS')..."
+                  className="w-full bg-gray-900/70 border border-gray-600 rounded-lg px-3 py-2 text-xs text-gray-300 placeholder-gray-500 focus:outline-none focus:border-cyan-500/50 resize-none"
+                  rows={3}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (scaffoldModifyText.trim()) {
+                        onModifyScaffoldPlan?.(message.id, scaffoldModifyText.trim());
+                        setScaffoldModifyOpen(false);
+                        setScaffoldModifyText('');
+                      }
+                    }}
+                    disabled={!scaffoldModifyText.trim()}
+                    className="px-3 py-1 text-xs bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-700 disabled:text-gray-500 text-white rounded transition-colors"
+                  >
+                    Send Modification
+                  </button>
+                  <button
+                    onClick={() => { setScaffoldModifyOpen(false); setScaffoldModifyText(''); }}
+                    className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-400 rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

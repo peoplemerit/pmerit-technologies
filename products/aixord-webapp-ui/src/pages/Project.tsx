@@ -886,6 +886,61 @@ export function Project() {
     }
   }, [id, token, fetchEvidence]);
 
+  // D81: Scaffold Plan — Approve handler (writes files after user approval)
+  const handleApproveScaffoldPlan = useCallback(async (messageId: string) => {
+    if (!conversation || !id || !token) return;
+    const message = conversation.messages.find(m => m.id === messageId);
+    if (!message?.metadata?.scaffoldPlan) return;
+
+    const updatedMetadata = {
+      ...message.metadata,
+      scaffoldPlan: { ...message.metadata.scaffoldPlan, status: 'approved' as const },
+    };
+
+    // Write files using ExecutionEngine
+    try {
+      const fileResult = await ExecutionEngine.processFilesOnly(message.content, id);
+      updatedMetadata.executionResult = {
+        filesCreated: fileResult.filesCreated,
+        filesUpdated: fileResult.filesUpdated,
+        progressUpdates: 0,
+        submissions: 0,
+        escalations: 0,
+        errors: fileResult.errors,
+      };
+    } catch (err) {
+      updatedMetadata.executionResult = {
+        filesCreated: [],
+        filesUpdated: [],
+        progressUpdates: 0,
+        submissions: 0,
+        escalations: 0,
+        errors: [err instanceof Error ? err.message : 'Unknown error'],
+      };
+    }
+
+    // Update local state
+    setConversation(prev => prev ? {
+      ...prev,
+      messages: prev.messages.map(m => m.id === messageId ? { ...m, metadata: updatedMetadata } : m),
+    } : prev);
+
+    // Re-save to backend
+    await api.messages.create(id, {
+      role: 'assistant',
+      content: message.content,
+      metadata: updatedMetadata as Record<string, unknown>,
+      session_id: activeSession?.id,
+    }, token);
+  }, [conversation, id, token, activeSession]);
+
+  // D81: Scaffold Plan — Modify handler (sends feedback to AI for updated plan)
+  // Note: handleSendMessage is used via ref pattern to avoid forward-declaration issue
+  const handleModifyScaffoldPlanRef = useRef<((messageId: string, feedback: string) => Promise<void>) | undefined>(undefined);
+  const handleModifyScaffoldPlan = useCallback(async (messageId: string, feedback: string) => {
+    await handleModifyScaffoldPlanRef.current?.(messageId, feedback);
+  }, []);
+
   const handleEvidenceSync = useCallback(async () => {
     if (!id || !token) return;
     try {
@@ -1286,6 +1341,39 @@ export function Project() {
 
       // HANDOFF-TDL-01 Task 7: Extract structured AI output blocks and call APIs
       if (state?.session.phase === 'EXECUTE' || state?.session.phase === 'E') {
+        // D81 SCAFFOLD PLAN: Parse and store (Swiss Cheese — plan-before-execute gate)
+        const scaffoldMatch = assistantContent.match(
+          /=== SCAFFOLD PLAN ===\s*([\s\S]*?)\s*=== END SCAFFOLD PLAN ===/
+        );
+        let hasScaffoldPlan = false;
+        if (scaffoldMatch) {
+          try {
+            const planData = JSON.parse(scaffoldMatch[1]);
+            hasScaffoldPlan = true;
+            assistantMessage.metadata = {
+              ...assistantMessage.metadata,
+              scaffoldPlan: {
+                deliverable: planData.deliverable || '',
+                projectName: planData.project_name || '',
+                description: planData.description || '',
+                files: (planData.files || []).map((f: Record<string, unknown>) => ({
+                  path: (f.path as string) || '',
+                  purpose: (f.purpose as string) || '',
+                  language: (f.language as string) || '',
+                  estimatedLines: (f.estimated_lines as number) || 0,
+                })),
+                tree: planData.tree || '',
+                dependencies: planData.dependencies || [],
+                totalFiles: planData.total_files || 0,
+                estimatedTokens: planData.estimated_tokens || 0,
+                status: 'pending' as const,
+              }
+            };
+          } catch {
+            console.warn('Failed to parse scaffold plan from AI response');
+          }
+        }
+
         try {
           // Progress updates
           const progressRe = /=== PROGRESS UPDATE ===\s*([\s\S]*?)\s*=== END PROGRESS UPDATE ===/g;
@@ -1351,30 +1439,33 @@ export function Project() {
         }
 
         // EXE-GAP-001: Write file deliverables to workspace
-        try {
-          const fileResult = await ExecutionEngine.processFilesOnly(assistantContent, id);
-          if (fileResult.filesCreated.length > 0 || fileResult.errors.length > 0) {
-            assistantMessage.metadata = {
-              ...assistantMessage.metadata,
-              executionResult: {
-                filesCreated: fileResult.filesCreated,
-                filesUpdated: fileResult.filesUpdated,
-                progressUpdates: 0,
-                submissions: 0,
-                escalations: 0,
-                errors: fileResult.errors,
-              }
-            };
-            // Re-save message with executionResult metadata
-            await api.messages.create(id, {
-              role: 'assistant',
-              content: assistantContent,
-              metadata: assistantMessage.metadata as Record<string, unknown>,
-              session_id: activeSession?.id,
-            }, token);
+        // D81: SKIP auto file writing if scaffold plan is pending (user must approve first)
+        if (!hasScaffoldPlan) {
+          try {
+            const fileResult = await ExecutionEngine.processFilesOnly(assistantContent, id);
+            if (fileResult.filesCreated.length > 0 || fileResult.errors.length > 0) {
+              assistantMessage.metadata = {
+                ...assistantMessage.metadata,
+                executionResult: {
+                  filesCreated: fileResult.filesCreated,
+                  filesUpdated: fileResult.filesUpdated,
+                  progressUpdates: 0,
+                  submissions: 0,
+                  escalations: 0,
+                  errors: fileResult.errors,
+                }
+              };
+              // Re-save message with executionResult metadata
+              await api.messages.create(id, {
+                role: 'assistant',
+                content: assistantContent,
+                metadata: assistantMessage.metadata as Record<string, unknown>,
+                session_id: activeSession?.id,
+              }, token);
+            }
+          } catch (err) {
+            console.warn('ExecutionEngine file processing failed:', err);
           }
-        } catch (err) {
-          console.warn('ExecutionEngine file processing failed:', err);
         }
       }
 
@@ -1436,6 +1527,25 @@ export function Project() {
     } finally {
       setChatLoading(false);
     }
+  };
+
+  // D81: Wire up modify scaffold plan ref (avoids forward-declaration of handleSendMessage)
+  handleModifyScaffoldPlanRef.current = async (messageId: string, feedback: string) => {
+    if (!conversation || !id) return;
+    setConversation(prev => prev ? {
+      ...prev,
+      messages: prev.messages.map(m => {
+        if (m.id !== messageId || !m.metadata?.scaffoldPlan) return m;
+        return {
+          ...m,
+          metadata: {
+            ...m.metadata,
+            scaffoldPlan: { ...m.metadata.scaffoldPlan, status: 'modified' as const },
+          },
+        };
+      }),
+    } : prev);
+    await handleSendMessage(`Modify the scaffold plan: ${feedback}\n\nPlease output an updated === SCAFFOLD PLAN === block.`, 'BALANCED');
   };
 
   // ============================================================================
@@ -1870,6 +1980,9 @@ export function Project() {
                     onRegenerate={message.role === 'assistant' ? () => handleRegenerateMessage(index) : undefined}
                     onEdit={message.role === 'user' ? (newContent: string) => handleEditMessage(index, newContent) : undefined}
                     workspaceFolderName={workspaceStatus?.folder_name || undefined}
+                    workspaceBound={!!workspaceStatus?.bound}
+                    onApproveScaffoldPlan={handleApproveScaffoldPlan}
+                    onModifyScaffoldPlan={handleModifyScaffoldPlan}
                   />
                 ))}
 

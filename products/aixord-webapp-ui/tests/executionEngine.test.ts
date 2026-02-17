@@ -296,3 +296,69 @@ export default function App() { return <div />; }
     expect(result.errors[0]).toContain('Permission denied');
   });
 });
+
+// ============================================================================
+// 3. Scaffold Plan Interaction (D81)
+// ============================================================================
+
+describe('Scaffold Plan — parseResponse interaction', () => {
+  it('does NOT count scaffold plan block as a file spec', () => {
+    const content = `I'll build the following files:
+
+=== SCAFFOLD PLAN ===
+{
+  "deliverable": "PantryOS Frontend",
+  "project_name": "pantry-app",
+  "description": "Core frontend scaffold",
+  "files": [
+    { "path": "src/App.tsx", "purpose": "Main component", "language": "tsx", "estimated_lines": 30 }
+  ],
+  "tree": "pantry-app/\\n  src/\\n    App.tsx",
+  "dependencies": ["react"],
+  "total_files": 1,
+  "estimated_tokens": 500
+}
+=== END SCAFFOLD PLAN ===
+
+Waiting for your approval before I write any files.`;
+
+    const parsed = ExecutionEngine.parseResponse(content);
+
+    // Scaffold plan JSON block should NOT be parsed as a file spec
+    expect(parsed.fileSpecs).toHaveLength(0);
+  });
+
+  it('processFilesOnly processes code fences even when scaffold plan block is present', async () => {
+    const mockHandle = { name: 'project-root' };
+    mockGetHandle.mockResolvedValue({ handle: mockHandle });
+    mockCreateDirectory.mockResolvedValue(mockHandle);
+    mockCreateFile.mockResolvedValue(undefined);
+
+    // After user approves, the response may contain both scaffold plan + code fences
+    const content = `=== SCAFFOLD PLAN ===
+{
+  "deliverable": "PantryOS Frontend",
+  "project_name": "pantry-app",
+  "description": "Core frontend scaffold",
+  "files": [
+    { "path": "src/App.tsx", "purpose": "Main component", "language": "tsx", "estimated_lines": 30 }
+  ],
+  "tree": "pantry-app/\\n  src/\\n    App.tsx",
+  "dependencies": ["react"],
+  "total_files": 1,
+  "estimated_tokens": 500
+}
+=== END SCAFFOLD PLAN ===
+
+\`\`\`tsx:src/App.tsx
+export default function App() { return <div>Hello</div>; }
+\`\`\``;
+
+    // processFilesOnly should still process the code fences
+    // (the gate logic is in Project.tsx, not in ExecutionEngine)
+    const result = await ExecutionEngine.processFilesOnly(content, 'proj-123');
+
+    expect(result.filesCreated).toEqual(['src/App.tsx']);
+    expect(result.errors).toEqual([]);
+  });
+});
