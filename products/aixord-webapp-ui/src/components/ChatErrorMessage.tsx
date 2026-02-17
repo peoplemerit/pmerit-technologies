@@ -91,6 +91,26 @@ const ERROR_GUIDANCE: Record<string, ErrorGuidance> = {
       path: '/pricing'
     }
   },
+  'ALLOWANCE_EXHAUSTED': {
+    code: 'ALLOWANCE_EXHAUSTED',
+    title: 'Monthly Allowance Used',
+    message: 'You have used all your AI requests for this billing period. Upgrade for more.',
+    icon: <AlertCircle size={20} />,
+    action: {
+      label: 'Upgrade Plan',
+      path: '/pricing'
+    }
+  },
+  'INTERNAL_ERROR': {
+    code: 'INTERNAL_ERROR',
+    title: 'Server Error',
+    message: 'Something went wrong on our end. Please try again in a moment.',
+    icon: <RefreshCw size={20} />,
+    action: {
+      label: 'Retry',
+      onClick: () => {}
+    }
+  },
   'TRIAL_EXPIRED': {
     code: 'TRIAL_EXPIRED',
     title: 'Trial Expired',

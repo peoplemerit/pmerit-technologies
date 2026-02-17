@@ -82,7 +82,12 @@ app.onError((err, c) => {
     method: c.req.method,
     statusCode: 500,
   });
-  return c.json({ error: 'Internal server error', requestId }, 500);
+  return c.json({
+    error: 'Internal server error',
+    error_code: 'INTERNAL_ERROR',
+    error_details: { recovery_action: 'RETRY', retry_after_ms: 3000 },
+    requestId,
+  }, 500);
 });
 
 // CORS middleware (PATCH-CORS-01: Updated for new domains, LOW-07: localhost conditional)
@@ -940,6 +945,18 @@ app.post('/v1/router/execute', async (c) => {
       await incrementMeteringUsage(c.env.DB, meteringUserId, totalTokens, costCents, false);
     }
 
+    // Phase 4.3: Response size guard — truncate oversized AI responses
+    // 100KB is a safe limit for browser rendering and Cloudflare Workers response sizes.
+    // Typical responses are 2-10KB; very large code-generation responses can reach 50KB+.
+    const MAX_RESPONSE_CHARS = 100_000;
+    if (response.content && response.content.length > MAX_RESPONSE_CHARS) {
+      console.warn(`[Response Guard] Truncating response: ${response.content.length} -> ${MAX_RESPONSE_CHARS} chars`);
+      response.content = response.content.slice(0, MAX_RESPONSE_CHARS) +
+        '\n\n---\n*Response truncated — the full response exceeded the maximum size limit. ' +
+        'Try breaking your request into smaller, more focused tasks.*';
+      response.content_truncated = true;
+    }
+
     return c.json(response);
 
   } catch (error) {
@@ -953,6 +970,21 @@ app.post('/v1/router/execute', async (c) => {
         latency_ms: latencyMs
       }));
 
+      // Phase 4.2: Map error codes to structured recovery metadata
+      const recoveryMap: Record<string, RouterResponse['error_details']> = {
+        TRIAL_EXPIRED: { recovery_action: 'UPGRADE', redirect: '/pricing' },
+        ALLOWANCE_EXHAUSTED: { recovery_action: 'UPGRADE', redirect: '/pricing', retry_after_ms: 86400000 },
+        NO_ACTIVE_SUBSCRIPTION: { recovery_action: 'UPGRADE', redirect: '/pricing' },
+        BYOK_KEY_MISSING: { recovery_action: 'CHECK_KEYS', redirect: '/settings' },
+        BYOK_REQUIRED: { recovery_action: 'CHECK_KEYS', redirect: '/settings' },
+        ALL_PROVIDERS_FAILED: { recovery_action: 'RETRY', retry_after_ms: 5000 },
+        NO_AVAILABLE_PROVIDERS: { recovery_action: 'RETRY', retry_after_ms: 10000 },
+        CLASS_NOT_ALLOWED: { recovery_action: 'UPGRADE', redirect: '/pricing' },
+        LIMIT_EXCEEDED: { recovery_action: 'UPGRADE', redirect: '/pricing' },
+        AI_EXPOSURE_PROHIBITED: { recovery_action: 'CONTACT_SUPPORT' },
+        AI_EXPOSURE_RESTRICTED: { recovery_action: 'CONTACT_SUPPORT' },
+      };
+
       const errorResponse: RouterResponse = {
         status: 'ERROR',
         content: '',
@@ -963,7 +995,9 @@ app.post('/v1/router/execute', async (c) => {
           cost_usd: 0,
           latency_ms: latencyMs
         },
-        error: `${error.code}: ${error.message}`
+        error: `${error.code}: ${error.message}`,
+        error_code: error.code,
+        error_details: recoveryMap[error.code] || { recovery_action: 'RETRY' },
       };
 
       return c.json(errorResponse, error.statusCode as 400 | 401 | 403 | 404 | 429 | 500);
@@ -989,7 +1023,9 @@ app.post('/v1/router/execute', async (c) => {
         cost_usd: 0,
         latency_ms: latencyMs
       },
-      error: 'Something went wrong processing your request. Please try sending your message again.'
+      error: 'Something went wrong processing your request. Please try sending your message again.',
+      error_code: 'INTERNAL_ERROR',
+      error_details: { recovery_action: 'RETRY', retry_after_ms: 3000 },
     };
 
     return c.json(errorResponse, 500);

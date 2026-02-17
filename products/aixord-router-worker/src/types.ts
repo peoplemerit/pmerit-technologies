@@ -422,6 +422,16 @@ export interface RouterResponse {
   usage: Usage;
   router_debug?: RouterDebug;
   error?: string;
+  /** Structured error code (e.g., TRIAL_EXPIRED, ALL_PROVIDERS_FAILED) */
+  error_code?: string;
+  /** Recovery metadata for client-side error handling */
+  error_details?: {
+    recovery_action?: 'RETRY' | 'UPGRADE' | 'CHECK_KEYS' | 'WAIT' | 'CONTACT_SUPPORT';
+    redirect?: string;
+    retry_after_ms?: number;
+  };
+  /** Whether the response content was truncated due to size limits */
+  content_truncated?: boolean;
 }
 
 // =============================================================================
