@@ -14,12 +14,15 @@ export { API_BASE };
 export class APIError extends Error {
   statusCode: number;
   code: string;
+  /** Retry-After header value (seconds) from 429 responses — Phase 1.3 */
+  retryAfter: string | null;
 
   constructor(statusCode: number, code: string, message: string) {
     super(message);
     this.name = 'APIError';
     this.statusCode = statusCode;
     this.code = code;
+    this.retryAfter = null;
   }
 
   isUnauthorized(): boolean {
@@ -36,15 +39,49 @@ export class APIError extends Error {
 }
 
 /**
- * Helper to make authenticated requests with retry for transient failures
+ * Compute retry delay with exponential backoff + jitter.
+ *
+ * Phase 1.3: Respects Retry-After header from 429 responses, otherwise uses
+ * exponential backoff (1s, 2s, 4s) with ±25% jitter to avoid thundering herd.
+ *
+ * @param attempt - Zero-based retry attempt number (1 = first retry)
+ * @param retryAfterHeader - Value of the Retry-After response header (seconds)
+ * @returns Delay in milliseconds
+ */
+function computeRetryDelay(attempt: number, retryAfterHeader?: string | null): number {
+  const BASE_DELAY_MS = 1000;
+  const MAX_DELAY_MS = 10_000;
+
+  // If server told us how long to wait, respect it (capped at 10s)
+  if (retryAfterHeader) {
+    const serverDelay = parseInt(retryAfterHeader, 10);
+    if (!isNaN(serverDelay) && serverDelay > 0) {
+      return Math.min(serverDelay * 1000, MAX_DELAY_MS);
+    }
+  }
+
+  // Exponential backoff: 1s, 2s, 4s (capped at 10s)
+  const exponentialDelay = Math.min(BASE_DELAY_MS * Math.pow(2, attempt - 1), MAX_DELAY_MS);
+
+  // Add ±25% jitter to prevent thundering herd
+  const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1);
+
+  return Math.max(0, Math.round(exponentialDelay + jitter));
+}
+
+/**
+ * Helper to make authenticated requests with retry for transient failures.
+ *
+ * Phase 1.3: Exponential backoff with jitter + Retry-After header support.
+ * Retries on: 429 (rate limit), 5xx (server errors), timeouts, network failures.
+ * Does NOT retry: 4xx client errors (except 429), JSON parse errors.
  */
 export async function request<T>(
   endpoint: string,
   options: RequestInit = {},
   token?: string
 ): Promise<T> {
-  const MAX_RETRIES = 2;
-  const RETRY_DELAY_MS = 1000;
+  const MAX_RETRIES = 3;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -58,9 +95,11 @@ export async function request<T>(
   let lastError: APIError | null = null;
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    // Wait before retry (exponential backoff)
+    // Wait before retry (exponential backoff with jitter)
     if (attempt > 0) {
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+      const delay = computeRetryDelay(attempt, lastError?.retryAfter);
+      console.debug(`[API] Retry ${attempt}/${MAX_RETRIES} for ${endpoint} after ${delay}ms`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
 
     // 30s timeout for regular API calls
@@ -117,6 +156,11 @@ export async function request<T>(
         (data.code as string) || 'UNKNOWN_ERROR',
         errorMessage
       );
+
+      // Capture Retry-After header for 429 responses
+      if (response.status === 429) {
+        apiError.retryAfter = response.headers.get('Retry-After');
+      }
 
       // Only retry on 429 (rate limit) and 5xx (server errors)
       if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
