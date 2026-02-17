@@ -283,7 +283,18 @@ When producing work:
 - Name which deliverable you're working on
 - Reference the plan's specification for that deliverable
 - Produce concrete output (code, content, configuration — not descriptions of what you would do)
-- Report what's done and what remains for this deliverable`,
+- Report what's done and what remains for this deliverable
+
+CRITICAL — FILE DELIVERY FORMAT:
+When producing code files, you MUST use this tagged format so the system writes them to the user's workspace automatically:
+
+\`\`\`language:path/to/file.ext
+file content here
+\`\`\`
+
+Example: \`\`\`tsx:src/App.tsx or \`\`\`json:package.json
+The language tag MUST include a colon and file path. Without the path, files will NOT be written.
+Deliver ONE file per code fence. Work through files sequentially, not all at once.`,
 
     REVIEW: `
 === REVIEW OUTPUT CONTRACT ===
@@ -526,12 +537,22 @@ next: [planned next actions]
 estimate: [rough time/effort to completion]
 === END STANDUP ===`;
 
-    // EXE-GAP-001/002: File deliverable format + size guard
-    systemPrompt += `
+  }
+
+  // EXE-GAP-001/002: File deliverable format — MUST be outside TDL guard
+  // so it fires for ALL EXECUTE messages, not just those with assignments.
+  // Workspace-aware: tells the AI which folder files will be written to.
+  if (phaseName === 'EXECUTE') {
+    const ws = request.capsule.workspace;
+    const folderName = ws?.folder_name || null;
+
+    if (ws?.bound) {
+      systemPrompt += `
 
 === FILE DELIVERABLES ===
-When producing code files, output them using this format so the system can write them to the workspace automatically:
+WORKSPACE BOUND: "${folderName}" — files you produce will be written here automatically.
 
+Format each code file as:
 \`\`\`language:path/to/file.ext
 file content here
 \`\`\`
@@ -539,11 +560,21 @@ file content here
 RULES:
 - One file per code fence — do NOT combine multiple files in one fence
 - Path is relative to project root (e.g., src/App.tsx, package.json)
-- Language must match the file extension (js, ts, tsx, html, css, json, etc.)
+- Language MUST include colon + path (e.g., \`\`\`tsx:src/App.tsx) — without it, nothing is written
 - Keep each file under 150 lines — if larger, split into logical modules
-- Deliver files ONE AT A TIME: output one file, then describe what it does, then the next
-- Do NOT dump all project files in a single response — work through deliverables sequentially
+- Deliver files ONE AT A TIME: output one file, explain it, then the next
+- Do NOT dump all project files in a single response — work sequentially
+- After writing files, confirm what was created so the user can verify in "${folderName}"
 === END FILE DELIVERABLES ===`;
+    } else {
+      systemPrompt += `
+
+=== FILE DELIVERABLES ===
+WARNING: No workspace folder is linked. Code files you produce will appear in chat only.
+Tell the user: "Link a workspace folder in the project settings so I can write files directly to your project."
+Still use the \`\`\`language:path/to/file.ext format so files are ready to write once a folder is linked.
+=== END FILE DELIVERABLES ===`;
+    }
   }
 
   // Response guidelines (compact)

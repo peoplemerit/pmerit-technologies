@@ -1749,17 +1749,42 @@ export function Project() {
 
         {/* Workspace Not Bound Banner (P1-3: re-entry path) */}
         {project && workspaceChecked && workspaceStatus && !workspaceStatus.bound && (
-          <div className="mx-4 mt-2 bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5 flex items-center justify-between">
+          <div className={`mx-4 mt-2 border rounded-lg px-4 py-2.5 flex items-center justify-between ${
+            state?.session.phase === 'EXECUTE' || state?.session.phase === 'E'
+              ? 'bg-red-500/10 border-red-500/30'
+              : 'bg-amber-500/10 border-amber-500/20'
+          }`}>
             <div className="flex items-center gap-2">
-              <span className="text-amber-400 text-sm">⚠️</span>
-              <span className="text-amber-300 text-sm">Workspace not configured — link a project folder for full governance</span>
+              <span className={`text-sm ${
+                state?.session.phase === 'EXECUTE' || state?.session.phase === 'E' ? 'text-red-400' : 'text-amber-400'
+              }`}>{state?.session.phase === 'EXECUTE' || state?.session.phase === 'E' ? '🚫' : '⚠️'}</span>
+              <span className={`text-sm ${
+                state?.session.phase === 'EXECUTE' || state?.session.phase === 'E' ? 'text-red-300' : 'text-amber-300'
+              }`}>
+                {state?.session.phase === 'EXECUTE' || state?.session.phase === 'E'
+                  ? 'No workspace folder linked — files will NOT be written. Link a folder so the AI can create project files.'
+                  : 'Workspace not configured — link a project folder for full governance'}
+              </span>
             </div>
             <button
               onClick={() => setShowWorkspaceWizard(true)}
-              className="px-3 py-1 text-xs bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded hover:bg-amber-500/30 transition-colors"
+              className={`px-3 py-1 text-xs border rounded transition-colors ${
+                state?.session.phase === 'EXECUTE' || state?.session.phase === 'E'
+                  ? 'bg-red-500/20 border-red-500/30 text-red-300 hover:bg-red-500/30 animate-pulse'
+                  : 'bg-amber-500/20 border-amber-500/30 text-amber-300 hover:bg-amber-500/30'
+              }`}
             >
-              Set up now
+              Link folder now
             </button>
+          </div>
+        )}
+        {/* Workspace Bound Confirmation — show target folder during EXECUTE */}
+        {project && workspaceChecked && workspaceStatus?.bound && (state?.session.phase === 'EXECUTE' || state?.session.phase === 'E') && (
+          <div className="mx-4 mt-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-4 py-2 flex items-center gap-2">
+            <span className="text-emerald-400 text-sm">📁</span>
+            <span className="text-emerald-300 text-sm">
+              Files writing to: <span className="font-mono font-semibold">{workspaceStatus.folder_name}</span>
+            </span>
           </div>
         )}
 
@@ -1844,6 +1869,7 @@ export function Project() {
                     onCopy={handleCopyMessage}
                     onRegenerate={message.role === 'assistant' ? () => handleRegenerateMessage(index) : undefined}
                     onEdit={message.role === 'user' ? (newContent: string) => handleEditMessage(index, newContent) : undefined}
+                    workspaceFolderName={workspaceStatus?.folder_name || undefined}
                   />
                 ))}
 

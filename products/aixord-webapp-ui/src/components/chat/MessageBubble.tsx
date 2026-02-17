@@ -22,6 +22,8 @@ interface MessageBubbleProps {
   onCopy?: (content: string) => void;
   onRegenerate?: () => void;
   onEdit?: (newContent: string) => void;
+  /** EXE-GAP-001: Workspace folder name for file operation cards */
+  workspaceFolderName?: string;
 }
 
 // Check if message content looks like an error
@@ -42,7 +44,7 @@ function isErrorMessage(content: string): boolean {
   return errorPatterns.some(pattern => pattern.test(content));
 }
 
-export function MessageBubble({ message, onSelectOption, onRetry, token, onPhaseAdvance, onCopy, onRegenerate, onEdit }: MessageBubbleProps) {
+export function MessageBubble({ message, onSelectOption, onRetry, token, onPhaseAdvance, onCopy, onRegenerate, onEdit, workspaceFolderName }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const isError = (isSystem || message.role === 'assistant') && isErrorMessage(message.content);
@@ -382,9 +384,14 @@ export function MessageBubble({ message, onSelectOption, onRetry, token, onPhase
                 {message.metadata.executionResult.errors.length > 0 ? 'FILE OPERATIONS (with errors)' : 'FILES WRITTEN'}
               </span>
             </div>
+            {workspaceFolderName && (
+              <div className="flex items-center gap-1 text-gray-400 mb-1">
+                <span className="font-mono">{workspaceFolderName}/</span>
+              </div>
+            )}
             {message.metadata.executionResult.filesCreated.map((f: string) => (
               <div key={f} className="flex items-center gap-1 text-emerald-300">
-                <span>+</span><span className="font-mono">{f}</span>
+                <span>+</span><span className="font-mono">{workspaceFolderName ? `${workspaceFolderName}/${f}` : f}</span>
               </div>
             ))}
             {message.metadata.executionResult.errors.map((e: string, i: number) => (
