@@ -52,7 +52,9 @@ export function createMockDB(queries: MockQueryResult[] = []) {
         async run() {
           executions.push({ sql, params: boundParams });
           const match = findResult(sql);
-          return match?.runResult ?? { success: true, changes: 1 };
+          const rr = match?.runResult ?? { success: true, changes: 1 };
+          // D1's run() returns { success, meta: { changes, ... } }
+          return { success: rr.success, meta: { changes: rr.changes ?? 0 } };
         },
       };
 
