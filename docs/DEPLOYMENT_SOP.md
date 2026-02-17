@@ -1,8 +1,10 @@
 # D4-CHAT Deployment Standard Operating Procedure
 
-**Version:** 1.0
+**Version:** 2.0
 **Created:** 2026-02-17
+**Updated:** 2026-02-17
 **Baseline Tag:** `v1.0.0-beta.1`
+**Current Head:** Phase 3 — Provider Analytics + Observability
 
 ---
 
@@ -69,13 +71,13 @@
 wrangler deploy --env staging
 
 # Run smoke test against staging
-curl https://aixord-router-worker-staging.peoplemerit.workers.dev/health
+curl https://aixord-router-worker-staging.peoplemerit.workers.dev/v1/router/health
 
-# Production
+# Production (no --env flag for default/production)
 wrangler deploy
 
 # Verify
-curl https://aixord-router-worker.peoplemerit.workers.dev/health
+curl https://aixord-router-worker.peoplemerit.workers.dev/v1/router/health
 ```
 
 ### 2. D1 Database Migrations
@@ -96,7 +98,7 @@ wrangler d1 migrations apply
 wrangler d1 execute aixord-db --command "SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 5;"
 ```
 
-**IMPORTANT:** Production DB has migration tracking gaps (many tables created via direct SQL before migration tracking was set up). Staging DB is fully tracked (46 migrations applied 2026-02-17). Future migrations MUST go through `wrangler d1 migrations apply`.
+**RESOLVED (2026-02-17):** Production `d1_migrations` tracking gap has been backfilled. Production now has 48 entries matching staging. All future migrations should apply cleanly via `wrangler d1 migrations apply`.
 
 ### 3. Frontend Deployment
 
@@ -128,10 +130,11 @@ wrangler secret list --env staging
 
 ## Pre-Deployment Checklist
 
-- [ ] All tests pass: `npm run test:run` (backend + frontend)
+- [ ] All tests pass: `npm run test:run` (450+ tests across 22 files)
 - [ ] TypeScript compiles: `tsc -b` (both packages)
 - [ ] No uncommitted changes: `git status` is clean
 - [ ] Staging deployed and smoke-tested first
+- [ ] Health check passes: `curl .../v1/router/health` returns `{"status":"healthy"}`
 - [ ] D1 migrations applied to staging before production
 - [ ] Tag release: `git tag -a vX.Y.Z -m "Release description"`
 
@@ -158,31 +161,80 @@ D1 migrations are forward-only. To reverse a migration:
 
 ---
 
-## Database Audit (Baseline 2026-02-17)
+## Database Audit (Updated 2026-02-17)
 
 ### Production (`aixord-db`)
-- **Tables:** 68
-- **Size:** 1.8 MB
+- **Tables:** 72 (68 baseline + 4 reconciled via migration 046)
+- **Size:** ~2 MB
 - **Users:** 8
 - **Region:** ENAM
-- **Migration tracking:** 3 entries (historical gap — many tables pre-date tracking)
+- **Migration tracking:** 48 entries (backfilled from 3 → 48)
 
 ### Staging (`aixord-db-staging`)
-- **Tables:** 70
-- **Size:** 1.3 MB
+- **Tables:** 72
+- **Size:** ~1.5 MB
 - **Users:** 0 (fresh)
 - **Region:** ENAM
-- **Migration tracking:** 46 entries (fully tracked)
+- **Migration tracking:** 48 entries (fully tracked)
 
-### Schema Delta (Staging vs Production)
+### Schema Reconciliation (Completed 2026-02-17)
 
-Staging has 4 extra tables not in production:
-- `agent_instances` — from migration 035 (agent_state.sql), prod uses different naming
-- `agent_tasks` — from migration 036 (task_queue.sql), prod uses different naming
-- `secret_access_log` — from migration 009 (security governance)
-- `security_classifications` — from migration 009 (security governance)
+Migration `046_schema_reconciliation_prod.sql` added 4 missing tables to production:
+- `agent_instances` — agent state tracking
+- `agent_tasks` — task queue
+- `secret_access_log` — security governance audit
+- `security_classifications` — security classification levels
 
-These discrepancies exist because production schema was built incrementally via direct SQL, while staging received all 46 migrations cleanly. **Action needed:** Reconcile by adding missing tables to production in a future migration.
+Production `d1_migrations` table was backfilled with 45 missing entries to match staging. Both environments are now schema-aligned.
+
+---
+
+## Release History
+
+### Phase 1 — Resilience & Reliability (2026-02-17)
+
+| Phase | Commit | Changes |
+|-------|--------|---------|
+| **1.1** | `e639319` | Deployment audit, SOP, baseline tag `v1.0.0-beta.1` |
+| **1.2** | `e890a3e` | Subscription polling, webhook batch atomicity |
+| **1.3** | `2c9da14` | Exponential backoff with jitter, `Retry-After` support |
+| **1.4** | `8d90cbb` | Circuit breaker (CLOSED→OPEN→HALF_OPEN), provider health probing |
+| **Tests** | `174912e` | Circuit breaker tests (13), mock DB `batch()` fix, migration 046 |
+
+### Phase 2 — Observability & Monitoring (2026-02-17)
+
+| Commit | Changes |
+|--------|---------|
+| `f652397` | Structured JSON logging in fallback chain, circuit breaker, and selection log |
+
+**Structured Log Events:**
+
+| Event | Level | When | Key Fields |
+|-------|-------|------|------------|
+| `provider_skipped` | info | Circuit open, provider bypassed | `request_id`, `provider`, `model`, `reason` |
+| `provider_success` | info | Provider returned successfully | `request_id`, `provider`, `model`, `latency_ms`, `tokens`, `cost_usd` |
+| `provider_failure` | warn | Provider call failed | `request_id`, `provider`, `model`, `latency_ms`, `error`, `will_retry` |
+| `all_providers_failed` | error | All fallback candidates exhausted | `request_id`, `model_class`, `total_candidates`, `provider_errors` |
+| `circuit_transition` | warn/info | Circuit state change | `provider`, `from`, `to`, `reason`, `failure_count` |
+| `circuit_reset` | info | Circuit manually reset | `provider` |
+| `selection_log_failed` | error | Audit log write failed | `request_id`, `error` |
+
+All logs emit as JSON via `utils/logger.ts` → compatible with Cloudflare Logpush, `wrangler tail`, Datadog, LogTail.
+
+### Phase 3 — Analytics & Governance (2026-02-17)
+
+| Commit | Changes |
+|--------|---------|
+| `6ef98b4` | Provider analytics endpoints, observability integration tests (10 new) |
+
+**New API Endpoints:**
+
+| Endpoint | Auth | Purpose |
+|----------|------|---------|
+| `GET /api/v1/analytics/providers` | Required | Per-provider request counts, model distribution, affinity rates, circuit breaker state |
+| `GET /api/v1/analytics/intents` | Required | Per-intent routing patterns with provider/mode breakdown |
+
+**Query Parameters:** `?since=ISO_DATE` (default: last 30 days), `?limit=N` (max: 5000)
 
 ---
 
@@ -197,5 +249,18 @@ These discrepancies exist because production schema was built incrementally via 
 
 ---
 
+## Test Coverage Summary
+
+| Area | Tests | Files |
+|------|-------|-------|
+| Routing (circuit breaker, fallback, model selection) | ~30 | 4 |
+| API endpoints (chat, usage, engineering, analytics) | ~80 | 6 |
+| Auth & middleware | ~40 | 3 |
+| Observability (structured log verification) | 10 | 1 |
+| Other (subscriptions, webhooks, KDP, etc.) | ~290 | 8 |
+| **Total** | **450+** | **22** |
+
+---
+
 *PMERIT TECHNOLOGIES LLC — AIXORD v2.1*
-*Created: 2026-02-17 | Baseline: v1.0.0-beta.1*
+*Created: 2026-02-17 | Updated: 2026-02-17 | Baseline: v1.0.0-beta.1*
