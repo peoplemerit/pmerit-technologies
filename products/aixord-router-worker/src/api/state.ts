@@ -13,6 +13,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { log } from '../utils/logger';
 import { evaluateAllGates } from '../services/gateRules';
 import { validateBrainstormArtifact } from './brainstorm';
 import type { BrainstormOption, BrainstormDecisionCriteria } from '../types';
@@ -636,11 +637,17 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
   const projectId = c.req.param('projectId');
   const requestedPhase = c.req.param('phase').toUpperCase();
 
-  // Parse optional override flags for quality warnings
+  // Parse optional override flags for quality warnings (body is optional for finalize)
   const body: { override_warnings?: boolean; override_reason?: string } = await c.req.json<{
     override_warnings?: boolean;
     override_reason?: string;
-  }>().catch(() => ({}));
+  }>().catch((err: unknown) => {
+    log.debug('finalize_body_parse_skipped', {
+      project_id: projectId,
+      reason: err instanceof Error ? err.message : 'no body',
+    });
+    return {};
+  });
 
   // ROOT-CAUSE-FIX: Top-level try/catch for the entire finalize handler.
   // Without this, any uncaught DB exception (missing column, constraint violation,
@@ -1156,7 +1163,9 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
         `UPDATE brainstorm_artifacts SET status = 'FROZEN', updated_at = ?
          WHERE project_id = ? AND status = 'ACTIVE'`
       ).bind(now, projectId).run();
-    } catch { /* Non-blocking */ }
+    } catch (err) {
+      log.warn('brainstorm_freeze_failed', { project_id: projectId, error: err instanceof Error ? err.message : String(err) });
+    }
   }
 
   // ── Mathematical Governance: Post-Finalization WU Operations ──
@@ -1167,10 +1176,14 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
       const readiness = await computeProjectReadiness(c.env.DB, projectId);
       for (const scope of readiness.scopes) {
         if (scope.R > 0 && scope.allocated_wu > 0) {
-          await transferWorkUnits(c.env.DB, projectId, scope.scope_id, userId).catch(() => {});
+          await transferWorkUnits(c.env.DB, projectId, scope.scope_id, userId).catch((err: unknown) => {
+            log.warn('wu_transfer_failed', { project_id: projectId, scope_id: scope.scope_id, error: err instanceof Error ? err.message : String(err) });
+          });
         }
       }
-    } catch { /* Non-blocking — WU transfer is advisory */ }
+    } catch (err) {
+      log.warn('wu_batch_transfer_failed', { project_id: projectId, phase: currentPhase, error: err instanceof Error ? err.message : String(err) });
+    }
   }
 
   // On REVIEW finalize: Lock scopes with R=1.0 and create final reconciliation snapshot

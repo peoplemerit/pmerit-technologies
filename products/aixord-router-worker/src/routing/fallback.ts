@@ -1136,7 +1136,9 @@ export async function executeWithFallback(
       // Phase 1.4: Record failure — may trip circuit to OPEN
       recordFailure(candidate.provider);
 
-      const errorMsg = error instanceof Error ? error.message : String(error);
+      const rawErrorMsg = error instanceof Error ? error.message : String(error);
+      // Sanitize error messages: truncate to prevent user input leakage in logs
+      const errorMsg = rawErrorMsg.length > 500 ? rawErrorMsg.slice(0, 500) + '...[truncated]' : rawErrorMsg;
 
       // Track provider-specific error (Phase 2: include latency)
       providerErrors.push({

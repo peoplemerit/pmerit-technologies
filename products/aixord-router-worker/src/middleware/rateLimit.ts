@@ -7,6 +7,7 @@
 
 import { Context, Next, MiddlewareHandler } from 'hono';
 import type { Env } from '../types';
+import { log } from '../utils/logger';
 
 export interface RateLimitConfig {
   /** Time window in milliseconds */
@@ -92,9 +93,17 @@ export function rateLimit(config: RateLimitConfig): MiddlewareHandler {
 
       await next();
     } catch (error) {
-      console.error('Rate limit middleware error:', error);
-      // On error, allow request through (fail open)
-      await next();
+      // SECURITY: Fail CLOSED — reject request when rate limit DB is unavailable
+      // Fail-open would allow unlimited requests during D1 outages
+      log.error('rate_limit_db_error', {
+        error: error instanceof Error ? error.message : String(error),
+        path: c.req.path,
+        method: c.req.method,
+      });
+      return c.json(
+        { error: 'Service temporarily unavailable', retryAfter: 5 },
+        503
+      );
     }
   };
 }

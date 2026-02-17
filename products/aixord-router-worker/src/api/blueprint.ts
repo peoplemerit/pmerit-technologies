@@ -13,6 +13,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { log } from '../utils/logger';
 import { triggerGateEvaluation } from '../services/gateRules';
 import { computeScopeReadiness } from '../services/readinessEngine';
 
@@ -453,7 +454,13 @@ blueprint.put('/:projectId/blueprint/deliverables/:deliverableId', async (c) => 
 
     if (deliverable) {
       c.executionCtx.waitUntil(
-        computeScopeReadiness(c.env.DB, projectId, deliverable.scope_id).catch(() => {})
+        computeScopeReadiness(c.env.DB, projectId, deliverable.scope_id).catch((err: unknown) => {
+          log.error('scope_readiness_compute_failed', {
+            project_id: projectId,
+            scope_id: deliverable.scope_id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        })
       );
     }
   }

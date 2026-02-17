@@ -38,6 +38,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { log } from '../utils/logger';
 
 const assignments = new Hono<{ Bindings: Env }>();
 
@@ -575,7 +576,10 @@ assignments.post('/:projectId/assignments/:id/accept', async (c) => {
     return c.json({ error: `Cannot accept from status: ${existing.status}` }, 409);
   }
 
-  const body = await c.req.json().catch(() => ({}));
+  const body = await c.req.json().catch((err: unknown) => {
+    log.debug('accept_body_parse_skipped', { assignment_id: assignmentId, reason: err instanceof Error ? err.message : 'no body' });
+    return {};
+  });
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(

@@ -74,6 +74,16 @@ app.use('*', async (c, next) => {
   await next();
 });
 
+// Request body size limit (10 MB) — prevents DoS via oversized payloads
+const MAX_BODY_BYTES = 10 * 1024 * 1024;
+app.use('*', async (c, next) => {
+  const contentLength = c.req.header('Content-Length');
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
+    return c.json({ error: 'Request body too large', max_bytes: MAX_BODY_BYTES }, 413);
+  }
+  await next();
+});
+
 // Phase 5.1: Request timing middleware — structured log for every request
 app.use('*', async (c, next) => {
   const start = Date.now();
@@ -156,6 +166,12 @@ app.use('/api/v1/auth/*', rateLimit({ windowMs: 60000, maxRequests: 120 }));
 
 // Router execute: 200 requests per minute (matches global limit — auth handles abuse)
 app.use('/v1/router/execute', rateLimit({ windowMs: 60000, maxRequests: 200 }));
+
+// Token refresh: 5 requests per minute (prevent brute-force token cycling)
+app.use('/api/v1/auth/refresh', rateLimit({ windowMs: 60000, maxRequests: 5 }));
+
+// API key reveal: 5 requests per minute (prevent brute-force key extraction)
+app.use('/api/v1/api-keys/*/reveal', rateLimit({ windowMs: 60000, maxRequests: 5 }));
 
 // Billing endpoints: 20 requests per minute (prevent payment fraud attempts)
 app.use('/api/v1/billing/*', rateLimit({ windowMs: 60000, maxRequests: 20 }));
@@ -356,7 +372,7 @@ app.post('/v1/router/execute', async (c) => {
         );
       }
 
-      // Log AI exposure for audit (fire-and-forget)
+      // Log AI exposure for audit (fire-and-forget with error capture)
       const logId = crypto.randomUUID();
       c.env.DB.prepare(`
         INSERT INTO ai_exposure_log
@@ -372,7 +388,13 @@ app.post('/v1/router/execute', async (c) => {
         'SYSTEM',
         `AI exposure level ${aiExposure} allows access`,
         new Date().toISOString()
-      ).run();
+      ).run().catch((err: unknown) => {
+        log.error('ai_exposure_log_failed', {
+          request_id: request.trace.request_id,
+          project_id: projectId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
 
       // SPG-01: Content redaction for CONFIDENTIAL level (L-SPG3)
       if (aiExposure === 'CONFIDENTIAL') {

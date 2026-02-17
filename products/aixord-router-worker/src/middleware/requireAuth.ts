@@ -14,6 +14,7 @@
 import { Context, Next } from 'hono';
 import type { Env } from '../types';
 import { hashSHA256 } from '../utils/crypto';
+import { log } from '../utils/logger';
 
 // Deadline after which plaintext token fallback is removed
 const LEGACY_TOKEN_DEADLINE = new Date('2026-03-15T00:00:00Z').getTime();
@@ -52,8 +53,13 @@ export async function requireAuth(c: Context<{ Bindings: Env }>, next: Next) {
       WHERE s.token = ? AND s.expires_at > datetime('now')
     `).bind(token).first<{ user_id: string; id: string; email: string }>();
 
-    // Backfill token_hash for transparent migration
+    // Backfill token_hash for transparent migration + log for tracking
     if (session) {
+      log.warn('legacy_plaintext_token_used', {
+        user_id: session.user_id.substring(0, 8) + '...',
+        session_id: session.id.substring(0, 8) + '...',
+        days_until_deadline: Math.ceil((LEGACY_TOKEN_DEADLINE - Date.now()) / 86400000),
+      });
       await c.env.DB.prepare(
         'UPDATE sessions SET token_hash = ? WHERE id = ?'
       ).bind(tokenHash, session.id).run();
