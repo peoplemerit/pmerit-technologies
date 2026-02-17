@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import ProtectedRoute from '../../src/components/ProtectedRoute';
+import { ProtectedRoute } from '../../src/components/ProtectedRoute';
 
 // Mock the auth context
 vi.mock('../../src/contexts/AuthContext', () => ({
@@ -14,13 +14,13 @@ const mockUseAuth = vi.mocked(useAuth);
 describe('ProtectedRoute', () => {
   it('shows loading spinner when auth is loading', () => {
     mockUseAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: true,
       user: null,
-      token: null,
-      loading: true,
       login: vi.fn(),
+      loginWithEmail: vi.fn(),
       register: vi.fn(),
       logout: vi.fn(),
-      isAuthenticated: false,
     } as any);
 
     render(
@@ -31,18 +31,20 @@ describe('ProtectedRoute', () => {
       </MemoryRouter>
     );
 
+    // Loading state should show spinner, not content
     expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
   });
 
   it('renders children when user is authenticated', () => {
     mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
       user: { id: 'test-id', email: 'test@test.com' },
-      token: 'test-token',
-      loading: false,
       login: vi.fn(),
+      loginWithEmail: vi.fn(),
       register: vi.fn(),
       logout: vi.fn(),
-      isAuthenticated: true,
     } as any);
 
     render(
@@ -58,13 +60,13 @@ describe('ProtectedRoute', () => {
 
   it('redirects to login when not authenticated', () => {
     mockUseAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
       user: null,
-      token: null,
-      loading: false,
       login: vi.fn(),
+      loginWithEmail: vi.fn(),
       register: vi.fn(),
       logout: vi.fn(),
-      isAuthenticated: false,
     } as any);
 
     render(
@@ -75,6 +77,7 @@ describe('ProtectedRoute', () => {
       </MemoryRouter>
     );
 
+    // Should redirect, not show protected content
     expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
   });
 });

@@ -1,0 +1,77 @@
+# AIXORD D4-CHAT — Staging Deployment
+# Auto-deploys to staging on push to develop branch
+# Runs full CI first, then deploys backend + frontend
+
+name: Deploy Staging
+
+on:
+  push:
+    branches: [develop]
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: CI Checks
+    uses: ./.github/workflows/ci.yml
+
+  deploy-backend:
+    name: Deploy Backend (Staging)
+    needs: ci
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: products/aixord-router-worker
+    environment: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: products/aixord-router-worker/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy to Staging
+        run: npx wrangler deploy --env staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+  deploy-frontend:
+    name: Deploy Frontend (Staging)
+    needs: ci
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: products/aixord-webapp-ui
+    environment: staging
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: products/aixord-webapp-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages (Staging)
+        run: npx wrangler pages deploy dist --project-name=aixord-webapp-ui --branch=staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

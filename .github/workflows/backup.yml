@@ -1,0 +1,52 @@
+# AIXORD D4-CHAT — Database Backup
+# Weekly automated backup of production D1 database
+# Stores SQL export as GitHub artifact (90-day retention)
+
+name: Database Backup
+
+on:
+  schedule:
+    - cron: '0 6 * * 0'  # Every Sunday at 6:00 AM UTC
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  backup:
+    name: Backup Production D1
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      - name: Export D1 Database
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          wrangler d1 export aixord-db \
+            --output="backup-${DATE}.sql" \
+            --no-schema=false
+          echo "BACKUP_FILE=backup-${DATE}.sql" >> $GITHUB_ENV
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        working-directory: products/aixord-router-worker
+
+      - name: Upload Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backup-${{ env.BACKUP_FILE }}
+          path: products/aixord-router-worker/${{ env.BACKUP_FILE }}
+          retention-days: 90
+
+      - name: Backup Summary
+        run: |
+          echo "## D1 Backup Complete" >> $GITHUB_STEP_SUMMARY
+          echo "- File: ${{ env.BACKUP_FILE }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Retention: 90 days" >> $GITHUB_STEP_SUMMARY
+          echo "- Database: aixord-db (production)" >> $GITHUB_STEP_SUMMARY
