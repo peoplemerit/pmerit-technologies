@@ -46,6 +46,7 @@ import knowledge from './api/knowledge';
 import ccs from './api/ccs';
 import security from './api/security';
 import { usage } from './api/usage';
+import { analytics } from './api/analytics';
 import images from './api/images';
 import sessions from './api/sessions';
 import layers from './api/layers';
@@ -1385,6 +1386,9 @@ app.route('/api/v1/projects', security);
 
 // Usage routes (H1/H2 - Trial and Metering)
 app.route('/api/v1/usage', usage);
+
+// Analytics routes (Phase 3 — Observability)
+app.route('/api/v1/analytics', analytics);
 
 // Image routes (ENH-4: Path C — Image Evidence)
 app.route('/api/v1/projects', images);
