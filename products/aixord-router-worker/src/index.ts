@@ -15,7 +15,7 @@ import type { Env, RouterResponse, RouterIntent, Provider } from './types';
 import { RouterError } from './types';
 import { validateRequest } from './schemas/router';
 import { getModelClass, isClassAllowedForTier } from './routing/intent-map';
-import { executeWithFallback } from './routing/fallback';
+import { executeWithFallback, getProviderHealth } from './routing/fallback';
 import { validateSubscription, incrementUsage as incrementLegacyUsage } from './routing/subscription';
 import { incrementUsage as incrementMeteringUsage, getTierLimit } from './middleware/entitlement';
 import { estimateCostCents } from './utils/cost';
@@ -192,6 +192,18 @@ app.get('/v1/router/health', async (c) => {
     ].filter(Boolean).join(',') || 'none',
   };
 
+  // Phase 1.4: Circuit breaker state per provider
+  const circuitHealth = getProviderHealth();
+  const openCircuits = Object.entries(circuitHealth)
+    .filter(([, v]) => v.state === 'OPEN')
+    .map(([k]) => k);
+  if (openCircuits.length > 0) {
+    checks.circuit_breaker = {
+      status: 'error',
+      detail: `Open circuits: ${openCircuits.join(', ')}`,
+    };
+  }
+
   const overallStatus = Object.values(checks).every(c => c.status === 'ok') ? 'healthy' : 'degraded';
 
   return c.json({
@@ -200,6 +212,8 @@ app.get('/v1/router/health', async (c) => {
     environment: c.env.ENVIRONMENT || 'unknown',
     timestamp: new Date().toISOString(),
     checks,
+    // Phase 1.4: Always include circuit breaker detail
+    circuit_breaker: circuitHealth,
   });
 });
 

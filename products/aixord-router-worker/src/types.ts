@@ -401,6 +401,8 @@ export interface ModelUsed {
 export interface RouterDebug {
   route: string;
   fallbacks: number;
+  /** Phase 1.4: Number of providers skipped due to open circuit breaker */
+  circuit_skipped?: number;
   tier_limits?: {
     used: number;
     max: number;

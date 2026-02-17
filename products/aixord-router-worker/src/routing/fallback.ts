@@ -17,6 +17,10 @@ import { getCandidates } from './table';
 import { resolveApiKey, isProviderAvailable } from './key-resolver';
 import { callProvider, estimateCost } from '../providers';
 import { redactContent } from '../utils/redaction';
+import { isCircuitClosed, recordSuccess, recordFailure } from './circuit-breaker';
+
+// Phase 1.4: Re-export for /health endpoint
+export { getProviderHealth } from './circuit-breaker';
 
 /**
  * Build layered execution system prompt (Path B: Proactive Debugging)
@@ -1031,8 +1035,19 @@ export async function executeWithFallback(
   let lastError: Error | null = null;
   let fallbackCount = 0;
   const providerErrors: Array<{ provider: string; error: string }> = [];
+  let circuitSkipped = 0;
 
   for (const candidate of availableCandidates) {
+    // Phase 1.4: Circuit breaker check — skip providers with open circuits
+    if (!isCircuitClosed(candidate.provider)) {
+      circuitSkipped++;
+      providerErrors.push({
+        provider: candidate.provider,
+        error: 'Circuit OPEN (provider temporarily unavailable, will probe after cooldown)'
+      });
+      continue;
+    }
+
     const startTime = Date.now();
 
     try {
@@ -1066,6 +1081,9 @@ export async function executeWithFallback(
         );
       }
 
+      // Phase 1.4: Record success — closes circuit if in HALF_OPEN
+      recordSuccess(candidate.provider);
+
       return {
         status: fallbackCount > 0 ? 'RETRIED' : 'OK',
         content: response.content,
@@ -1082,12 +1100,16 @@ export async function executeWithFallback(
         },
         router_debug: {
           route: `${modelClass}->${candidate.provider}/${candidate.model}`,
-          fallbacks: fallbackCount
+          fallbacks: fallbackCount,
+          circuit_skipped: circuitSkipped  // Phase 1.4: expose in debug
         }
       };
     } catch (error) {
       lastError = error as Error;
       fallbackCount++;
+
+      // Phase 1.4: Record failure — may trip circuit to OPEN
+      recordFailure(candidate.provider);
 
       // Track provider-specific error
       providerErrors.push({
