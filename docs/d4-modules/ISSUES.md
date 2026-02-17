@@ -3,7 +3,7 @@
 **Module:** Fixed issues, known issues, technical debt, backlog items (§13)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** SHRINKING
-**Last Updated:** 2026-02-16 (Session 10)
+**Last Updated:** 2026-02-17 (Session 11)
 
 ---
 
@@ -61,12 +61,16 @@
 | ~~Mock tasks~~ | ~~Dashboard mock data~~ | ~~Implement task system~~ ✅ RESOLVED (Session 42 — TDL) |
 | Local settings | Not persisted | Backend storage |
 | Dependabot branches stale | 4 branches on old main | Close stale router-worker multi; review 3 minor bumps |
+| D1 migration tracker out of sync | Remote d1_migrations table only has 3 entries vs 45 migration files | Reconcile migration tracking or use --file for individual migrations |
 
 ### 13.4 Backlog Items
 
 | ID | Title | Source | Priority | Status |
 |----|-------|--------|----------|--------|
 | ~~UI-GOV-001~~ | ~~Differentiate phase indicators from gate checkpoints in UI~~ | HO-BASELINE-UPDATE-01, PATCH-UI-GOVERNANCE-01 | P2 | ✅ RESOLVED (Session 10) |
+| EXE-GAP-001 | EXECUTE phase has no file-writing mechanism — AI dumps code in chat, truncates on large scaffolds | PantryOS session diagnostic (Session 11) | P1 | OPEN |
+| EXE-GAP-002 | Response size guard missing — no protection against oversized AI responses that truncate mid-output | PantryOS session diagnostic (Session 11) | P1 | OPEN |
+| EXE-GAP-003 | "Something went wrong" error gives no actionable recovery path (no retry/resume/report) | PantryOS session diagnostic (Session 11) | P2 | OPEN |
 
 **UI-GOV-001 Detail:** ✅ **IMPLEMENTED**
 - **Requirement:** Gates must be visually distinct from phases.
@@ -74,6 +78,20 @@
   - Phases: informational, non-blocking (breadcrumb with dot indicators + `›` separators)
 - **Doctrine Reference:** AIXORD Baseline §10.11.5.5 — Authority Clarity Doctrine ("Phase != Authority", "Gates Grant Permission")
 - **Commit:** `a5dfc21` — feat: UI-GOV-001 Authority Clarity Doctrine for GovernanceRibbon
+
+**EXE-GAP-001/002/003 Detail:** PantryOS EXECUTE Phase Diagnostic
+- **Source:** User session transcript (Product.md) — PantryOS mobile app project
+- **What happened:** AI entered EXECUTE phase, attempted to scaffold entire PWA project (package.json, vite.config.js, index.html, App.js, main.css, sw.js) in a single chat message. Response was ~14K+ tokens, truncated mid-file at `wb.` in service worker registration. User saw "Something went wrong" with no recovery path.
+- **Root Causes (Swiss Cheese analysis):**
+  - **PROCESS:** AI dumped code in chat instead of using structured deliverable submission
+  - **DESIGN:** No token/response size guard for EXECUTE phase AI output
+  - **OBSERVABILITY:** "Something went wrong" gives no actionable information
+  - **INTEGRITY:** Truncated code shown to user with no way to complete/resume
+- **Recommended fixes:**
+  1. File-writing mechanism in EXECUTE phase (workspace file creation or chunked deliverable submission)
+  2. Response size guard (break large scaffolds into multiple deliverable submissions)
+  3. Error recovery UX (retry, resume from error, report actions)
+  4. Deliverable-at-a-time pattern (work through deliverables sequentially with acceptance gates)
 
 ---
 

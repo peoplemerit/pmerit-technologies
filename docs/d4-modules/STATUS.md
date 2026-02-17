@@ -3,7 +3,7 @@
 **Module:** Executive summary metrics, deliverable matrix, API endpoint status (§6)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** CAPPED (condensed metrics + pending deliverables only in future)
-**Last Updated:** 2026-02-16 (Session 10)
+**Last Updated:** 2026-02-17 (Session 11)
 
 ---
 
@@ -95,6 +95,8 @@
 | **GAP-2 R-Threshold Escalation** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (5-level escalation, auto-gate-flipping at R thresholds) | NEW |
 | **UI-GOV-001 Authority Clarity** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Phases=breadcrumbs, Gates=red/green blocking checkpoints) | NEW |
 | **GT2UTM Readiness Audit** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **36%** (2.5/7 criteria — infrastructure exists, integration pending) | NEW |
+| **Root Cause Doctrine Phase 2 (D79)** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Swiss Cheese Model: migration 045, registry, L-RCD, 43 tests) | NEW |
+| **PantryOS EXECUTE Phase Diagnostic** | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | **100%** (Root cause analysis: no file-writing in EXECUTE, response truncation) | NEW |
 
 ### 6.2 Deliverable Matrix
 
@@ -178,8 +180,10 @@
 | D76 | GAP-2 R-Threshold Automatic Escalation (readinessEscalation.ts, 5 levels) | ✅ **DEPLOYED** | **100%** |
 | D77 | UI-GOV-001 Authority Clarity Doctrine (GovernanceRibbon phase/gate visual differentiation) | ✅ **DEPLOYED** | **100%** |
 | D78 | GT2UTM Readiness Audit (2.5/7 criteria, traceability matrix documented) | ✅ **COMPLETE** | **36%** |
+| D79 | Root Cause Doctrine Phase 2 — Swiss Cheese Model Structural Enforcement (migration 045, root_cause_registry, L-RCD governance, AuditHistory badges, 43 tests) | ✅ **DEPLOYED** | **100%** |
+| D80 | PantryOS EXECUTE Phase Diagnostic (Root cause: no file-writing mechanism in EXECUTE, response truncation, missing recovery UX) | ✅ **COMPLETE** | **100%** |
 
-**Total Deliverables:** 78 (D1-D78)
+**Total Deliverables:** 80 (D1-D80)
 
 **Note (PATCH-CGC-01, GAP-9):** Session 23 sprint deliverables (§16.10) used internal numbering D7-D16 that maps to the main deliverable matrix as follows: Sprint-D10+D11 (Session Metrics) = main D10 (Usage Statistics). Sprint-D14+D15 (Prompt Caching) are implementation details within D1 (Model Router Worker). The main D1-D43 numbering is canonical.
 
@@ -208,7 +212,7 @@ WORKSPACE ENDPOINTS (4):       ALL ✅ DEPLOYED (Unified GA:ENV — get, update,
 BRAINSTORM ENDPOINTS (5):      ALL ✅ DEPLOYED (HANDOFF-VD-CI-01 + BQL-01 — create/get artifact, validate, get validation, readiness)
 ASSIGNMENT ENDPOINTS (20):     ALL ✅ DEPLOYED (HANDOFF-TDL-01 — CRUD, lifecycle, escalation, standup, task board)
 CONTINUITY ENDPOINTS (7):      ALL ✅ DEPLOYED (HANDOFF-PCC-01 — capsule, session detail, decisions, artifacts, pins CRUD)
-AGENT ENDPOINTS (14):          ALL ✅ DEPLOYED (CGC-01 GAP-1 — agent CRUD, task CRUD, orchestrate, execute, approve, audit-log)
+AGENT ENDPOINTS (16):          ALL ✅ DEPLOYED (CGC-01 GAP-1 — agent CRUD, task CRUD, orchestrate, execute, approve, audit-log, root-cause-registry GET/PUT)
 ```
 
 See §10.1 for complete endpoint matrix with paths and methods.

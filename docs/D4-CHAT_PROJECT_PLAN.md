@@ -1,10 +1,10 @@
 # D4-CHAT PROJECT PLAN — Manifest
 
 **Document Type:** Module Manifest (MOSA Architecture)
-**Version:** 20.0 (Session 10 — Governance UI + GT2UTM Audit)
+**Version:** 21.0 (Session 11 — Root Cause Doctrine Phase 2 + PantryOS Diagnostic)
 **Entity:** PMERIT Technologies LLC
 **Governance:** AIXORD v4.6
-**Last Updated:** 2026-02-16 (Session 10)
+**Last Updated:** 2026-02-17 (Session 11)
 
 > **This file is a manifest.** The full project plan has been decomposed into 13 independently-loadable modules using MOSA (Modular Open Systems Approach) to optimize AI context window usage. Load modules ON DEMAND based on the task at hand.
 
@@ -29,9 +29,9 @@
 | Metric | Value |
 |--------|-------|
 | **Completion** | ~100% Functional (All API Methods Wired) |
-| **Backend Tests** | 234/234 passing |
+| **Backend Tests** | 277/277 passing |
 | **API Endpoints** | 200+ across 24 modules |
-| **Database Tables** | 61 across 39 migrations |
+| **Database Tables** | 62 across 45 migrations |
 | **Security Audits** | 7 completed (5 Copilot + 1 Critical + 1 Emergency Remediation) |
 | **Credential Rotation** | ✅ Complete (Password + 4 AI + 2 Stripe secrets rotated) |
 | **GT2UTM Readiness** | 2.5/7 (36%) — infrastructure exists, integration layer pending |
@@ -52,8 +52,8 @@
 | [DATABASE.md](d4-modules/DATABASE.md) | 244 | SLOW-GROWTH | Schema changes, migrations |
 | [API-REFERENCE.md](d4-modules/API-REFERENCE.md) | 159 | SLOW-GROWTH | Adding/modifying endpoints |
 | [GOVERNANCE-IMPL.md](d4-modules/GOVERNANCE-IMPL.md) | 230 | SEMI-STATIC | Gate/security work |
-| [ISSUES.md](d4-modules/ISSUES.md) | 78 | SHRINKING | Bug fixes, tech debt |
-| [SESSION-HISTORY.md](d4-modules/SESSION-HISTORY.md) | 91 | ROLLING | Context recovery |
+| [ISSUES.md](d4-modules/ISSUES.md) | 93 | SHRINKING | Bug fixes, tech debt |
+| [SESSION-HISTORY.md](d4-modules/SESSION-HISTORY.md) | 94 | ROLLING | Context recovery |
 | [RELATED-ASSETS.md](d4-modules/RELATED-ASSETS.md) | 58 | STATIC | Finding governance docs |
 | [ROADMAP.md](d4-modules/ROADMAP.md) | 59 | ROTATING | **Every session startup** |
 | [IMPLEMENTATION-LOG.md](d4-modules/IMPLEMENTATION-LOG.md) | 1119 | ARCHIVAL | Never on startup — on-demand only |
@@ -96,7 +96,7 @@ Load additional modules ON DEMAND based on the task directive. Maximum ~800 line
 
 ```bash
 # Backend — run from products/aixord-router-worker/
-npx vitest run                    # 234 tests
+npx vitest run                    # 277 tests
 npx wrangler d1 migrations list --local D4_CHAT_DB
 
 # Frontend — run from products/aixord-webapp-ui/
@@ -133,7 +133,7 @@ The webapp UI (`products/aixord-webapp-ui/docs/`) no longer maintains a duplicat
 
 ---
 
-*MOSA Documentation Architecture — Session 10*
-*D4-CHAT Project Plan Manifest v20.0*
-*AIXORD v4.6 — Governance UI + GT2UTM Audit*
+*MOSA Documentation Architecture — Session 11*
+*D4-CHAT Project Plan Manifest v21.0*
+*AIXORD v4.6 — Root Cause Doctrine Phase 2 + PantryOS Diagnostic*
 *PMERIT Technologies LLC*

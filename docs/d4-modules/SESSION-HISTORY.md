@@ -3,7 +3,7 @@
 **Module:** Session timeline and key learnings (§14)
 **Parent Manifest:** `docs/D4-CHAT_PROJECT_PLAN.md`
 **Growth Class:** ROLLING-WINDOW (last 10 sessions kept here; older sessions archived to IMPLEMENTATION-LOG.md)
-**Last Updated:** 2026-02-16 (Session 10)
+**Last Updated:** 2026-02-17 (Session 11)
 
 ---
 
@@ -78,6 +78,7 @@
 | **59_*** | **02/15** | **Email Delivery Debugging + Project Plan Update** | **Forgot-password email not received. Investigated: RESEND_API_KEY configured, domain pmerit.com verified in Resend (status: verified, sending: enabled), DNS records correct (SPF, DKIM, MX, DMARC). Resend API accepts emails (HTTP 200 + ID returned). Added sendEmail success/error logging. Discovered Resend experiencing service degradation (internal DB 500 errors on all query endpoints). Diagnostic endpoint created/used/removed. Backend deployed (b4f1a2ae). Updated D4-CHAT_PROJECT_PLAN v18→v19, STATUS.md (D64-D70), ROADMAP.md, ISSUES.md, SESSION-HISTORY.md.** |
 | **9_*** | **02/16** | **Session 9 Backlog — Subscription, Stripe, GAPs, Root Cause** | **Subscription tier NONE→TRIAL auto-upgrade (register + execute). Stripe webhook fallback lookup via subscriptions table. Rate limit 20→120/min. Legacy key consolidation to PLATFORM_*. Finalize error handling + dag_json ghost column fix. Root Cause Doctrine in system prompt + Auditor agent. GAP-1 User-Guided Execution Mode (3 endpoints). GAP-2 R-Threshold Escalation (readinessEscalation.ts, 5 levels). Frontend persistent finalize prompt fix. 6 commits pushed (638f0a2..fa18413).** |
 | **10_*** | **02/16** | **Governance UI + GT2UTM Audit + Cleanup** | **Forgot-password verified (Resend recovered, token used <1min). Stripe E2E verified (all endpoints auth-enforced, webhook sig validated, trial expiry enforced). GT2UTM readiness audit: 2.5/7 (36%) — infrastructure exists, integration layer pending. UI-GOV-001 Authority Clarity Doctrine: GovernanceRibbon phases→breadcrumbs, gates→red/green blocking checkpoints. Dependabot 7 stale branches pruned. D71-D78 deliverables. Project plan v19→v20. 2 commits pushed (59edbff, a5dfc21).** |
+| **11_*** | **02/17** | **Root Cause Doctrine Phase 2 + PantryOS Diagnostic** | **D79: Swiss Cheese Model structural enforcement — migration 045 (root_cause_registry table + audit_findings columns), SHA-256 signature-based registry upsert for recurrence tracking, L-RCD governance law (blocks phase transitions on recurring CRITICAL/HIGH root causes), 6 Swiss Cheese categories (INTEGRITY/VALIDATION/ISOLATION/OBSERVABILITY/PROCESS/DESIGN), 2 new API endpoints (GET/PUT root-cause-registry), AuditHistory.tsx category badges + recurring warnings. 43 new tests (277 total). Migrations 037/040/041/045 applied to production D1 (synced remote). PantryOS EXECUTE phase diagnostic: analyzed Product.md user session — identified 4 root causes (no file-writing in EXECUTE phase, response truncation, missing error recovery UX, deliverable-at-a-time pattern needed). D79-D80 deliverables. Project plan v20→v21. Commit 065fb16.** |
 
 ### 14.2 Key Learnings (Aligned with L-GCP)
 
