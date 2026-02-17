@@ -60,6 +60,19 @@ export function createMockDB(queries: MockQueryResult[] = []) {
 
       return stmt;
     },
+
+    /**
+     * Mock D1 batch() — Phase 1.2: Webhook handlers now use db.batch()
+     * for atomic multi-table updates. This executes each prepared statement's
+     * run() method sequentially (matching real D1 batch behavior).
+     */
+    async batch(statements: Array<{ run: () => Promise<unknown> }>) {
+      const results = [];
+      for (const stmt of statements) {
+        results.push(await stmt.run());
+      }
+      return results;
+    },
   };
 
   return mockDB;
