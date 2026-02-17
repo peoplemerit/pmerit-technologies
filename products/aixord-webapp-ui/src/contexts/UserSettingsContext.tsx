@@ -228,7 +228,7 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
       // Sync subscription and API keys from backend (async, non-blocking)
       if (token) {
         refreshSubscription();
-        
+
         // Sync API keys from backend (HANDOFF-SECURITY-CRITICAL-01: masked previews)
         fetchApiKeysFromBackend().then(({ keys: backendKeys, metas }) => {
           if (Object.keys(backendKeys).length > 0) {
@@ -247,6 +247,22 @@ export function UserSettingsProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     }
   }, [isAuthenticated, user?.id, token]);
+
+  // Phase 1.2: Poll subscription status every 60 seconds
+  // Ensures frontend reflects Stripe webhook tier changes (checkout, upgrade, cancel)
+  // without requiring manual page refresh.
+  useEffect(() => {
+    if (!isAuthenticated || !token) return;
+
+    const POLL_INTERVAL_MS = 60_000; // 60 seconds
+    const intervalId = setInterval(() => {
+      refreshSubscription().catch((err) => {
+        console.warn('[SETTINGS] Subscription poll failed (will retry):', err);
+      });
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [isAuthenticated, token]);
 
   // Listen for API key updates (from Settings page save)
   useEffect(() => {

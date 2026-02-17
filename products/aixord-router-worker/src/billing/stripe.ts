@@ -181,36 +181,40 @@ async function handleCheckoutCompleted(
     console.log(`[WEBHOOK] Stored stripe_customer_id=${session.customer} for user=${userId}`);
   }
 
-  // If we have tier, update everything now. Otherwise wait for subscription.created.
+  // If we have tier, update everything atomically. Otherwise wait for subscription.created.
   if (tier) {
-    // Step 1: Upsert subscriptions table
+    // Phase 1.2: Use db.batch() for atomic multi-table updates.
+    // Prevents partial state where subscriptions is updated but users.subscription_tier is not
+    // (the original "24h debugging" bug was exactly this split-brain scenario).
     const subId = crypto.randomUUID();
-    await db.prepare(`
-      INSERT INTO subscriptions (id, user_id, tier, status, stripe_customer_id, stripe_subscription_id, period_start, period_end)
-      VALUES (?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now', '+30 days'))
-      ON CONFLICT(user_id) DO UPDATE SET
-        tier = excluded.tier,
-        status = 'active',
-        stripe_customer_id = excluded.stripe_customer_id,
-        stripe_subscription_id = excluded.stripe_subscription_id,
-        period_start = datetime('now'),
-        period_end = datetime('now', '+30 days'),
-        updated_at = datetime('now')
-    `).bind(subId, userId, tier, session.customer, session.subscription || '').run();
-
-    // Step 2: CRITICAL — Update users.subscription_tier
-    await db.prepare(
-      'UPDATE users SET subscription_tier = ?, updated_at = datetime(\'now\') WHERE id = ?'
-    ).bind(tier, userId).run();
-
-    // Step 3: Reset usage tracking for new billing period
     const now = new Date();
     const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    await db.prepare(
-      'DELETE FROM usage_tracking WHERE user_id = ? AND period = ?'
-    ).bind(userId, currentPeriod).run();
 
-    console.log(`[WEBHOOK] Checkout completed: user=${userId}, tier=${tier}, customer=${session.customer}`);
+    await db.batch([
+      // Step 1: Upsert subscriptions table
+      db.prepare(`
+        INSERT INTO subscriptions (id, user_id, tier, status, stripe_customer_id, stripe_subscription_id, period_start, period_end)
+        VALUES (?, ?, ?, 'active', ?, ?, datetime('now'), datetime('now', '+30 days'))
+        ON CONFLICT(user_id) DO UPDATE SET
+          tier = excluded.tier,
+          status = 'active',
+          stripe_customer_id = excluded.stripe_customer_id,
+          stripe_subscription_id = excluded.stripe_subscription_id,
+          period_start = datetime('now'),
+          period_end = datetime('now', '+30 days'),
+          updated_at = datetime('now')
+      `).bind(subId, userId, tier, session.customer, session.subscription || ''),
+      // Step 2: CRITICAL — Update users.subscription_tier
+      db.prepare(
+        'UPDATE users SET subscription_tier = ?, updated_at = datetime(\'now\') WHERE id = ?'
+      ).bind(tier, userId),
+      // Step 3: Reset usage tracking for new billing period
+      db.prepare(
+        'DELETE FROM usage_tracking WHERE user_id = ? AND period = ?'
+      ).bind(userId, currentPeriod),
+    ]);
+
+    console.log(`[WEBHOOK] Checkout completed (atomic): user=${userId}, tier=${tier}, customer=${session.customer}`);
     return { success: true, message: `Checkout completed: user=${userId} activated ${tier}` };
   }
 
@@ -257,75 +261,83 @@ async function handleSubscriptionUpdate(
   const periodStart = new Date(subscription.current_period_start * 1000).toISOString();
   const periodEnd = new Date(subscription.current_period_end * 1000).toISOString();
 
-  if (existingSub) {
-    await db.prepare(`
-      UPDATE subscriptions
-      SET tier = ?, status = ?, period_start = ?, period_end = ?, updated_at = datetime('now')
-      WHERE stripe_subscription_id = ?
-    `).bind(tier, status, periodStart, periodEnd, subscription.id).run();
-  } else {
-    // Need to find user by Stripe customer ID
-    // FIX-STRIPE-PAYMENT-01: Check both users and subscriptions tables
-    let user = await db.prepare(
-      'SELECT id FROM users WHERE stripe_customer_id = ?'
-    ).bind(subscription.customer).first<{ id: string }>();
-
-    if (!user) {
-      // Fallback: lookup via subscriptions table (stripe_customer_id lives there too)
-      const subRecord = await db.prepare(
-        'SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?'
-      ).bind(subscription.customer).first<{ user_id: string }>();
-      if (subRecord) {
-        user = { id: subRecord.user_id };
-        // Backfill stripe_customer_id on users table for future lookups
-        await db.prepare(
-          'UPDATE users SET stripe_customer_id = ?, updated_at = datetime(\'now\') WHERE id = ?'
-        ).bind(subscription.customer, subRecord.user_id).run();
-        console.log(`[WEBHOOK] Backfilled stripe_customer_id on users table for user=${subRecord.user_id}`);
-      }
-    }
-
-    if (!user) {
-      return { success: false, message: `No user found for customer: ${subscription.customer}` };
-    }
-
-    const subId = crypto.randomUUID();
-    await db.prepare(`
-      INSERT INTO subscriptions (id, user_id, tier, status, stripe_customer_id, stripe_subscription_id, period_start, period_end)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(subId, user.id, tier, status, subscription.customer, subscription.id, periodStart, periodEnd).run();
-  }
-
-  // CRITICAL FIX: Also update users.subscription_tier
+  // Phase 1.2: Resolve user ID first (reads), then batch all writes atomically.
   // FIX-STRIPE-PAYMENT-01: Check both users and subscriptions tables for user lookup
-  let userForTierUpdate = await db.prepare(
+  let resolvedUserId: string | null = null;
+
+  const userByCustomer = await db.prepare(
     'SELECT id FROM users WHERE stripe_customer_id = ?'
   ).bind(subscription.customer).first<{ id: string }>();
 
-  if (!userForTierUpdate) {
-    // Fallback: lookup via subscriptions table
+  if (userByCustomer) {
+    resolvedUserId = userByCustomer.id;
+  } else {
+    // Fallback: lookup via subscriptions table (stripe_customer_id lives there too)
     const subRecord = await db.prepare(
       'SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?'
     ).bind(subscription.customer).first<{ user_id: string }>();
     if (subRecord) {
-      userForTierUpdate = { id: subRecord.user_id };
+      resolvedUserId = subRecord.user_id;
     }
   }
 
-  if (userForTierUpdate) {
+  // Build batch of write statements
+  const batchStatements: D1PreparedStatement[] = [];
+
+  if (existingSub) {
+    batchStatements.push(
+      db.prepare(`
+        UPDATE subscriptions
+        SET tier = ?, status = ?, period_start = ?, period_end = ?, updated_at = datetime('now')
+        WHERE stripe_subscription_id = ?
+      `).bind(tier, status, periodStart, periodEnd, subscription.id)
+    );
+  } else {
+    if (!resolvedUserId) {
+      return { success: false, message: `No user found for customer: ${subscription.customer}` };
+    }
+
+    const subId = crypto.randomUUID();
+    batchStatements.push(
+      db.prepare(`
+        INSERT INTO subscriptions (id, user_id, tier, status, stripe_customer_id, stripe_subscription_id, period_start, period_end)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(subId, resolvedUserId, tier, status, subscription.customer, subscription.id, periodStart, periodEnd)
+    );
+  }
+
+  // CRITICAL: Also update users.subscription_tier atomically in the same batch
+  if (resolvedUserId) {
     if (status === 'active') {
-      await db.prepare(
-        'UPDATE users SET subscription_tier = ?, stripe_customer_id = ?, updated_at = datetime(\'now\') WHERE id = ?'
-      ).bind(tier, subscription.customer, userForTierUpdate.id).run();
-      console.log(`[WEBHOOK] Updated users.subscription_tier=${tier} for user=${userForTierUpdate.id}`);
+      batchStatements.push(
+        db.prepare(
+          'UPDATE users SET subscription_tier = ?, stripe_customer_id = ?, updated_at = datetime(\'now\') WHERE id = ?'
+        ).bind(tier, subscription.customer, resolvedUserId)
+      );
+      console.log(`[WEBHOOK] Batching users.subscription_tier=${tier} for user=${resolvedUserId}`);
     } else if (status === 'cancelled' || status === 'expired') {
-      // Downgrade to TRIAL on cancellation/expiry
-      await db.prepare(
-        'UPDATE users SET subscription_tier = \'TRIAL\', updated_at = datetime(\'now\') WHERE id = ?'
-      ).bind(userForTierUpdate.id).run();
-      console.log(`[WEBHOOK] Downgraded users.subscription_tier to TRIAL for user=${userForTierUpdate.id}`);
+      batchStatements.push(
+        db.prepare(
+          'UPDATE users SET subscription_tier = \'TRIAL\', updated_at = datetime(\'now\') WHERE id = ?'
+        ).bind(resolvedUserId)
+      );
+      console.log(`[WEBHOOK] Batching downgrade to TRIAL for user=${resolvedUserId}`);
+    }
+
+    // Backfill stripe_customer_id if it was missing from users table
+    if (!userByCustomer && resolvedUserId) {
+      batchStatements.push(
+        db.prepare(
+          'UPDATE users SET stripe_customer_id = ?, updated_at = datetime(\'now\') WHERE id = ?'
+        ).bind(subscription.customer, resolvedUserId)
+      );
+      console.log(`[WEBHOOK] Batching stripe_customer_id backfill for user=${resolvedUserId}`);
     }
   }
+
+  // Execute all writes atomically
+  await db.batch(batchStatements);
+  console.log(`[WEBHOOK] Subscription updated (atomic, ${batchStatements.length} ops): ${subscription.id} → ${tier} (${status})`);
 
   return { success: true, message: `Subscription ${subscription.id} updated to ${tier} (${status})` };
 }
@@ -339,23 +351,32 @@ async function handleSubscriptionDeleted(
   subscription: StripeSubscription,
   db: D1Database
 ): Promise<{ success: boolean; message: string }> {
-  // Mark subscription as cancelled
-  await db.prepare(`
-    UPDATE subscriptions
-    SET status = 'cancelled', updated_at = datetime('now')
-    WHERE stripe_subscription_id = ?
-  `).bind(subscription.id).run();
-
-  // CRITICAL FIX: Downgrade user tier to TRIAL
+  // Phase 1.2: Look up user first, then batch the cancellation + downgrade atomically
   const user = await db.prepare(
     'SELECT user_id FROM subscriptions WHERE stripe_customer_id = ?'
   ).bind(subscription.customer).first<{ user_id: string }>();
 
   if (user) {
-    await db.prepare(
-      'UPDATE users SET subscription_tier = \'TRIAL\', updated_at = datetime(\'now\') WHERE id = ?'
-    ).bind(user.user_id).run();
-    console.log(`[WEBHOOK] Subscription deleted: downgraded user=${user.user_id} to TRIAL`);
+    // Atomic: cancel subscription + downgrade user tier in one batch
+    await db.batch([
+      db.prepare(`
+        UPDATE subscriptions
+        SET status = 'cancelled', updated_at = datetime('now')
+        WHERE stripe_subscription_id = ?
+      `).bind(subscription.id),
+      db.prepare(
+        'UPDATE users SET subscription_tier = \'TRIAL\', updated_at = datetime(\'now\') WHERE id = ?'
+      ).bind(user.user_id),
+    ]);
+    console.log(`[WEBHOOK] Subscription deleted (atomic): downgraded user=${user.user_id} to TRIAL`);
+  } else {
+    // No user found — still mark subscription as cancelled
+    await db.prepare(`
+      UPDATE subscriptions
+      SET status = 'cancelled', updated_at = datetime('now')
+      WHERE stripe_subscription_id = ?
+    `).bind(subscription.id).run();
+    console.warn(`[WEBHOOK] Subscription deleted but no user found for customer=${subscription.customer}`);
   }
 
   return { success: true, message: `Subscription ${subscription.id} cancelled, user downgraded to TRIAL` };
