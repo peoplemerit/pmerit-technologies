@@ -701,6 +701,15 @@ RULES FOR FILE REQUESTS:
 - After requesting files, STOP and wait for the file contents — do NOT guess at what they contain
 - You may include other analysis or commentary before the request block
 
+AFTER RECEIVING FILE CONTENTS:
+When the platform provides file contents in a follow-up, you MUST:
+1. ANALYZE the file contents internally — understand the structure, purpose, key data, and relevant details
+2. Produce a concise ANALYSIS or SUMMARY in your response — this is what the user sees and what persists in the session
+3. Do NOT reproduce or echo large portions of the raw file content back in your response
+4. Do NOT quote entire sections verbatim — instead, reference specific details, patterns, or insights you extracted
+5. The file contents are EPHEMERAL working memory provided to you for analysis — your insights are what stay in the conversation
+6. If the file is a brainstorm, plan, or specification document, extract the KEY decisions, options, and parameters rather than restating the whole document
+
 IMPORTANT: Do NOT say you "cannot access" files or "cannot view repository files." You already have the repository's file tree and key file contents loaded above. For any other file in the tree, use READ_FILE_REQUEST to fetch its contents.`;
   } else {
     // No workspace context at all — check if GitHub is connected but context failed

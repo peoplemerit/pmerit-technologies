@@ -220,7 +220,9 @@ function formatFileResults(results: ReadFileResult[], reason: string): string {
 
   parts.push('=== END FILE CONTENTS ===');
   parts.push('');
-  parts.push('The requested file contents are provided above. Please continue your analysis.');
+  parts.push('IMPORTANT: These file contents are EPHEMERAL — they will NOT be stored in the conversation history.');
+  parts.push('Analyze the file contents above and provide your insights, summary, or analysis in your response.');
+  parts.push('Do NOT echo or reproduce the raw file contents. Your analysis is what persists in the session.');
 
   return parts.filter(Boolean).join('\n');
 }

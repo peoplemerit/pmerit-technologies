@@ -1320,44 +1320,55 @@ export function Project() {
       setSessionTokens(prev => prev + sdkResponse.usage.outputTokens + sdkResponse.usage.inputTokens);
 
       // READ_FILE_REQUEST: Check if AI requested file contents from workspace
-      // If found, auto-read files via FSAPI and send a follow-up message with contents
+      // TRANSIENT CONTEXT INJECTION: File contents are ephemeral working memory.
+      // They are passed to the AI for analysis but NOT persisted in conversation history.
+      // Only the AI's analysis/summary persists in the session, saving tokens on future turns.
       if (sdkResponse.status === 'SUCCESS' && workspaceStatus?.bound) {
         try {
           const fileReadResult = await processReadFileRequests(assistantContent, id);
           if (fileReadResult.hasRequests && fileReadResult.filesRead > 0) {
-            // Add a system-style message showing the file contents being injected
-            const fileReadMessage: Message = {
+            // Build lightweight notification (filenames + sizes ONLY — no file contents)
+            const fileReadSummary = fileReadResult.results
+              .filter(r => r.found && r.content)
+              .map(r => `${r.path} (${r.size ? (r.size / 1024).toFixed(1) + ' KB' : 'unknown size'})`)
+              .join(', ');
+            const notificationContent = `Auto-read ${fileReadResult.filesRead} file${fileReadResult.filesRead > 1 ? 's' : ''} from workspace: ${fileReadSummary}`;
+
+            // Save LIGHTWEIGHT notification to backend (metadata only, no file contents)
+            const notificationMessage: Message = {
               id: generateId(),
               role: 'user',
-              content: fileReadResult.contextMessage,
+              content: notificationContent,
               timestamp: new Date(),
               metadata: {
                 autoFileRead: true,
                 filesRead: fileReadResult.filesRead,
-                requestedPaths: fileReadResult.results.map(r => r.path),
+                requestedPaths: fileReadResult.results.filter(r => r.found).map(r => r.path),
               },
             };
 
-            // Save to backend
             await api.messages.create(id, {
               role: 'user',
-              content: fileReadResult.contextMessage,
+              content: notificationContent,
               metadata: { autoFileRead: true, filesRead: fileReadResult.filesRead },
               session_id: activeSession?.id,
             }, token);
 
-            // Add to UI
+            // Add notification to UI (user sees "Auto-read 1 file: Old-brainstorm.md (52.8 KB)")
             setConversation((prev) => prev ? {
               ...prev,
-              messages: [...prev.messages, fileReadMessage],
+              messages: [...prev.messages, notificationMessage],
               updatedAt: new Date()
             } : prev);
 
-            // Auto-send follow-up AI call with file contents in context
-            // The conversation history will now include the file contents
+            // TRANSIENT context: file contents go into this ONE API call only
+            // They are NOT persisted in backend, NOT added to conversation state,
+            // and NOT included in conversationHistory for future turns.
+            // The AI analyzes the file and its response (summary/insight) is what persists.
             const followUpHistory = [
               ...conversationHistory,
               { role: 'assistant' as const, content: assistantContent },
+              // File contents are transient — included here for AI analysis only
               { role: 'user' as const, content: fileReadResult.contextMessage },
             ].slice(-MAX_HISTORY_MESSAGES);
 
@@ -1391,7 +1402,7 @@ export function Project() {
               } : undefined,
             });
 
-            // Create follow-up assistant message
+            // The AI's analysis is the persistent output — this is what stays in the session
             const followUpContent = followUpResponse.status === 'SUCCESS'
               ? followUpResponse.content
               : `Error: ${followUpResponse.error || 'Unknown error'}`;
@@ -1430,9 +1441,6 @@ export function Project() {
             // Update metrics for follow-up call
             setSessionCost(prev => prev + followUpResponse.usage.costUsd);
             setSessionTokens(prev => prev + followUpResponse.usage.inputTokens + followUpResponse.usage.outputTokens);
-
-            // Use the follow-up content for subsequent artifact extraction
-            // (The original assistantContent is kept for the first pass)
           }
         } catch (fileReadErr) {
           // Non-blocking — file read auto-resolution is best-effort
