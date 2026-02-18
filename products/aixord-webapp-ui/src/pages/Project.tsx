@@ -31,7 +31,7 @@ import { detectAndResolveFiles } from '../lib/fileDetection';
 import { processReadFileRequests } from '../lib/readFileRequest';
 import { fileSystemStorage, readDirectory, readFileContent, verifyPermission } from '../lib/fileSystem';
 import { ExecutionEngine } from '../lib/executionEngine';
-import { validateScopeImports, type ImportValidationResult } from '../lib/scopeValidator';
+import { validateScopeImports } from '../lib/scopeValidator';
 import { CCSIncidentBanner } from '../components/CCSIncidentBanner';
 import { CCSIncidentPanel } from '../components/CCSIncidentPanel';
 import { CCSCreateIncidentModal } from '../components/CCSCreateIncidentModal';
@@ -1212,13 +1212,12 @@ export function Project() {
                 const isKeyFile = KEY_FILE_NAMES.has(entry.name) || KEY_FILE_EXTENSIONS.has(ext);
                 if (!isKeyFile) continue;
                 try {
-                    const fileData = await readFileContent((entry as { handle: FileSystemFileHandle }).handle);
-                    if (fileData.content.length < MAX_KEY_FILE_SIZE) {
-                      keyFiles.push({ path: entry.name, content: fileData.content });
-                    }
-                  } catch {
-                    // Skip unreadable files
+                  const fileData = await readFileContent((entry as { handle: FileSystemFileHandle }).handle);
+                  if (fileData.content.length < MAX_KEY_FILE_SIZE) {
+                    keyFiles.push({ path: entry.name, content: fileData.content });
                   }
+                } catch {
+                  // Skip unreadable files
                 }
               }
 

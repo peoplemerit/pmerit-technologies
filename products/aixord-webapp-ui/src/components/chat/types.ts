@@ -80,6 +80,40 @@ export interface MessageMetadata {
     estimatedTokens: number;
     status: 'pending' | 'approved' | 'modified';
   };
+  // Enforcement data
+  enforcement?: {
+    gatesPassed: string[];
+    gatesFailed: string[];
+    aiExposureLevel: string;
+    wasRedacted: boolean;
+  };
+  // READ_FILE_REQUEST: Auto-read file contents from workspace
+  autoFileRead?: boolean;
+  filesRead?: number;
+  requestedPaths?: string[];
+  fileReadFollowUp?: boolean;
+  // ENV-SYNC-01: GitHub commit tracking
+  githubCommit?: {
+    commit_sha?: string;
+    branch?: string;
+    commit_url?: string;
+    files_committed: number;
+    scope_name?: string;
+  };
+  // ENV-SYNC-01 Phase 4: Cross-file import validation
+  scopeValidation?: {
+    valid: boolean;
+    totalImports: number;
+    resolvedImports: number;
+    unresolvedCount: number;
+    unresolvedImports: Array<{
+      sourceFile: string;
+      importPath: string;
+      line: number;
+      suggestion?: string;
+    }>;
+    checkedFiles: number;
+  };
 }
 
 export interface MessageOption {

@@ -670,6 +670,10 @@ export const workspaceApi = {
     github_connected?: boolean;
     github_repo?: string;
     binding_confirmed?: boolean;
+    // ENV-SYNC-01: Push metadata
+    github_push_count?: number;
+    github_push_sha?: string;
+    github_push_branch?: string;
   }, token: string): Promise<{ success: boolean; updated_at: string }> {
     return request<{ success: boolean; updated_at: string }>(`/projects/${projectId}/workspace`, {
       method: 'PUT',
