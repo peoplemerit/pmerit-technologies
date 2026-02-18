@@ -158,7 +158,7 @@ governance.post('/:projectId/governance/wu/transfer', async (c) => {
     return c.json(result);
   } catch (err) {
     return c.json({
-      error: err instanceof Error ? err.message : 'Transfer failed',
+      error: 'Transfer failed',
     }, 400);
   }
 });

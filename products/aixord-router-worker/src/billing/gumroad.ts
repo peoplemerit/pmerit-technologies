@@ -56,7 +56,7 @@ export async function verifyGumroadLicense(
     if (!data.success) {
       return {
         valid: false,
-        error: data.message || 'Invalid license key'
+        error: 'Invalid license key'
       };
     }
 
@@ -76,7 +76,7 @@ export async function verifyGumroadLicense(
   } catch (error) {
     return {
       valid: false,
-      error: error instanceof Error ? error.message : 'Verification failed'
+      error: 'Verification failed'
     };
   }
 }
@@ -133,7 +133,7 @@ export async function activateGumroadLicense(
   if (!activateData.success) {
     return {
       success: false,
-      error: activateData.message || 'Failed to activate license'
+      error: 'Failed to activate license'
     };
   }
 

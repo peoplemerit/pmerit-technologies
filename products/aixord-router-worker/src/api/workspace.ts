@@ -261,7 +261,7 @@ async function runD1ReadTest(
       passed: false,
       latency_ms: Date.now() - start,
       evidence: {},
-      error: err instanceof Error ? err.message : 'Unknown error',
+      error: 'Internal error',
     };
   }
 }
@@ -308,7 +308,7 @@ async function runD1WriteTest(
       passed: false,
       latency_ms: Date.now() - start,
       evidence: { probe_id: probeId },
-      error: err instanceof Error ? err.message : 'Unknown error',
+      error: 'Internal error',
     };
   }
 }
@@ -333,7 +333,7 @@ async function runR2ListTest(
       passed: false,
       latency_ms: Date.now() - start,
       evidence: {},
-      error: err instanceof Error ? err.message : 'Unknown error',
+      error: 'Internal error',
     };
   }
 }
@@ -360,7 +360,7 @@ function runRouterHealthTest(): EnvTestResult {
       passed: false,
       latency_ms: Date.now() - start,
       evidence: {},
-      error: err instanceof Error ? err.message : 'Unknown error',
+      error: 'Internal error',
     };
   }
 }
@@ -390,7 +390,7 @@ function runEnvConfigTest(env: Env): EnvTestResult {
       passed: false,
       latency_ms: Date.now() - start,
       evidence: {},
-      error: err instanceof Error ? err.message : 'Unknown error',
+      error: 'Internal error',
     };
   }
 }
@@ -427,7 +427,7 @@ workspace.post('/:projectId/workspace/confirm-test', async (c) => {
       passed: false,
       latency_ms: 0,
       evidence: {},
-      error: r.reason?.message || 'Unknown error',
+      error: 'Internal error',
     };
   });
 
@@ -484,7 +484,7 @@ workspace.post('/:projectId/workspace/setup', async (c) => {
     }
     steps.push({ name: 'Link project folder', status: 'completed', detail: folder_name });
   } catch (err) {
-    steps.push({ name: 'Link project folder', status: 'failed', detail: err instanceof Error ? err.message : 'Unknown error' });
+    steps.push({ name: 'Link project folder', status: 'failed', detail: 'Internal error' });
   }
 
   // Step 2: Connect GitHub (optional)
@@ -495,7 +495,7 @@ workspace.post('/:projectId/workspace/setup', async (c) => {
       ).bind(github_repo, now, projectId).run();
       steps.push({ name: 'Connect GitHub', status: 'completed', detail: github_repo });
     } catch (err) {
-      steps.push({ name: 'Connect GitHub', status: 'failed', detail: err instanceof Error ? err.message : 'Unknown error' });
+      steps.push({ name: 'Connect GitHub', status: 'failed', detail: 'Internal error' });
     }
   } else {
     steps.push({ name: 'Connect GitHub', status: 'skipped', detail: 'No GitHub repo specified' });
@@ -508,7 +508,7 @@ workspace.post('/:projectId/workspace/setup', async (c) => {
     ).bind(now, projectId).run();
     steps.push({ name: 'Confirm environment', status: 'completed' });
   } catch (err) {
-    steps.push({ name: 'Confirm environment', status: 'failed', detail: err instanceof Error ? err.message : 'Unknown error' });
+    steps.push({ name: 'Confirm environment', status: 'failed', detail: 'Internal error' });
   }
 
   // Step 4: Generate scaffold template (optional)
@@ -522,7 +522,7 @@ workspace.post('/:projectId/workspace/setup', async (c) => {
       ).bind(crypto.randomUUID(), projectId, JSON.stringify(scaffold), now, userId).run();
       steps.push({ name: 'Generate scaffold', status: 'completed', detail: `${scaffold.nodes.length} files in ${scaffold.template_type} template` });
     } catch (err) {
-      steps.push({ name: 'Generate scaffold', status: 'failed', detail: err instanceof Error ? err.message : 'Unknown error' });
+      steps.push({ name: 'Generate scaffold', status: 'failed', detail: 'Internal error' });
     }
   } else {
     steps.push({ name: 'Generate scaffold', status: 'skipped' });
@@ -602,7 +602,7 @@ workspace.post('/:projectId/workspace/setup', async (c) => {
       steps.push({ name: 'Commit scaffold to GitHub', status: 'skipped', detail: 'No GitHub connection' });
     }
   } catch (err) {
-    steps.push({ name: 'Commit scaffold to GitHub', status: 'failed', detail: err instanceof Error ? err.message : 'Unknown error' });
+    steps.push({ name: 'Commit scaffold to GitHub', status: 'failed', detail: 'Internal error' });
   }
 
   // Trigger gate evaluation after workspace setup

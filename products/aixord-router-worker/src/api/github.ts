@@ -720,7 +720,6 @@ github.post('/commit/:projectId', async (c) => {
     log.error('github_commit_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to commit files to GitHub',
-      detail: error instanceof Error ? error.message : String(error),
       error_code: 'COMMIT_FAILED'
     }, 500);
   }
@@ -854,7 +853,6 @@ github.post('/create-repo/:projectId', async (c) => {
     log.error('github_create_repo_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to create repository',
-      detail: error instanceof Error ? error.message : String(error),
       error_code: 'CREATE_REPO_FAILED'
     }, 500);
   }

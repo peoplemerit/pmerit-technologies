@@ -62,7 +62,7 @@ describe('verifyGumroadLicense', () => {
     const result = await verifyGumroadLicense('BAD-KEY', 'test-product');
 
     expect(result.valid).toBe(false);
-    expect(result.error).toContain('does not exist');
+    expect(result.error).toBe('Invalid license key');
   });
 
   it('returns invalid for refunded purchase', async () => {
@@ -115,7 +115,7 @@ describe('verifyGumroadLicense', () => {
     const result = await verifyGumroadLicense('KEY', 'product');
 
     expect(result.valid).toBe(false);
-    expect(result.error).toContain('Network timeout');
+    expect(result.error).toBe('Verification failed');
   });
 });
 

@@ -27,8 +27,9 @@ vi.mock('../../src/utils/crypto', () => ({
   }),
 }));
 
-import { verifyPasswordPBKDF2 } from '../../src/utils/crypto';
+import { verifyPasswordPBKDF2, hashSHA256 } from '../../src/utils/crypto';
 const mockVerifyPassword = vi.mocked(verifyPasswordPBKDF2);
+const mockHashSHA256 = vi.mocked(hashSHA256);
 
 // We need to dynamically import auth after mocking
 let authRouter: any;
@@ -637,5 +638,480 @@ describe('POST /api/v1/auth/change-password', () => {
     expect(res.status).toBe(400);
     const body = await res.json() as { error: string };
     expect(body.error).toContain('different');
+  });
+});
+
+// ============================================================================
+// Resend Verification Tests
+// ============================================================================
+describe('POST /api/v1/auth/resend-verification', () => {
+  it('returns success for existing unverified user', async () => {
+    const { req } = buildApp([
+      {
+        pattern: 'SELECT id, email, email_verified FROM users WHERE email',
+        result: { id: 'user-1', email: 'user@test.com', email_verified: 0 },
+      },
+      // Invalidate existing tokens
+      { pattern: 'UPDATE email_verification_tokens SET used_at', runResult: { success: true } },
+      // Create new token
+      { pattern: 'INSERT INTO email_verification_tokens', runResult: { success: true, changes: 1 } },
+    ]);
+
+    const res = await req('/api/v1/auth/resend-verification', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ email: 'user@test.com' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean; message: string };
+    expect(body.success).toBe(true);
+    expect(body.message).toContain('verification link');
+  });
+
+  it('returns success for non-existent user (prevents enumeration)', async () => {
+    const { req } = buildApp([
+      { pattern: 'SELECT id, email, email_verified FROM users WHERE email', result: null },
+    ]);
+
+    const res = await req('/api/v1/auth/resend-verification', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ email: 'nobody@test.com' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean; message: string };
+    expect(body.success).toBe(true);
+    expect(body.message).toContain('verification link');
+  });
+
+  it('returns success for already-verified user', async () => {
+    const { req } = buildApp([
+      {
+        pattern: 'SELECT id, email, email_verified FROM users WHERE email',
+        result: { id: 'user-1', email: 'user@test.com', email_verified: 1 },
+      },
+    ]);
+
+    const res = await req('/api/v1/auth/resend-verification', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ email: 'user@test.com' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean; message: string };
+    expect(body.success).toBe(true);
+    expect(body.message).toContain('already verified');
+  });
+
+  it('returns 400 for missing email', async () => {
+    const { req } = buildApp();
+
+    const res = await req('/api/v1/auth/resend-verification', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain('Email required');
+  });
+});
+
+// ============================================================================
+// Recover Username Tests
+// ============================================================================
+describe('POST /api/v1/auth/recover-username', () => {
+  it('returns success for existing user (sends email)', async () => {
+    const { req } = buildApp([
+      {
+        pattern: 'SELECT email, username FROM users WHERE email',
+        result: { email: 'user@test.com', username: 'testuser' },
+      },
+    ]);
+
+    const res = await req('/api/v1/auth/recover-username', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ email: 'user@test.com' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean; message: string };
+    expect(body.success).toBe(true);
+    expect(body.message).toContain('username information');
+  });
+
+  it('returns success for non-existent user (prevents enumeration)', async () => {
+    const { req } = buildApp([
+      { pattern: 'SELECT email, username FROM users WHERE email', result: null },
+    ]);
+
+    const res = await req('/api/v1/auth/recover-username', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ email: 'nobody@test.com' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean; message: string };
+    expect(body.success).toBe(true);
+    expect(body.message).toContain('username information');
+  });
+
+  it('returns 400 for missing email', async () => {
+    const { req } = buildApp();
+
+    const res = await req('/api/v1/auth/recover-username', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain('Email required');
+  });
+});
+
+// ============================================================================
+// Subscription Endpoint Tests
+// ============================================================================
+describe('GET /api/v1/auth/subscription', () => {
+  it('returns subscription data for authenticated user', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      // Session lookup via token_hash
+      { pattern: 'token_hash', result: { user_id: 'user-1', id: 'sess-1' } },
+      // Subscription lookup
+      {
+        pattern: 'SELECT tier, status, period_start, period_end, stripe_customer_id',
+        result: {
+          tier: 'PRO',
+          status: 'active',
+          period_start: '2026-01-01T00:00:00Z',
+          period_end: '2026-02-01T00:00:00Z',
+          stripe_customer_id: 'cus_test123',
+        },
+      },
+    ]);
+
+    const res = await req('/api/v1/auth/subscription', {
+      headers: authHeaders(token),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { tier: string; status: string; keyMode: string };
+    expect(body.tier).toBe('PRO');
+    expect(body.status).toBe('active');
+    expect(body.keyMode).toBeDefined();
+  });
+
+  it('returns user tier when no subscription record exists', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      // Session lookup
+      { pattern: 'token_hash', result: { user_id: 'user-1', id: 'sess-1' } },
+      // No subscription record
+      { pattern: 'SELECT tier, status, period_start, period_end, stripe_customer_id', result: null },
+      // User table fallback
+      { pattern: 'SELECT subscription_tier FROM users', result: { subscription_tier: 'TRIAL' } },
+    ]);
+
+    const res = await req('/api/v1/auth/subscription', {
+      headers: authHeaders(token),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { tier: string; status: string };
+    expect(body.tier).toBe('TRIAL');
+    expect(body.status).toBe('active');
+  });
+
+  it('auto-upgrades NONE tier to TRIAL', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      // Session lookup
+      { pattern: 'token_hash', result: { user_id: 'user-1', id: 'sess-1' } },
+      // No subscription record
+      { pattern: 'SELECT tier, status, period_start, period_end, stripe_customer_id', result: null },
+      // User has NONE tier
+      { pattern: 'SELECT subscription_tier FROM users', result: { subscription_tier: 'NONE' } },
+      // Auto-upgrade UPDATE
+      { pattern: "UPDATE users SET subscription_tier = 'TRIAL'", runResult: { success: true } },
+      // Auto-upgrade INSERT subscription
+      { pattern: 'INSERT INTO subscriptions', runResult: { success: true, changes: 1 } },
+    ]);
+
+    const res = await req('/api/v1/auth/subscription', {
+      headers: authHeaders(token),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { tier: string };
+    expect(body.tier).toBe('TRIAL');
+  });
+
+  it('returns 401 without auth header', async () => {
+    const { req } = buildApp();
+
+    const res = await req('/api/v1/auth/subscription');
+
+    expect(res.status).toBe(401);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain('No token');
+  });
+
+  it('returns 401 for invalid token', async () => {
+    const { req } = buildApp([
+      { pattern: 'token_hash', result: null },
+      { pattern: 'token =', result: null },
+    ]);
+
+    const res = await req('/api/v1/auth/subscription', {
+      headers: authHeaders('bad-token'),
+    });
+
+    expect(res.status).toBe(401);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain('Invalid or expired');
+  });
+});
+
+// ============================================================================
+// GDPR Export Tests
+// Note: The /export endpoint uses c.get('userId') which requires requireAuth
+// middleware. In production, this middleware must be applied upstream.
+// These tests use a buildAuthenticatedApp helper that includes requireAuth.
+// ============================================================================
+
+/**
+ * Build an app with requireAuth middleware applied before the auth router.
+ * This mirrors the intended production setup for endpoints that use c.get('userId').
+ */
+function buildAuthenticatedApp(queries: MockQueryResult[] = []) {
+  const env = createMockEnv(queries);
+  const app = new Hono<{ Bindings: Env }>();
+
+  // Apply requireAuth before auth routes (middleware sets userId/userEmail)
+  app.use('/api/v1/auth/export', async (c, next) => {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return c.json({ error: 'Authentication required' }, 401);
+    }
+    const token = authHeader.slice(7);
+    const tokenHash = await mockHashSHA256(token);
+    const session = await c.env.DB.prepare(
+      "SELECT s.user_id, s.id, u.email FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token_hash = ? AND s.expires_at > datetime('now')"
+    ).bind(tokenHash).first<{ user_id: string; id: string; email: string }>();
+    if (!session) return c.json({ error: 'Invalid or expired token' }, 401);
+    c.set('userId', session.user_id);
+    c.set('userEmail', session.email);
+    await next();
+  });
+
+  app.use('/api/v1/auth/account', async (c, next) => {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return c.json({ error: 'Authentication required' }, 401);
+    }
+    const token = authHeader.slice(7);
+    const tokenHash = await mockHashSHA256(token);
+    const session = await c.env.DB.prepare(
+      "SELECT s.user_id, s.id, u.email FROM sessions s JOIN users u ON s.user_id = u.id WHERE s.token_hash = ? AND s.expires_at > datetime('now')"
+    ).bind(tokenHash).first<{ user_id: string; id: string; email: string }>();
+    if (!session) return c.json({ error: 'Invalid or expired token' }, 401);
+    c.set('userId', session.user_id);
+    c.set('userEmail', session.email);
+    await next();
+  });
+
+  app.route('/api/v1/auth', authRouter);
+
+  const req = (path: string, init?: RequestInit) =>
+    app.request(path, init, env);
+
+  return { app, env, req };
+}
+
+describe('GET /api/v1/auth/export', () => {
+  it('returns all user data for authenticated user', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildAuthenticatedApp([
+      // Session lookup (for middleware)
+      {
+        pattern: 'sessions s JOIN users u',
+        result: { user_id: 'user-1', id: 'sess-1', email: 'user@test.com' },
+      },
+      // User data
+      {
+        pattern: 'SELECT id, email, name, username, subscription_tier',
+        result: {
+          id: 'user-1', email: 'user@test.com', name: 'Test User',
+          username: 'testuser', subscription_tier: 'PRO',
+          trial_expires_at: null, email_verified: 1,
+          created_at: '2026-01-01', updated_at: '2026-02-01',
+        },
+      },
+      // Subscriptions
+      { pattern: 'FROM subscriptions WHERE user_id', result: [] },
+      // Projects
+      { pattern: 'FROM projects WHERE user_id', result: [] },
+      // Sessions
+      { pattern: 'FROM sessions WHERE user_id', result: [] },
+      // Usage tracking
+      { pattern: 'FROM usage_tracking WHERE user_id', result: [] },
+      // API keys
+      { pattern: 'FROM user_api_keys WHERE user_id', result: [] },
+    ]);
+
+    const res = await req('/api/v1/auth/export', {
+      headers: authHeaders(token),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      exported_at: string;
+      user: { id: string; email: string };
+      subscriptions: unknown[];
+      projects: unknown[];
+      sessions: unknown[];
+      usage: unknown[];
+      api_keys: unknown[];
+    };
+    expect(body.exported_at).toBeDefined();
+    expect(body.user.id).toBe('user-1');
+    expect(body.user.email).toBe('user@test.com');
+    expect(body.subscriptions).toEqual([]);
+    expect(body.projects).toEqual([]);
+    expect(body.api_keys).toEqual([]);
+  });
+
+  it('returns 401 without auth header', async () => {
+    const { req } = buildAuthenticatedApp();
+
+    const res = await req('/api/v1/auth/export');
+
+    expect(res.status).toBe(401);
+  });
+});
+
+// ============================================================================
+// GDPR Account Deletion Tests
+// ============================================================================
+describe('DELETE /api/v1/auth/account', () => {
+  it('deletes account with correct password confirmation', async () => {
+    const { token } = await createTestSession();
+    const user = createTestUser({ id: 'user-1', hash_algorithm: 'pbkdf2', password_salt: 'salt123' });
+
+    const { req } = buildAuthenticatedApp([
+      // Session lookup (for middleware)
+      {
+        pattern: 'sessions s JOIN users u',
+        result: { user_id: 'user-1', id: 'sess-1', email: 'user@test.com' },
+      },
+      // User lookup for password verification
+      {
+        pattern: 'SELECT id, password_hash, password_salt, hash_algorithm FROM users WHERE id',
+        result: user,
+      },
+      // Cascade deletions
+      { pattern: 'DELETE FROM sessions WHERE user_id', runResult: { success: true, changes: 2 } },
+      { pattern: 'DELETE FROM user_api_keys WHERE user_id', runResult: { success: true, changes: 0 } },
+      { pattern: 'DELETE FROM usage_tracking WHERE user_id', runResult: { success: true, changes: 3 } },
+      { pattern: 'DELETE FROM usage WHERE user_id', runResult: { success: true, changes: 5 } },
+      { pattern: 'DELETE FROM subscriptions WHERE user_id', runResult: { success: true, changes: 1 } },
+      { pattern: 'DELETE FROM email_verification_tokens WHERE user_id', runResult: { success: true, changes: 1 } },
+      { pattern: 'DELETE FROM password_reset_tokens WHERE user_id', runResult: { success: true, changes: 0 } },
+      { pattern: 'DELETE FROM rate_limits WHERE user_id', runResult: { success: true, changes: 0 } },
+      // Delete projects
+      { pattern: 'DELETE FROM projects WHERE user_id', runResult: { success: true, changes: 2 } },
+      // Delete user record
+      { pattern: 'DELETE FROM users WHERE id', runResult: { success: true, changes: 1 } },
+    ]);
+
+    mockVerifyPassword.mockResolvedValue(true);
+
+    const res = await req('/api/v1/auth/account', {
+      method: 'DELETE',
+      headers: authHeaders(token),
+      body: JSON.stringify({ password: 'CorrectPass123' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean; message: string };
+    expect(body.success).toBe(true);
+    expect(body.message).toContain('permanently deleted');
+  });
+
+  it('returns 401 for incorrect password', async () => {
+    const { token } = await createTestSession();
+    const user = createTestUser({ id: 'user-1', hash_algorithm: 'pbkdf2', password_salt: 'salt123' });
+
+    const { req } = buildAuthenticatedApp([
+      // Session lookup (for middleware)
+      {
+        pattern: 'sessions s JOIN users u',
+        result: { user_id: 'user-1', id: 'sess-1', email: 'user@test.com' },
+      },
+      // User lookup
+      {
+        pattern: 'SELECT id, password_hash, password_salt, hash_algorithm FROM users WHERE id',
+        result: user,
+      },
+    ]);
+
+    mockVerifyPassword.mockResolvedValue(false);
+
+    const res = await req('/api/v1/auth/account', {
+      method: 'DELETE',
+      headers: authHeaders(token),
+      body: JSON.stringify({ password: 'WrongPass123' }),
+    });
+
+    expect(res.status).toBe(401);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain('Incorrect password');
+  });
+
+  it('returns 400 for missing password', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildAuthenticatedApp([
+      // Session lookup (for middleware)
+      {
+        pattern: 'sessions s JOIN users u',
+        result: { user_id: 'user-1', id: 'sess-1', email: 'user@test.com' },
+      },
+    ]);
+
+    const res = await req('/api/v1/auth/account', {
+      method: 'DELETE',
+      headers: authHeaders(token),
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain('Password confirmation required');
+  });
+
+  it('returns 401 without auth header', async () => {
+    const { req } = buildAuthenticatedApp();
+
+    const res = await req('/api/v1/auth/account', {
+      method: 'DELETE',
+      headers: jsonHeaders,
+      body: JSON.stringify({ password: 'SomePass123' }),
+    });
+
+    expect(res.status).toBe(401);
   });
 });

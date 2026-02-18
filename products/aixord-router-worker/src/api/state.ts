@@ -1321,7 +1321,7 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
     const errStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join(' | ') : undefined;
     log.error('finalize_error', { project_id: projectId, phase: requestedPhase });
     return c.json({
-      error: `Phase finalization failed: ${errMsg}`,
+      error: 'Phase finalization failed',
       phase: requestedPhase,
       projectId,
     }, 500);
@@ -1354,7 +1354,7 @@ state.post('/:projectId/gates/evaluate', async (c) => {
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     log.error('gate_evaluate_error', { project_id: projectId });
-    return c.json({ error: `Gate evaluation failed: ${errMsg}` }, 500);
+    return c.json({ error: 'Gate evaluation failed' }, 500);
   }
 });
 

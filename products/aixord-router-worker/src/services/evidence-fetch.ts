@@ -378,7 +378,7 @@ export async function syncProjectEvidence(
       total_fetched: 0,
       by_type: byType,
       by_triad: byTriad,
-      errors: [error instanceof Error ? error.message : 'Unknown error']
+      errors: ['Evidence sync failed']
     };
   }
 }
