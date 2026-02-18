@@ -47,11 +47,18 @@ export function MiniBar({ currentPhase, gates, onTabClick, activeTab, hiddenTabs
   const totalPending = totalGates - totalPassed;
   const pct = totalGates > 0 ? Math.round((totalPassed / totalGates) * 100) : 0;
 
+  // MED-02: Determine phase label for display
+  const activePhase = phases[currentPhaseIndex];
+  const phaseName = activePhase?.full || currentPhase;
+
+  // MED-02: Color-coded completion
+  const pctColorClass = pct >= 75 ? 'bg-green-500' : pct >= 25 ? 'bg-amber-500' : 'bg-red-500';
+  const pctTextClass = pct >= 75 ? 'text-green-400' : pct >= 25 ? 'text-amber-400' : 'text-red-400';
+
   return (
     <div className="h-9 flex items-center justify-between px-4 bg-gray-900/80 border-b border-gray-700/30 select-none">
-      {/* Left: Phase stepper (compact) */}
+      {/* Left: Phase stepper (compact) + phase name */}
       <div className="flex items-center gap-1">
-        <span className="text-gray-500 text-xs mr-1">Phase</span>
         <div className="flex items-center">
           {phases.map((phase, index) => {
             const isActive = index === currentPhaseIndex;
@@ -77,6 +84,8 @@ export function MiniBar({ currentPhase, gates, onTabClick, activeTab, hiddenTabs
             );
           })}
         </div>
+        {/* MED-03: Current phase name as text */}
+        <span className="text-xs text-violet-400 ml-1.5 font-medium">{phaseName}</span>
       </div>
 
       {/* Center: Gate summary */}
@@ -88,7 +97,7 @@ export function MiniBar({ currentPhase, gates, onTabClick, activeTab, hiddenTabs
               ? 'bg-violet-600/20 text-violet-300'
               : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
           }`}
-          title="Open Governance detail panel"
+          title={`${totalPassed} of ${totalGates} gates passed — Click for details`}
         >
           <span className="text-green-400">✓{totalPassed}</span>
           <span className="text-gray-500">○{totalPending}</span>
@@ -126,17 +135,15 @@ export function MiniBar({ currentPhase, gates, onTabClick, activeTab, hiddenTabs
         )}
       </div>
 
-      {/* Right: Completion % */}
-      <div className="flex items-center gap-2">
+      {/* Right: Completion % (MED-02: color-coded) */}
+      <div className="flex items-center gap-2" title={`${totalPassed} of ${totalGates} gates passed (${pct}%)`}>
         <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              pct === 100 ? 'bg-green-500' : pct >= 50 ? 'bg-violet-500' : 'bg-amber-500'
-            }`}
+            className={`h-full rounded-full transition-all duration-500 ${pctColorClass}`}
             style={{ width: `${pct}%` }}
           />
         </div>
-        <span className="text-xs text-gray-400 w-8 text-right">{pct}%</span>
+        <span className={`text-xs w-8 text-right font-medium ${pctTextClass}`}>{pct}%</span>
       </div>
     </div>
   );

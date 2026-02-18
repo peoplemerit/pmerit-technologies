@@ -590,11 +590,19 @@ export function EngineeringPanel({
 }
 
 function EmptyState({ label }: { label: string }) {
+  const isAutoGeneratable = label.includes('Architecture') || label.includes('Fitness');
   return (
     <div className="text-center py-8">
-      <div className="text-gray-500 text-sm mb-2">{label}</div>
-      <p className="text-gray-600 text-xs">
-        Use the + Add button above to create one.
+      <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-800/60 mb-2">
+        <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17l-5.03-2.82a3 3 0 01-1.29-4.03l.96-1.74a3 3 0 014.03-1.29l5.03 2.82a3 3 0 011.29 4.03l-.96 1.74a3 3 0 01-4.03 1.29z" />
+        </svg>
+      </div>
+      <div className="text-gray-400 text-sm mb-1">{label}</div>
+      <p className="text-gray-600 text-xs mb-3">
+        {isAutoGeneratable
+          ? 'These are auto-generated from your blueprint when it is imported. You can also add them manually.'
+          : 'Use the + Add button above to create one.'}
       </p>
     </div>
   );

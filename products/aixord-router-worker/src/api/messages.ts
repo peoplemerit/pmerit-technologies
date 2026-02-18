@@ -13,25 +13,12 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
 import { triggerGateEvaluation } from '../services/gateRules';
+import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const messages = new Hono<{ Bindings: Env }>();
 
 // All routes require auth
 messages.use('/*', requireAuth);
-
-/**
- * Verify project ownership
- */
-async function verifyProjectOwnership(
-  db: D1Database,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await db.prepare(
-    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
-  ).bind(projectId, userId).first();
-  return !!project;
-}
 
 /**
  * GET /api/v1/projects/:projectId/messages

@@ -6,6 +6,7 @@
 
 import type { Message, CallOptions, ProviderResponse, ImageContent } from '../types';
 import { RouterError } from '../types';
+import { log } from '../utils/logger';
 
 // Gemini content part types
 type GeminiTextPart = { text: string };
@@ -91,10 +92,8 @@ export async function callGoogle(
   if (!response.ok) {
     const errorText = await response.text();
     
-    // Enhanced error logging for Google API issues
-    console.error(`[Google Provider] API error ${response.status}:`, errorText);
-    console.error(`[Google Provider] Request URL: ${apiUrl.replace(/key=.+$/, 'key=***')}`);
-    console.error(`[Google Provider] Model: ${model}`);
+    // Structured error logging (no URL or errorText — may contain API key / sensitive info)
+    log.error('google_api_error', { status: response.status, model });
     
     throw new RouterError(
       'GOOGLE_ERROR',

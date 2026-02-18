@@ -12,12 +12,16 @@ interface TaskBoardProps {
   taskBoard: TaskBoardData | null;
   assignments: TaskAssignmentData[];
   isLoading?: boolean;
+  projectId?: string;
+  phase?: string;
+  deliverableCount?: number;
   onStart?: (assignmentId: string) => void;
   onSubmit?: (assignmentId: string) => void;
   onAccept?: (assignmentId: string) => void;
   onReject?: (assignmentId: string) => void;
   onBlock?: (assignmentId: string) => void;
   onViewDetails?: (assignment: TaskAssignmentData) => void;
+  onAutoGenerate?: () => Promise<void>;
 }
 
 const STATUS_COLUMNS = [
@@ -156,12 +160,16 @@ export function TaskBoard({
   taskBoard,
   assignments,
   isLoading,
+  projectId,
+  phase,
+  deliverableCount,
   onStart,
   onSubmit,
   onAccept,
   onReject,
   onBlock,
   onViewDetails,
+  onAutoGenerate,
 }: TaskBoardProps) {
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
 
@@ -178,10 +186,40 @@ export function TaskBoard({
   }
 
   if (!taskBoard && assignments.length === 0) {
+    // CRIT-03 Fix: Show actionable empty state with auto-generate CTA
+    const isExecutePhase = phase === 'EXECUTE' || phase === 'REVIEW';
+    const hasDeliverables = (deliverableCount || 0) > 0;
+
     return (
-      <div className="text-center py-8 text-gray-500">
-        <p className="text-sm">No task assignments yet.</p>
-        <p className="text-xs mt-1">Assign deliverables to sessions to start tracking work.</p>
+      <div className="text-center py-8">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-800/60 mb-3">
+          <svg className="w-6 h-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+          </svg>
+        </div>
+        {isExecutePhase && hasDeliverables ? (
+          <>
+            <p className="text-sm text-gray-300 mb-1">Your blueprint has {deliverableCount} deliverables ready for assignment.</p>
+            <p className="text-xs text-gray-500 mb-4">Auto-generate task assignments to populate this board.</p>
+            {onAutoGenerate && (
+              <button
+                onClick={onAutoGenerate}
+                className="px-4 py-2 text-sm bg-violet-600/20 text-violet-400 border border-violet-500/30 rounded-lg hover:bg-violet-600/30 transition-colors"
+              >
+                Generate Task Assignments
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-gray-500">No task assignments yet.</p>
+            <p className="text-xs text-gray-600 mt-1">
+              {!isExecutePhase
+                ? 'Tasks are created when you finalize your plan and enter the Execute phase.'
+                : 'Assign deliverables to sessions to start tracking work.'}
+            </p>
+          </>
+        )}
       </div>
     );
   }

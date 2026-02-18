@@ -15,24 +15,11 @@
 import { Hono } from 'hono';
 import type { Env, BrainstormOption, BrainstormDecisionCriteria, BrainstormValidationCheck, BrainstormValidationResult, BrainstormReadiness, ReadinessDimension, ReadinessDimensionStatus } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const brainstorm = new Hono<{ Bindings: Env }>();
 
 brainstorm.use('/*', requireAuth);
-
-/**
- * Verify project ownership (local helper — same pattern as state.ts)
- */
-async function verifyProjectOwnership(
-  db: D1Database,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await db.prepare(
-    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
-  ).bind(projectId, userId).first();
-  return !!project;
-}
 
 // ═══════════════════════════════════════════════════════════════════
 // Validation Engine (Task A2)

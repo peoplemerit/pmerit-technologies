@@ -57,8 +57,12 @@ export function SecurityDashboard({ projectId, token }: SecurityDashboardProps) 
   const [classifications, setClassifications] = useState<ResourceClassification[]>([]);
   const [secretAudits, setSecretAudits] = useState<SecretAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<string>('');
+  const [projectClassification, setProjectClassification] = useState<Record<string, unknown> | null>(null);
+  const [suggestions, setSuggestions] = useState<Record<string, unknown> | null>(null);
+  const [suggestLoading, setSuggestLoading] = useState(false);
 
   const loadClassifications = useCallback(async () => {
     try {
@@ -84,18 +88,83 @@ export function SecurityDashboard({ projectId, token }: SecurityDashboardProps) 
     }
   }, [projectId, token]);
 
+  // HIGH-02 Fix: Load project-level classification
+  const loadProjectClassification = useCallback(async () => {
+    try {
+      const resp = await fetch(
+        `${import.meta.env.VITE_API_URL || ''}/api/v1/projects/${projectId}/security/classification`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        setProjectClassification(data);
+      }
+    } catch {
+      // Will show as unclassified
+    }
+  }, [projectId, token]);
+
   useEffect(() => {
     setLoading(true);
     setError(null);
-    Promise.all([loadClassifications(), loadSecretAudits()])
-      .catch(() => setError('Failed to load security data'))
-      .finally(() => setLoading(false));
-  }, [loadClassifications, loadSecretAudits]);
+    setLoadTimedOut(false);
 
-  if (loading) {
+    // HIGH-02 Fix: 5-second timeout for loading state
+    const timeoutId = setTimeout(() => setLoadTimedOut(true), 5000);
+
+    Promise.all([loadClassifications(), loadSecretAudits(), loadProjectClassification()])
+      .catch(() => setError('Failed to load security data'))
+      .finally(() => {
+        clearTimeout(timeoutId);
+        setLoading(false);
+      });
+
+    return () => clearTimeout(timeoutId);
+  }, [loadClassifications, loadSecretAudits, loadProjectClassification]);
+
+  // HIGH-02 Fix: Auto-suggest handler
+  const handleAutoSuggest = async () => {
+    setSuggestLoading(true);
+    try {
+      const resp = await fetch(
+        `${import.meta.env.VITE_API_URL || ''}/api/v1/projects/${projectId}/security/suggest`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        setSuggestions(data);
+      }
+    } catch {
+      // Suggestion failed — user can still classify manually
+    } finally {
+      setSuggestLoading(false);
+    }
+  };
+
+  if (loading && !loadTimedOut) {
     return (
       <div className="p-4 text-center text-gray-500 text-sm">
         Loading security dashboard...
+      </div>
+    );
+  }
+
+  if (loading && loadTimedOut) {
+    return (
+      <div className="p-4 text-center text-gray-500 text-sm">
+        <p className="text-amber-400 mb-2">Security data is taking longer than expected.</p>
+        <button
+          onClick={() => {
+            setLoadTimedOut(false);
+            setLoading(true);
+            Promise.all([loadClassifications(), loadSecretAudits(), loadProjectClassification()])
+              .catch(() => setError('Failed to load security data'))
+              .finally(() => setLoading(false));
+          }}
+          className="px-3 py-1.5 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -104,6 +173,18 @@ export function SecurityDashboard({ projectId, token }: SecurityDashboardProps) 
     return (
       <div className="p-4 text-center text-red-400 text-sm">
         {error}
+        <button
+          onClick={() => {
+            setError(null);
+            setLoading(true);
+            Promise.all([loadClassifications(), loadSecretAudits(), loadProjectClassification()])
+              .catch(() => setError('Failed to load security data'))
+              .finally(() => setLoading(false));
+          }}
+          className="ml-2 px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -112,8 +193,64 @@ export function SecurityDashboard({ projectId, token }: SecurityDashboardProps) 
   const restrictedCount = classifications.filter(c => c.classification === 'RESTRICTED').length;
   const aiBlockedCount = classifications.filter(c => !c.aiExposureAllowed).length;
 
+  // Check if project classification is unset
+  const isUnclassified = !projectClassification ||
+    (projectClassification.declared === false) ||
+    (projectClassification.pii === 'UNKNOWN' && projectClassification.phi === 'UNKNOWN');
+  const exposureUnknown = !projectClassification || projectClassification.ai_exposure === 'RESTRICTED' && !projectClassification.declared;
+
   return (
     <div className="space-y-4">
+      {/* HIGH-02 Fix: Classification Required Banner */}
+      {isUnclassified && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-amber-500/20 shrink-0 mt-0.5">
+              <svg className="w-4 h-4 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-amber-300 mb-1">Data Classification Required</h4>
+              <p className="text-xs text-amber-400/80 mb-3">
+                Your project is operating under maximum restriction (L-SPG4). Classify your project data to unlock AI features and set appropriate security levels.
+              </p>
+              {exposureUnknown && (
+                <p className="text-xs text-red-400/80 mb-3">
+                  Unknown exposure level restricts AI access. Classify to enable AI-assisted features.
+                </p>
+              )}
+              {suggestions ? (
+                <div className="bg-gray-900/40 rounded-lg p-3 mb-3">
+                  <p className="text-xs text-gray-400 mb-2">Suggested classification based on project analysis:</p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {Object.entries(suggestions.suggestions as Record<string, unknown> || {}).map(([key, val]) => (
+                      <div key={key} className="flex justify-between">
+                        <span className="text-gray-500 capitalize">{key.replace('_', ' ')}:</span>
+                        <span className={val === true ? 'text-amber-400' : val === false ? 'text-green-400' : 'text-gray-300'}>
+                          {typeof val === 'boolean' ? (val ? 'YES' : 'NO') : String(val)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-gray-600 mt-2">
+                    Confidence: {String(suggestions.confidence || 'unknown')} — {(suggestions.reasons as string[] || []).join('; ')}
+                  </p>
+                </div>
+              ) : (
+                <button
+                  onClick={handleAutoSuggest}
+                  disabled={suggestLoading}
+                  className="px-3 py-1.5 text-xs bg-amber-600/20 text-amber-400 border border-amber-500/30 rounded hover:bg-amber-600/30 transition-colors disabled:opacity-50"
+                >
+                  {suggestLoading ? 'Analyzing...' : 'Auto-suggest Classifications'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary Stats */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700/50 text-center">

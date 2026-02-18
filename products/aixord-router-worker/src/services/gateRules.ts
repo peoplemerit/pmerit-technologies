@@ -19,6 +19,7 @@ import {
   getConservationSnapshot,
   computeReconciliation,
 } from './readinessEngine';
+import { log } from '../utils/logger';
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -33,6 +34,23 @@ export interface GateEvalResult {
   reason: string;
 }
 
+/**
+ * HIGH-01 Fix: Gate failure metadata for UI tooltips and finalize error messages.
+ * Maps gate IDs to user-facing failure reasons and recommended actions.
+ */
+export const GATE_FAILURE_META: Record<string, { action: string; phaseGroup: 'brainstorm' | 'plan' | 'execute' }> = {
+  'GA:LIC': { action: 'Subscribe to a plan to unlock project creation', phaseGroup: 'brainstorm' },
+  'GA:DIS': { action: 'Start a conversation with the AI in this project', phaseGroup: 'brainstorm' },
+  'GA:TIR': { action: 'Activate your subscription to set your access tier', phaseGroup: 'brainstorm' },
+  'GA:ENV': { action: 'Set up your project workspace (link folder and confirm environment)', phaseGroup: 'plan' },
+  'GA:FLD': { action: 'Link a project folder to store generated files', phaseGroup: 'plan' },
+  'GA:BP':  { action: 'Create a blueprint with scopes, deliverables, and Definition of Done', phaseGroup: 'plan' },
+  'GA:IVL': { action: 'Run integrity validation on your blueprint', phaseGroup: 'plan' },
+  'GW:PRE': { action: 'Initialize WU budget, allocate to scopes, and create execution layers', phaseGroup: 'execute' },
+  'GW:VAL': { action: 'Ensure all scopes reach R >= 0.6 readiness with no failing layers', phaseGroup: 'execute' },
+  'GW:VER': { action: 'Verify all scopes (R >= 0.8), transfer WU, and resolve reconciliation divergences', phaseGroup: 'execute' },
+};
+
 export interface GateRule {
   description: string;
   evaluate: (ctx: GateEvalContext) => Promise<GateEvalResult>;
@@ -45,10 +63,18 @@ export interface GateChangeEntry {
   reason: string;
 }
 
+export interface GateDetail {
+  satisfied: boolean;
+  reason: string;
+  action: string;
+  blocking: boolean;
+}
+
 export interface EvaluateResult {
   evaluated: string[];
   changed: GateChangeEntry[];
   gates: Record<string, boolean>;
+  gate_details: Record<string, GateDetail>;
   phase: string;
 }
 
@@ -379,7 +405,7 @@ export async function evaluateAllGates(
       }
     } catch (err) {
       // Skip failed evaluations — don't flip gates on error
-      console.warn(`[GateRules] ${gateId} evaluation error:`, err);
+      log.warn('gate_evaluation_error', { gate_id: gateId });
     }
   }
 
@@ -391,11 +417,36 @@ export async function evaluateAllGates(
     ).bind(JSON.stringify(gates), now, projectId).run();
   }
 
+  // HIGH-01 Fix: Build enriched gate details for frontend
+  const gateDetails: Record<string, { satisfied: boolean; reason: string; action: string; blocking: boolean }> = {};
+  const phase = (current.phase || 'BRAINSTORM').toUpperCase();
+
+  for (const [gateId, rule] of Object.entries(GATE_RULES)) {
+    const meta = GATE_FAILURE_META[gateId];
+    const isSatisfied = !!gates[gateId];
+    let isBlocking = false;
+
+    // Determine if this gate blocks current phase finalization
+    if (meta) {
+      if (phase === 'BRAINSTORM' && meta.phaseGroup === 'brainstorm') isBlocking = !isSatisfied;
+      if (phase === 'PLAN' && meta.phaseGroup === 'plan') isBlocking = !isSatisfied;
+      if ((phase === 'EXECUTE' || phase === 'E') && meta.phaseGroup === 'execute') isBlocking = !isSatisfied;
+    }
+
+    gateDetails[gateId] = {
+      satisfied: isSatisfied,
+      reason: isSatisfied ? `Gate passed` : 'Gate not satisfied',
+      action: meta?.action || 'Check gate requirements',
+      blocking: isBlocking,
+    };
+  }
+
   return {
     evaluated,
     changed,
     gates,
-    phase: current.phase || 'BRAINSTORM',
+    gate_details: gateDetails,
+    phase,
   };
 }
 
@@ -423,10 +474,10 @@ export async function triggerGateEvaluation(
         const { checkReadinessEscalation } = await import('./readinessEscalation');
         await checkReadinessEscalation(db, projectId, userId);
       } catch (escalationErr) {
-        console.warn('[GateRules] Escalation check failed (non-blocking):', escalationErr);
+        log.warn('escalation_check_failed');
       }
     }
   } catch (err) {
-    console.warn('[GateRules] Background evaluation failed:', err);
+    log.warn('gate_background_evaluation_failed');
   }
 }

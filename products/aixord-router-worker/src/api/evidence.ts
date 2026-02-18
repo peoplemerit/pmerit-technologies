@@ -18,6 +18,7 @@ import {
   getProjectEvidence,
   getStaleEvidence
 } from '../services/evidence-fetch';
+import { log } from '../utils/logger';
 
 const evidence = new Hono<{ Bindings: Env }>();
 
@@ -44,8 +45,11 @@ evidence.post('/sync/:projectId', async (c) => {
       return c.json({ error: 'Project not found' }, 404);
     }
 
-    // Get encryption key
-    const encryptionKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY || 'default-key-change-in-production';
+    // Get encryption key — fail-closed if secret not configured
+    const encryptionKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      return c.json({ error: 'Server configuration error', error_code: 'CONFIG_MISSING' }, 500);
+    }
 
     // Accept optional session_id from request body
     let sessionId: string | undefined;
@@ -62,10 +66,10 @@ evidence.post('/sync/:projectId', async (c) => {
     return c.json(result);
 
   } catch (error) {
-    console.error('Evidence sync error:', error);
+    log.error('evidence_sync_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to sync evidence',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -104,10 +108,10 @@ evidence.get('/:projectId', async (c) => {
     });
 
   } catch (error) {
-    console.error('Evidence fetch error:', error);
+    log.error('evidence_fetch_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to fetch evidence',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -163,10 +167,10 @@ evidence.get('/:projectId/triad', async (c) => {
     });
 
   } catch (error) {
-    console.error('Evidence triad fetch error:', error);
+    log.error('evidence_triad_fetch_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to fetch evidence',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -201,10 +205,10 @@ evidence.get('/:projectId/stale', async (c) => {
     });
 
   } catch (error) {
-    console.error('Stale evidence fetch error:', error);
+    log.error('stale_evidence_fetch_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to fetch stale evidence',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });

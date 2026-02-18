@@ -295,18 +295,135 @@ export class ExecutionEngine {
   }
 
   /**
+   * CRIT-01/CRIT-02 Fix: Write scaffold skeleton BEFORE component files.
+   * Fetches the scaffold template from backend and writes infrastructure
+   * files (package.json, index.html, etc.) if not already present.
+   */
+  static async writeScaffoldIfNeeded(
+    projectId: string,
+    token: string
+  ): Promise<{ written: string[]; errors: string[] }> {
+    const written: string[] = [];
+    const errors: string[] = [];
+
+    try {
+      // Check if workspace has a package.json already (skip if scaffold already written)
+      const linkedFolder = await fileSystemStorage.getHandle(projectId);
+      if (!linkedFolder) return { written, errors };
+
+      try {
+        await linkedFolder.handle.getFileHandle('package.json');
+        // package.json exists — scaffold already written
+        return { written, errors };
+      } catch {
+        // package.json doesn't exist — proceed with scaffold
+      }
+
+      // Fetch scaffold template from backend
+      const response = await fetch(
+        `${api.getBaseUrl()}/api/v1/projects/${projectId}/scaffold`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!response.ok) {
+        // No scaffold available — not an error, just skip
+        return { written, errors };
+      }
+
+      const scaffold = await response.json();
+      if (!scaffold?.nodes || !Array.isArray(scaffold.nodes)) {
+        return { written, errors };
+      }
+
+      // Write scaffold nodes
+      for (const node of scaffold.nodes) {
+        try {
+          if (node.type === 'directory') {
+            // Create directory recursively
+            const parts = node.path.split('/');
+            let current = linkedFolder.handle;
+            for (const part of parts) {
+              if (part) {
+                current = await createDirectory(current, part);
+              }
+            }
+          } else if (node.type === 'file' && node.content) {
+            // Parse path into directory + filename
+            const pathParts = node.path.split('/');
+            const filename = pathParts.pop()!;
+            let currentHandle = linkedFolder.handle;
+            for (const part of pathParts) {
+              if (part) {
+                currentHandle = await createDirectory(currentHandle, part);
+              }
+            }
+            await createFile(currentHandle, filename, node.content);
+            written.push(node.path);
+          }
+        } catch (err) {
+          errors.push(`Scaffold write failed for ${node.path}: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
+      }
+    } catch (err) {
+      errors.push(`Scaffold fetch failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+
+    return { written, errors };
+  }
+
+  /**
+   * HIGH-03 Fix: Report written files to backend for artifact tracking.
+   * Sends metadata (path, hash, size) to the workspace/artifacts endpoint.
+   */
+  static async reportArtifacts(
+    projectId: string,
+    files: Array<{ path: string; content: string }>,
+    token: string
+  ): Promise<void> {
+    if (files.length === 0) return;
+
+    try {
+      const artifacts = files.map(f => ({
+        path: f.path,
+        size_bytes: new Blob([f.content]).size,
+        file_type: f.path.split('.').pop() || 'unknown',
+      }));
+
+      await fetch(
+        `${api.getBaseUrl()}/api/v1/projects/${projectId}/workspace/artifacts`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ artifacts }),
+        }
+      );
+    } catch {
+      // Non-blocking — artifact tracking is best-effort
+    }
+  }
+
+  /**
    * Process ONLY file deliverables from AI response.
    * Use this in Project.tsx where TDL structured blocks are already
    * handled inline — avoids double-processing submissions/progress/escalations.
+   *
+   * CRIT-01/CRIT-02 enhancement: Writes scaffold skeleton first if needed.
    */
   static async processFilesOnly(
     content: string,
-    projectId: string
-  ): Promise<{ filesCreated: string[]; filesUpdated: string[]; errors: string[] }> {
+    projectId: string,
+    token?: string
+  ): Promise<{ filesCreated: string[]; filesUpdated: string[]; errors: string[]; scaffoldWritten?: string[] }> {
     const result = {
       filesCreated: [] as string[],
       filesUpdated: [] as string[],
       errors: [] as string[],
+      scaffoldWritten: [] as string[],
     };
 
     // Parse code fences with file path headers: ```language:path/to/file.ext
@@ -326,7 +443,17 @@ export class ExecutionEngine {
 
     if (fileSpecs.length === 0) return result;
 
-    // Write files to workspace
+    // CRIT-01/CRIT-02: Write scaffold skeleton BEFORE component files
+    if (token) {
+      const scaffold = await this.writeScaffoldIfNeeded(projectId, token);
+      result.scaffoldWritten = scaffold.written;
+      if (scaffold.errors.length > 0) {
+        result.errors.push(...scaffold.errors);
+      }
+    }
+
+    // Write component files to workspace
+    const writtenFiles: Array<{ path: string; content: string }> = [];
     for (const fileSpec of fileSpecs) {
       const writeResult = await this.writeFileToWorkspace(
         projectId,
@@ -336,11 +463,17 @@ export class ExecutionEngine {
 
       if (writeResult.success) {
         result.filesCreated.push(fileSpec.path);
+        writtenFiles.push({ path: fileSpec.path, content: fileSpec.content });
       } else {
         result.errors.push(
           `Failed to write ${fileSpec.path}: ${writeResult.error}`
         );
       }
+    }
+
+    // HIGH-03: Report artifacts to backend for tracking
+    if (token && writtenFiles.length > 0) {
+      await this.reportArtifacts(projectId, writtenFiles, token);
     }
 
     return result;

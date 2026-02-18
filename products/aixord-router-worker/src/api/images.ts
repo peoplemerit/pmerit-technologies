@@ -16,6 +16,8 @@ import { Hono } from 'hono';
 import type { Env, ImageEvidenceType, ImageMetadata, ImageUploadResponse } from '../types';
 import { ALLOWED_IMAGE_TYPES, MAX_IMAGE_SIZE } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { log } from '../utils/logger';
+import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const images = new Hono<{ Bindings: Env }>();
 
@@ -25,18 +27,6 @@ images.use('/*', requireAuth);
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Verify project exists and belongs to the authenticated user */
-async function verifyProjectOwnership(
-  db: D1Database,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await db.prepare(
-    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
-  ).bind(projectId, userId).first();
-  return !!project;
-}
 
 /** Build the R2 object key: projects/<projectId>/images/<imageId>/<filename> */
 function buildR2Key(projectId: string, imageId: string, filename: string): string {
@@ -131,10 +121,10 @@ images.post('/:projectId/images', async (c) => {
     return c.json(response, 201);
 
   } catch (error) {
-    console.error('Image upload error:', error);
+    log.error('image_upload_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to upload image',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -189,10 +179,10 @@ images.get('/:projectId/images', async (c) => {
     });
 
   } catch (error) {
-    console.error('Image list error:', error);
+    log.error('image_list_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to list images',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -222,10 +212,10 @@ images.get('/:projectId/images/:imageId', async (c) => {
     return c.json(image);
 
   } catch (error) {
-    console.error('Image metadata error:', error);
+    log.error('image_metadata_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to get image metadata',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -268,10 +258,10 @@ images.get('/:projectId/images/:imageId/url', async (c) => {
     return new Response(object.body, { headers });
 
   } catch (error) {
-    console.error('Image URL error:', error);
+    log.error('image_url_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to get image',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -321,10 +311,10 @@ images.get('/:projectId/images/:imageId/base64', async (c) => {
     });
 
   } catch (error) {
-    console.error('Image base64 error:', error);
+    log.error('image_base64_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to get image as base64',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -361,10 +351,10 @@ images.delete('/:projectId/images/:imageId', async (c) => {
     return c.json({ deleted: true, id: imageId });
 
   } catch (error) {
-    console.error('Image delete error:', error);
+    log.error('image_delete_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to delete image',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });

@@ -4,13 +4,13 @@ compatibility_date = "2025-01-01"
 
 [vars]
 ENVIRONMENT = "production"
-AUTH_SALT = "aixord-d4-backend-salt-2026"
 
 # GitHub OAuth (PATCH-GITHUB-01, PATCH-CORS-01)
 GITHUB_REDIRECT_URI = "https://aixord-router-worker.peoplemerit.workers.dev/api/v1/github/callback"
 FRONTEND_URL = "https://aixord.pmerit.com"
 
 # Secrets (set via wrangler secret put):
+# AUTH_SALT - password hashing salt (MOVED from [vars] — C-1 fix)
 # PLATFORM_ANTHROPIC_KEY
 # PLATFORM_OPENAI_KEY
 # PLATFORM_GOOGLE_KEY
@@ -46,7 +46,7 @@ name = "aixord-router-worker-staging"
 
 [env.staging.vars]
 ENVIRONMENT = "staging"
-AUTH_SALT = "aixord-d4-backend-salt-2026-staging"
+# AUTH_SALT moved to secrets (wrangler secret put AUTH_SALT --env staging)
 GITHUB_REDIRECT_URI = "https://aixord-router-worker-staging.peoplemerit.workers.dev/api/v1/github/callback"
 FRONTEND_URL = "https://staging.aixord.pmerit.com"
 

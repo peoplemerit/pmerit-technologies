@@ -17,7 +17,7 @@ import { getCandidates } from './table';
 import { resolveApiKey, isProviderAvailable } from './key-resolver';
 import { callProvider, estimateCost } from '../providers';
 import { redactContent } from '../utils/redaction';
-import { isCircuitClosed, recordSuccess, recordFailure } from './circuit-breaker';
+import { isCircuitClosed, recordSuccess, recordFailure, hydrateFromD1 } from './circuit-breaker';
 import { log } from '../utils/logger';
 
 // Phase 1.4: Re-export for /health endpoint
@@ -941,7 +941,7 @@ After presenting the Review Packet, include this tag at the END of your response
   // within most models' context windows (128k tokens for DeepSeek, 200k for Claude)
   const MAX_SYSTEM_PROMPT_CHARS = 60000;
   if (systemPrompt.length > MAX_SYSTEM_PROMPT_CHARS) {
-    console.warn(`[buildMessages] System prompt truncated: ${systemPrompt.length} -> ${MAX_SYSTEM_PROMPT_CHARS} chars`);
+    log.warn('system_prompt_truncated', { original_length: systemPrompt.length, truncated_to: MAX_SYSTEM_PROMPT_CHARS });
     systemPrompt = systemPrompt.slice(0, MAX_SYSTEM_PROMPT_CHARS) + '\n\n[System prompt truncated for context window safety]';
   }
 
@@ -1001,6 +1001,9 @@ export async function executeWithFallback(
   modelClass: ModelClass,
   env: Env
 ): Promise<RouterResponse> {
+  // M-2: Hydrate circuit breaker from D1 on cold start (no-op if already hydrated)
+  await hydrateFromD1(env.DB);
+
   const candidates = getCandidates(modelClass);
 
   if (candidates.length === 0) {
@@ -1041,7 +1044,7 @@ export async function executeWithFallback(
 
   for (const candidate of availableCandidates) {
     // Phase 1.4: Circuit breaker check — skip providers with open circuits
-    if (!isCircuitClosed(candidate.provider)) {
+    if (!isCircuitClosed(candidate.provider, undefined, env.DB)) {
       circuitSkipped++;
       providerErrors.push({
         provider: candidate.provider,
@@ -1092,7 +1095,7 @@ export async function executeWithFallback(
       }
 
       // Phase 1.4: Record success — closes circuit if in HALF_OPEN
-      recordSuccess(candidate.provider);
+      recordSuccess(candidate.provider, undefined, env.DB);
 
       // Phase 2: Log successful provider attempt with full context
       log.info('provider_success', {
@@ -1134,7 +1137,7 @@ export async function executeWithFallback(
       fallbackCount++;
 
       // Phase 1.4: Record failure — may trip circuit to OPEN
-      recordFailure(candidate.provider);
+      recordFailure(candidate.provider, undefined, env.DB);
 
       const rawErrorMsg = error instanceof Error ? error.message : String(error);
       // Sanitize error messages: truncate to prevent user input leakage in logs

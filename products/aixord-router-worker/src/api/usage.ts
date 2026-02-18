@@ -83,55 +83,63 @@ usage.get('/history', async (c) => {
 usage.get('/projects', async (c) => {
   const userId = c.get('userId');
 
-  // Get all projects owned by user
-  const projects = await c.env.DB.prepare(
-    'SELECT id, name FROM projects WHERE owner_id = ?'
-  ).bind(userId).all<{ id: string; name: string }>();
+  // M-4 fix: Single aggregated query instead of N+1
+  const projectMetrics = await c.env.DB.prepare(`
+    SELECT
+      p.id as project_id,
+      p.name as project_name,
+      COALESCE(s.session_count, 0) as sessions,
+      COALESCE(m.message_count, 0) as messages
+    FROM projects p
+    LEFT JOIN (
+      SELECT project_id, COUNT(*) as session_count
+      FROM project_sessions GROUP BY project_id
+    ) s ON s.project_id = p.id
+    LEFT JOIN (
+      SELECT project_id, COUNT(*) as message_count
+      FROM messages GROUP BY project_id
+    ) m ON m.project_id = p.id
+    WHERE p.owner_id = ?
+    ORDER BY p.updated_at DESC
+  `).bind(userId).all<{
+    project_id: string; project_name: string; sessions: number; messages: number;
+  }>();
 
-  const projectMetrics = [];
+  // Token/cost aggregation still requires metadata parsing per-project
+  // but we batch-fetch all assistant messages in one query
+  const allAssistantMeta = await c.env.DB.prepare(`
+    SELECT m.project_id, m.metadata
+    FROM messages m
+    JOIN projects p ON m.project_id = p.id
+    WHERE p.owner_id = ? AND m.role = 'assistant' AND m.metadata IS NOT NULL
+  `).bind(userId).all<{ project_id: string; metadata: string }>();
 
-  for (const project of projects.results) {
-    // Count sessions
-    const sessionCount = await c.env.DB.prepare(
-      'SELECT COUNT(*) as count FROM project_sessions WHERE project_id = ?'
-    ).bind(project.id).first<{ count: number }>();
-
-    // Count messages
-    const messageCount = await c.env.DB.prepare(
-      'SELECT COUNT(*) as count FROM messages WHERE project_id = ?'
-    ).bind(project.id).first<{ count: number }>();
-
-    // Aggregate token/cost from assistant message metadata
-    const assistantMessages = await c.env.DB.prepare(
-      "SELECT metadata FROM messages WHERE project_id = ? AND role = 'assistant'"
-    ).bind(project.id).all<{ metadata: string }>();
-
-    let totalTokens = 0;
-    let totalCost = 0;
-
-    for (const msg of assistantMessages.results) {
-      try {
-        const meta = JSON.parse(msg.metadata || '{}');
-        if (meta.usage) {
-          totalTokens += (meta.usage.inputTokens || 0) + (meta.usage.outputTokens || 0);
-          totalCost += meta.usage.costUsd || 0;
-        }
-      } catch {
-        // Skip unparseable
+  // Aggregate tokens/cost per project in memory
+  const tokenMap = new Map<string, { tokens: number; cost: number }>();
+  for (const msg of allAssistantMeta.results) {
+    try {
+      const meta = JSON.parse(msg.metadata || '{}');
+      if (meta.usage) {
+        const existing = tokenMap.get(msg.project_id) || { tokens: 0, cost: 0 };
+        existing.tokens += (meta.usage.inputTokens || 0) + (meta.usage.outputTokens || 0);
+        existing.cost += meta.usage.costUsd || 0;
+        tokenMap.set(msg.project_id, existing);
       }
+    } catch {
+      // Skip unparseable metadata
     }
-
-    projectMetrics.push({
-      project_id: project.id,
-      project_name: project.name,
-      sessions: sessionCount?.count || 0,
-      messages: messageCount?.count || 0,
-      tokens: totalTokens,
-      cost_usd: totalCost,
-    });
   }
 
-  return c.json({ projects: projectMetrics });
+  const results = projectMetrics.results.map(p => ({
+    project_id: p.project_id,
+    project_name: p.project_name,
+    sessions: p.sessions,
+    messages: p.messages,
+    tokens: tokenMap.get(p.project_id)?.tokens || 0,
+    cost_usd: tokenMap.get(p.project_id)?.cost || 0,
+  }));
+
+  return c.json({ projects: results });
 });
 
 export { usage };

@@ -17,25 +17,12 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const sessions = new Hono<{ Bindings: Env }>();
 
 // All routes require auth
 sessions.use('/*', requireAuth);
-
-/**
- * Verify project ownership
- */
-async function verifyProjectOwnership(
-  db: D1Database,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await db.prepare(
-    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
-  ).bind(projectId, userId).first();
-  return !!project;
-}
 
 // Valid session types and edge types
 const SESSION_TYPES = ['DISCOVER', 'BRAINSTORM', 'BLUEPRINT', 'EXECUTE', 'AUDIT', 'VERIFY_LOCK'] as const;

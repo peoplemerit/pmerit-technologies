@@ -29,24 +29,11 @@ import {
   transferWorkUnits,
   computeReconciliation,
 } from '../services/readinessEngine';
+import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const governance = new Hono<{ Bindings: Env }>();
 
 governance.use('/*', requireAuth);
-
-/**
- * Verify project ownership
- */
-async function verifyProjectOwnership(
-  db: D1Database,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await db.prepare(
-    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
-  ).bind(projectId, userId).first();
-  return !!project;
-}
 
 // ============================================================================
 // WU MANAGEMENT

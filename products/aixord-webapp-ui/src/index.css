@@ -34,6 +34,23 @@ body {
   animation: slideDown 0.2s ease-out forwards;
 }
 
+/* UPGRADE-UX-01: Modal + Toast Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 /* Line clamp utility for text truncation */
 .line-clamp-2 {
   display: -webkit-box;

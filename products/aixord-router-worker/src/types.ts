@@ -604,6 +604,13 @@ export interface GitHubEvidenceRecord {
 }
 
 /**
+ * GitHub connection mode (DUAL-MODE-01)
+ * READ_ONLY:      Evidence sync only (commits, PRs, releases → triad)
+ * WORKSPACE_SYNC: Full read-write (create repos, commit scaffold, push code)
+ */
+export type GitHubMode = 'READ_ONLY' | 'WORKSPACE_SYNC';
+
+/**
  * GitHub connection status for a project
  */
 export interface GitHubConnection {
@@ -611,7 +618,8 @@ export interface GitHubConnection {
   connected: boolean;
   repo_owner: string | null;
   repo_name: string | null;
-  scope: 'READ_ONLY';       // Always read-only
+  scope: GitHubMode;
+  github_mode: GitHubMode;
   connected_at: string | null;
   last_sync: string | null;
 }

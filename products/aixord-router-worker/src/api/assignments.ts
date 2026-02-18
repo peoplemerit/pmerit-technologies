@@ -39,21 +39,13 @@ import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
 import { log } from '../utils/logger';
+import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const assignments = new Hono<{ Bindings: Env }>();
 
 assignments.use('/*', requireAuth);
 
 // ── Helpers ──
-
-async function verifyProjectOwnership(
-  db: D1Database, projectId: string, userId: string
-): Promise<boolean> {
-  const row = await db.prepare(
-    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
-  ).bind(projectId, userId).first();
-  return !!row;
-}
 
 async function getAssignment(
   db: D1Database, projectId: string, assignmentId: string
@@ -216,90 +208,176 @@ assignments.post('/:projectId/assignments', async (c) => {
   return c.json(formatAssignment(created!), 201);
 });
 
-// DEAD ENDPOINT: No frontend consumer — commented 2026-02-12
 /**
  * POST /:projectId/assignments/batch — Batch assign deliverables
+ * Reactivated 2026-02-17 for CRIT-03 fix (auto-task-generation).
  */
-// assignments.post('/:projectId/assignments/batch', async (c) => {
-//   const userId = c.get('userId');
-//   const projectId = c.req.param('projectId');
+assignments.post('/:projectId/assignments/batch', async (c) => {
+  const userId = c.get('userId');
+  const projectId = c.req.param('projectId');
 
-//   if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
-//     return c.json({ error: 'Project not found' }, 404);
-//   }
+  if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
 
-//   const body = await c.req.json();
-//   const { assignments: items = [], session_id } = body;
+  const body = await c.req.json();
+  const { assignments: items = [], session_id } = body;
 
-//   if (!Array.isArray(items) || items.length === 0) {
-//     return c.json({ error: 'assignments array required' }, 400);
-//   }
+  if (!Array.isArray(items) || items.length === 0) {
+    return c.json({ error: 'assignments array required' }, 400);
+  }
 
-//   const created: unknown[] = [];
-//   const rejected: Array<{ deliverable_id: string; reason: string }> = [];
-//   const now = new Date().toISOString();
+  const created: unknown[] = [];
+  const rejected: Array<{ deliverable_id: string; reason: string }> = [];
+  const now = new Date().toISOString();
 
-//   for (const item of items) {
-//     const { deliverable_id, priority = 'P1', authority_scope = [] } = item;
+  for (const item of items) {
+    const { deliverable_id, priority = 'P1', authority_scope = [] } = item;
 
-//     // Verify deliverable
-//     const deliverable = await c.env.DB.prepare(
-//       'SELECT id, name, status, upstream_deps FROM blueprint_deliverables WHERE id = ? AND project_id = ?'
-//     ).bind(deliverable_id, projectId).first<{ id: string; name: string; status: string; upstream_deps: string }>();
+    // Verify deliverable
+    const deliverable = await c.env.DB.prepare(
+      'SELECT id, name, status, upstream_deps FROM blueprint_deliverables WHERE id = ? AND project_id = ?'
+    ).bind(deliverable_id, projectId).first<{ id: string; name: string; status: string; upstream_deps: string }>();
 
-//     if (!deliverable) {
-//       rejected.push({ deliverable_id, reason: 'Deliverable not found' });
-//       continue;
-//     }
+    if (!deliverable) {
+      rejected.push({ deliverable_id, reason: 'Deliverable not found' });
+      continue;
+    }
 
-//     // DAG check
-//     const upstreamIds: string[] = JSON.parse(deliverable.upstream_deps || '[]');
-//     if (upstreamIds.length > 0) {
-//       const placeholders = upstreamIds.map(() => '?').join(',');
-//       const unsatisfied = await c.env.DB.prepare(
-//         `SELECT id FROM blueprint_deliverables WHERE id IN (${placeholders}) AND status NOT IN ('DONE', 'VERIFIED', 'LOCKED', 'CANCELLED')`
-//       ).bind(...upstreamIds).all();
-//       if (unsatisfied.results.length > 0) {
-//         rejected.push({ deliverable_id, reason: 'Upstream dependencies not satisfied' });
-//         continue;
-//       }
-//     }
+    // DAG check
+    const upstreamIds: string[] = JSON.parse(deliverable.upstream_deps || '[]');
+    if (upstreamIds.length > 0) {
+      const placeholders = upstreamIds.map(() => '?').join(',');
+      const unsatisfied = await c.env.DB.prepare(
+        `SELECT id FROM blueprint_deliverables WHERE id IN (${placeholders}) AND status NOT IN ('DONE', 'VERIFIED', 'LOCKED', 'CANCELLED')`
+      ).bind(...upstreamIds).all();
+      if (unsatisfied.results.length > 0) {
+        rejected.push({ deliverable_id, reason: 'Upstream dependencies not satisfied' });
+        continue;
+      }
+    }
 
-//     // Check existing active assignment
-//     const existing = await c.env.DB.prepare(
-//       `SELECT id FROM task_assignments WHERE deliverable_id = ? AND project_id = ? AND status NOT IN ('ACCEPTED', 'PAUSED')`
-//     ).bind(deliverable_id, projectId).first();
-//     if (existing) {
-//       rejected.push({ deliverable_id, reason: 'Already has active assignment' });
-//       continue;
-//     }
+    // Check existing active assignment
+    const existing = await c.env.DB.prepare(
+      `SELECT id FROM task_assignments WHERE deliverable_id = ? AND project_id = ? AND status NOT IN ('ACCEPTED', 'PAUSED')`
+    ).bind(deliverable_id, projectId).first();
+    if (existing) {
+      rejected.push({ deliverable_id, reason: 'Already has active assignment' });
+      continue;
+    }
 
-//     const id = crypto.randomUUID();
-//     await c.env.DB.prepare(
-//       `INSERT INTO task_assignments
-//        (id, project_id, deliverable_id, session_id, priority, status, authority_scope, escalation_triggers, assigned_by, assigned_at, updated_at)
-//        VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, '[]', ?, ?, ?)`
-//     ).bind(id, projectId, deliverable_id, session_id || null, priority, JSON.stringify(authority_scope), userId, now, now).run();
+    const id = crypto.randomUUID();
+    await c.env.DB.prepare(
+      `INSERT INTO task_assignments
+       (id, project_id, deliverable_id, session_id, priority, status, authority_scope, escalation_triggers, assigned_by, assigned_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'ASSIGNED', ?, '[]', ?, ?, ?)`
+    ).bind(id, projectId, deliverable_id, session_id || null, priority, JSON.stringify(authority_scope), userId, now, now).run();
 
-//     if (['DRAFT', 'READY'].includes(deliverable.status)) {
-//       await c.env.DB.prepare(
-//         "UPDATE blueprint_deliverables SET status = 'IN_PROGRESS', updated_at = ? WHERE id = ?"
-//       ).bind(now, deliverable_id).run();
-//     }
+    if (['DRAFT', 'READY'].includes(deliverable.status)) {
+      await c.env.DB.prepare(
+        "UPDATE blueprint_deliverables SET status = 'IN_PROGRESS', updated_at = ? WHERE id = ?"
+      ).bind(now, deliverable_id).run();
+    }
 
-//     const row = await getAssignment(c.env.DB, projectId, id);
-//     created.push(formatAssignment(row!));
-//   }
+    const row = await getAssignment(c.env.DB, projectId, id);
+    created.push(formatAssignment(row!));
+  }
 
-//   if (created.length > 0) {
-//     await logDecision(c.env.DB, projectId, 'TASK_BATCH_ASSIGN', userId, {
-//       count: created.length, session_id,
-//       reason: `Batch assigned ${created.length} deliverable(s)`,
-//     });
-//   }
+  if (created.length > 0) {
+    await logDecision(c.env.DB, projectId, 'TASK_BATCH_ASSIGN', userId, {
+      count: created.length, session_id,
+      reason: `Batch assigned ${created.length} deliverable(s)`,
+    });
+  }
 
-//   return c.json({ created, rejected }, 201);
-// });
+  return c.json({ created, rejected }, 201);
+});
+
+/**
+ * POST /:projectId/assignments/auto-generate — Auto-create assignments from blueprint
+ * CRIT-03 fix: Queries all DRAFT/READY deliverables and batch-assigns them.
+ * Called automatically on PLAN → EXECUTE finalization and available as manual CTA.
+ */
+assignments.post('/:projectId/assignments/auto-generate', async (c) => {
+  const userId = c.get('userId');
+  const projectId = c.req.param('projectId');
+
+  if (!await verifyProjectOwnership(c.env.DB, projectId, userId)) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  // Fetch all assignable deliverables
+  const deliverables = await c.env.DB.prepare(
+    `SELECT d.id, d.name, d.status, d.upstream_deps
+     FROM blueprint_deliverables d
+     JOIN blueprint_scopes s ON d.scope_id = s.id
+     WHERE s.project_id = ? AND d.status IN ('DRAFT', 'READY')`
+  ).bind(projectId).all<{ id: string; name: string; status: string; upstream_deps: string }>();
+
+  if (!deliverables.results?.length) {
+    return c.json({ created: 0, rejected: 0, message: 'No assignable deliverables found' });
+  }
+
+  const created: unknown[] = [];
+  const rejected: Array<{ deliverable_id: string; name: string; reason: string }> = [];
+  const now = new Date().toISOString();
+
+  for (const del of deliverables.results) {
+    // DAG check — skip deliverables with unsatisfied upstream deps
+    const upstreamIds: string[] = JSON.parse(del.upstream_deps || '[]');
+    if (upstreamIds.length > 0) {
+      const placeholders = upstreamIds.map(() => '?').join(',');
+      const unsatisfied = await c.env.DB.prepare(
+        `SELECT id FROM blueprint_deliverables WHERE id IN (${placeholders}) AND status NOT IN ('DONE', 'VERIFIED', 'LOCKED', 'CANCELLED')`
+      ).bind(...upstreamIds).all();
+      if (unsatisfied.results.length > 0) {
+        rejected.push({ deliverable_id: del.id, name: del.name, reason: 'Upstream dependencies not satisfied' });
+        continue;
+      }
+    }
+
+    // Skip if already has active assignment
+    const existing = await c.env.DB.prepare(
+      `SELECT id FROM task_assignments WHERE deliverable_id = ? AND project_id = ? AND status NOT IN ('ACCEPTED', 'PAUSED')`
+    ).bind(del.id, projectId).first();
+    if (existing) {
+      rejected.push({ deliverable_id: del.id, name: del.name, reason: 'Already has active assignment' });
+      continue;
+    }
+
+    const id = crypto.randomUUID();
+    await c.env.DB.prepare(
+      `INSERT INTO task_assignments
+       (id, project_id, deliverable_id, session_id, priority, status, authority_scope, escalation_triggers, assigned_by, assigned_at, updated_at)
+       VALUES (?, ?, ?, NULL, 'P1', 'ASSIGNED', '[]', '[]', ?, ?, ?)`
+    ).bind(id, projectId, del.id, userId, now, now).run();
+
+    // Transition deliverable to IN_PROGRESS
+    if (['DRAFT', 'READY'].includes(del.status)) {
+      await c.env.DB.prepare(
+        "UPDATE blueprint_deliverables SET status = 'IN_PROGRESS', updated_at = ? WHERE id = ?"
+      ).bind(now, del.id).run();
+    }
+
+    const row = await getAssignment(c.env.DB, projectId, id);
+    created.push(formatAssignment(row!));
+  }
+
+  if (created.length > 0) {
+    await logDecision(c.env.DB, projectId, 'AUTO_TASK_ASSIGN', userId, {
+      count: created.length,
+      reason: `Auto-assigned ${created.length} deliverable(s) from blueprint`,
+    });
+  }
+
+  log.info('auto_generate_assignments', {
+    project_id: projectId,
+    created: created.length,
+    rejected: rejected.length,
+  });
+
+  return c.json({ created: created.length, rejected: rejected.length, details: { created, rejected } }, 201);
+});
 
 /**
  * GET /:projectId/assignments — List assignments

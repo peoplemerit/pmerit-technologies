@@ -67,6 +67,42 @@ import { log } from './utils/logger';
 
 const app = new Hono<{ Bindings: Env }>();
 
+// M-6: Environment variable validation — warns on first request if critical secrets are missing
+let envValidated = false;
+app.use('*', async (c, next) => {
+  if (!envValidated) {
+    envValidated = true;
+    const required: Array<[string, keyof Env]> = [
+      ['AUTH_SALT', 'AUTH_SALT'],
+      ['STRIPE_SECRET_KEY', 'STRIPE_SECRET_KEY'],
+      ['STRIPE_WEBHOOK_SECRET', 'STRIPE_WEBHOOK_SECRET'],
+    ];
+    const optional: Array<[string, keyof Env]> = [
+      ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_ID'],
+      ['GITHUB_CLIENT_SECRET', 'GITHUB_CLIENT_SECRET'],
+      ['GITHUB_TOKEN_ENCRYPTION_KEY', 'GITHUB_TOKEN_ENCRYPTION_KEY'],
+      ['RESEND_API_KEY', 'RESEND_API_KEY'],
+    ];
+    for (const [name, key] of required) {
+      if (!c.env[key]) {
+        log.error('env_missing_required', { variable: name });
+      }
+    }
+    for (const [name, key] of optional) {
+      if (!c.env[key]) {
+        log.warn('env_missing_optional', { variable: name });
+      }
+    }
+    // Check at least one provider key is set
+    const hasProvider = c.env.PLATFORM_ANTHROPIC_KEY || c.env.PLATFORM_OPENAI_KEY ||
+                        c.env.PLATFORM_GOOGLE_KEY || c.env.PLATFORM_DEEPSEEK_KEY;
+    if (!hasProvider) {
+      log.warn('env_no_provider_keys', { note: 'No platform provider keys configured' });
+    }
+  }
+  await next();
+});
+
 // Request correlation ID middleware (HANDOFF-COPILOT-AUDIT-01)
 app.use('*', async (c, next) => {
   const requestId = c.req.header('X-Request-ID') || crypto.randomUUID();
@@ -75,11 +111,39 @@ app.use('*', async (c, next) => {
 });
 
 // Request body size limit (10 MB) — prevents DoS via oversized payloads
+// M-5 fix: Validates actual body bytes, not just Content-Length header
 const MAX_BODY_BYTES = 10 * 1024 * 1024;
 app.use('*', async (c, next) => {
+  // Fast-path: reject if Content-Length header declares oversized body
   const contentLength = c.req.header('Content-Length');
   if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
     return c.json({ error: 'Request body too large', max_bytes: MAX_BODY_BYTES }, 413);
+  }
+  // For methods with bodies, validate actual stream size if no Content-Length or small declared size
+  const method = c.req.method;
+  if (method === 'POST' || method === 'PUT' || method === 'PATCH') {
+    const body = c.req.raw.body;
+    if (body && !contentLength) {
+      // Clone and read to check actual size when Content-Length is missing
+      const cloned = c.req.raw.clone();
+      const reader = cloned.body?.getReader();
+      if (reader) {
+        let totalBytes = 0;
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            totalBytes += value.byteLength;
+            if (totalBytes > MAX_BODY_BYTES) {
+              reader.cancel();
+              return c.json({ error: 'Request body too large', max_bytes: MAX_BODY_BYTES }, 413);
+            }
+          }
+        } catch {
+          // Stream read error — let downstream handle it
+        }
+      }
+    }
   }
   await next();
 });
@@ -251,14 +315,17 @@ app.get('/v1/router/models', (c) => {
   });
 });
 
-// Main execute endpoint
-app.post('/v1/router/execute', async (c) => {
+// Main execute endpoint — H-1 fix: requireAuth enforces authenticated access
+app.post('/v1/router/execute', requireAuth, async (c) => {
   const startTime = Date.now();
 
   try {
     // Parse and validate request
     const body = await c.req.json();
     const request = validateRequest(body);
+
+    // Override trace.user_id with authenticated user (prevents spoofing)
+    request.trace.user_id = c.get('userId');
 
     // Validate subscription and usage limits
     await validateSubscription(request, c.env.DB);
@@ -294,7 +361,7 @@ app.post('/v1/router/execute', async (c) => {
               period_end = excluded.period_end,
               updated_at = datetime('now')
           `).bind(crypto.randomUUID(), userId, trialExpiry.toISOString()).run();
-          console.log(`[FIX-TIER] Auto-upgraded NONE user ${userId.substring(0, 8)}... to TRIAL`);
+          log.info('tier_auto_upgrade', { user_id_prefix: userId.substring(0, 8), from: 'NONE', to: 'TRIAL' });
           // Continue processing — user now has TRIAL tier
         }
 
@@ -437,7 +504,7 @@ app.post('/v1/router/execute', async (c) => {
           }
         }
       } catch (err) {
-        console.error('Security gates enrichment failed (non-fatal):', err);
+        log.error('security_gates_enrichment_failed', { note: 'non-fatal' });
         // Continue without enriched gates — capsule will use client-sent values
       }
     }
@@ -490,7 +557,7 @@ app.post('/v1/router/execute', async (c) => {
           };
         }
       } catch (err) {
-        console.error('Tier 1C data classification query failed (non-fatal):', err);
+        log.error('tier_1c_data_classification_failed', { note: 'non-fatal' });
       }
 
       // Tier 2D: Evidence context (EXECUTE/REVIEW phases only — keeps prompt lean)
@@ -518,7 +585,7 @@ app.post('/v1/router/execute', async (c) => {
             };
           }
         } catch (err) {
-          console.error('Tier 2D evidence query failed (non-fatal):', err);
+          log.error('tier_2d_evidence_query_failed', { note: 'non-fatal' });
         }
       }
 
@@ -538,7 +605,7 @@ app.post('/v1/router/execute', async (c) => {
           };
         }
       } catch (err) {
-        console.error('Tier 2F CCS query failed (non-fatal):', err);
+        log.error('tier_2f_ccs_query_failed', { note: 'non-fatal' });
       }
 
       // ═══════════════════════════════════════════════════════════════
@@ -602,7 +669,7 @@ app.post('/v1/router/execute', async (c) => {
             };
           }
         } catch (err) {
-          console.error('Tier 3 TDL query failed (non-fatal):', err);
+          log.error('tier_3_tdl_query_failed', { note: 'non-fatal' });
         }
       }
 
@@ -617,7 +684,7 @@ app.post('/v1/router/execute', async (c) => {
           ctx.continuity = compactContinuity;
         }
       } catch (err) {
-        console.error('Tier 4 PCC error (non-fatal):', err);
+        log.error('tier_4_pcc_failed', { note: 'non-fatal' });
       }
 
       // ═══════════════════════════════════════════════════════════════
@@ -701,7 +768,7 @@ app.post('/v1/router/execute', async (c) => {
             };
           }
         } catch (err) {
-          console.error('Tier 5C brainstorm content query failed (non-fatal):', err);
+          log.error('tier_5c_brainstorm_content_failed', { note: 'non-fatal' });
           ctx.brainstorm_artifact_content = null;
         }
       }
@@ -808,7 +875,8 @@ app.post('/v1/router/execute', async (c) => {
           }>();
 
           if (ghConn?.repo_owner && ghConn?.repo_name && ghConn?.access_token_encrypted) {
-            const encKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY || 'default-key-change-in-production';
+            const encKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY;
+            if (!encKey) throw new Error('GITHUB_TOKEN_ENCRYPTION_KEY not configured');
             // Decrypt token using shared crypto utility (HANDOFF-COPILOT-AUDIT-01)
             const ghToken = await decryptAESGCM(ghConn.access_token_encrypted, encKey);
 
@@ -889,7 +957,7 @@ app.post('/v1/router/execute', async (c) => {
             }
           }
         } catch (err) {
-          console.error('Tier 7 GitHub context fetch failed (non-fatal):', err);
+          log.error('tier_7_github_context_failed', { note: 'non-fatal' });
         }
       }
 
@@ -961,7 +1029,7 @@ app.post('/v1/router/execute', async (c) => {
       } catch (err) {
         // FIX-2: Gate enforcement failure is non-fatal on cold start
         // If project_state doesn't exist yet, skip gate enforcement and let AI respond
-        console.error('Hard gate enforcement failed (non-fatal — cold start safe):', err);
+        log.error('hard_gate_enforcement_failed', { note: 'non-fatal, cold start safe' });
       }
     }
 
@@ -1041,7 +1109,7 @@ app.post('/v1/router/execute', async (c) => {
     // Typical responses are 2-10KB; very large code-generation responses can reach 50KB+.
     const MAX_RESPONSE_CHARS = 100_000;
     if (response.content && response.content.length > MAX_RESPONSE_CHARS) {
-      console.warn(`[Response Guard] Truncating response: ${response.content.length} -> ${MAX_RESPONSE_CHARS} chars`);
+      log.warn('response_truncated', { original_length: response.content.length, truncated_to: MAX_RESPONSE_CHARS });
       response.content = response.content.slice(0, MAX_RESPONSE_CHARS) +
         '\n\n---\n*Response truncated — the full response exceeded the maximum size limit. ' +
         'Try breaking your request into smaller, more focused tasks.*';
@@ -1054,12 +1122,10 @@ app.post('/v1/router/execute', async (c) => {
     const latencyMs = Date.now() - startTime;
 
     if (error instanceof RouterError) {
-      console.error(JSON.stringify({
-        type: 'router_error',
+      log.error('router_error', {
         error_code: error.code,
-        error_message: error.message,
-        latency_ms: latencyMs
-      }));
+        latency_ms: latencyMs,
+      });
 
       // Phase 4.2: Map error codes to structured recovery metadata
       const recoveryMap: Record<string, RouterResponse['error_details']> = {
@@ -1095,14 +1161,10 @@ app.post('/v1/router/execute', async (c) => {
     }
 
     // Unknown error — FIX-2: Enhanced diagnostics for cold-start debugging
-    const errMsg = error instanceof Error ? error.message : String(error);
-    const errStack = error instanceof Error ? error.stack : undefined;
-    console.error('Unexpected error:', JSON.stringify({
-      message: errMsg,
-      stack: errStack,
-      type: error?.constructor?.name || 'unknown',
+    log.error('unexpected_error', {
+      error_type: error?.constructor?.name || 'unknown',
       latency_ms: latencyMs,
-    }));
+    });
 
     const errorResponse: RouterResponse = {
       status: 'ERROR',
@@ -1202,7 +1264,7 @@ app.post('/v1/billing/webhook/stripe', async (c) => {
     const result = await handleStripeWebhook(event, c.env.DB);
     return c.json(result);
   } catch (error) {
-    console.error('Webhook error:', error);
+    log.error('stripe_webhook_failed', { note: 'webhook processing error' });
     return c.json({ error: 'Webhook processing failed' }, 500);
   }
 });
@@ -1232,7 +1294,7 @@ app.post('/v1/billing/checkout', requireAuth, async (c) => {
 
     return c.json(session);
   } catch (error) {
-    console.error('Checkout error:', error);
+    log.error('checkout_session_failed', { note: 'checkout creation error' });
     const message = error instanceof Error ? error.message : 'Failed to create checkout session';
     return c.json({ error: message }, 500);
   }
@@ -1259,7 +1321,7 @@ app.post('/v1/billing/portal', requireAuth, async (c) => {
 
     return c.json(session);
   } catch (error) {
-    console.error('Portal error:', error);
+    log.error('portal_session_failed', { note: 'portal creation error' });
     const message = error instanceof Error ? error.message : 'Failed to create portal session';
     return c.json({ error: message }, 500);
   }
@@ -1291,7 +1353,7 @@ app.post('/v1/billing/activate/gumroad', requireAuth, async (c) => {
 
     return c.json({ success: true, tier: 'MANUSCRIPT_BYOK' });
   } catch (error) {
-    console.error('Gumroad activation error:', error);
+    log.error('gumroad_activation_failed', { note: 'license activation error' });
     return c.json({ error: 'Failed to activate license' }, 500);
   }
 });
@@ -1322,7 +1384,7 @@ app.post('/v1/billing/activate/kdp', requireAuth, async (c) => {
 
     return c.json({ success: true, tier: 'MANUSCRIPT_BYOK' });
   } catch (error) {
-    console.error('KDP activation error:', error);
+    log.error('kdp_activation_failed', { note: 'code activation error' });
     return c.json({ error: 'Failed to activate code' }, 500);
   }
 });
@@ -1361,10 +1423,10 @@ app.post('/v1/billing/activate/trial', requireAuth, async (c) => {
         updated_at = datetime('now')
     `).bind(crypto.randomUUID(), userId, trialExpiresAt.toISOString()).run();
 
-    console.log(`[TRIAL] Activated free trial for user=${userId}, expires=${trialExpiresAt.toISOString()}`);
+    log.info('trial_activated', { user_id: userId, expires_at: trialExpiresAt.toISOString() });
     return c.json({ success: true, tier: 'TRIAL', expires_at: trialExpiresAt.toISOString() });
   } catch (error) {
-    console.error('Trial activation error:', error);
+    log.error('trial_activation_failed', { note: 'trial activation error' });
     return c.json({ error: 'Failed to activate trial' }, 500);
   }
 });

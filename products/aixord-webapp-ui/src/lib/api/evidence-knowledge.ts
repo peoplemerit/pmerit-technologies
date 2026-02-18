@@ -5,8 +5,15 @@
 import { request } from './core';
 
 // ============================================================================
-// GitHub API (PATCH-GITHUB-01)
+// GitHub API (PATCH-GITHUB-01 + DUAL-MODE-01)
 // ============================================================================
+
+/**
+ * GitHub connection mode (DUAL-MODE-01)
+ * READ_ONLY:      Evidence sync only
+ * WORKSPACE_SYNC: Full read-write (create repos, commit scaffold, push code)
+ */
+export type GitHubMode = 'READ_ONLY' | 'WORKSPACE_SYNC';
 
 /**
  * GitHub connection status
@@ -16,9 +23,26 @@ export interface GitHubConnection {
   connected: boolean;
   repo_owner: string | null;
   repo_name: string | null;
-  scope: 'READ_ONLY';
+  scope: GitHubMode;
+  github_mode: GitHubMode;
   connected_at: string | null;
   last_sync: string | null;
+}
+
+/**
+ * Platform commit record (from github_commits table)
+ */
+export interface GitHubPlatformCommit {
+  id: string;
+  branch: string;
+  commit_sha: string;
+  tree_sha: string;
+  message: string;
+  files_count: number;
+  committed_by: string;
+  committed_at: string;
+  pr_number: number | null;
+  pr_url: string | null;
 }
 
 /**
@@ -61,20 +85,26 @@ export interface GitHubRepo {
 
 export const githubApi = {
   /**
-   * Initiate GitHub OAuth connection
+   * Initiate GitHub OAuth connection (DUAL-MODE-01: mode-aware)
    * Returns authorization URL to redirect user
    */
   async connect(
     projectId: string,
     token: string,
     repoOwner?: string,
-    repoName?: string
+    repoName?: string,
+    mode?: GitHubMode
   ): Promise<{ authorization_url: string; state: string; expires_in: number }> {
     return request<{ authorization_url: string; state: string; expires_in: number }>(
       '/github/connect',
       {
         method: 'POST',
-        body: JSON.stringify({ project_id: projectId, repo_owner: repoOwner, repo_name: repoName }),
+        body: JSON.stringify({
+          project_id: projectId,
+          repo_owner: repoOwner,
+          repo_name: repoName,
+          mode: mode || 'READ_ONLY',
+        }),
       },
       token
     );
@@ -118,6 +148,75 @@ export const githubApi = {
       },
       token
     );
+  },
+
+  /**
+   * Switch GitHub mode (DUAL-MODE-01)
+   * Upgrading READ_ONLY → WORKSPACE_SYNC returns requires_reauth=true
+   */
+  async switchMode(
+    projectId: string,
+    mode: GitHubMode,
+    token: string
+  ): Promise<{ success?: boolean; requires_reauth?: boolean; github_mode?: GitHubMode; message: string }> {
+    return request<{ success?: boolean; requires_reauth?: boolean; github_mode?: GitHubMode; message: string }>(
+      `/github/mode/${projectId}`,
+      { method: 'PUT', body: JSON.stringify({ mode }) },
+      token
+    );
+  },
+
+  /**
+   * Commit files to GitHub (WORKSPACE_SYNC only)
+   */
+  async commitFiles(
+    projectId: string,
+    files: Array<{ path: string; content: string }>,
+    message: string,
+    token: string,
+    branch?: string
+  ): Promise<{
+    success: boolean;
+    commit_sha: string;
+    tree_sha: string;
+    branch: string;
+    files_committed: number;
+    commit_url: string;
+    pr_number?: number;
+    pr_url?: string;
+  }> {
+    return request(`/github/commit/${projectId}`, {
+      method: 'POST',
+      body: JSON.stringify({ files, message, branch }),
+    }, token);
+  },
+
+  /**
+   * List platform-made commits
+   */
+  async getCommits(
+    projectId: string,
+    token: string,
+    page = 1,
+    perPage = 20
+  ): Promise<{ commits: GitHubPlatformCommit[]; total: number; page: number; per_page: number }> {
+    return request(`/github/commits/${projectId}?page=${page}&per_page=${perPage}`, {}, token);
+  },
+
+  /**
+   * Create a new GitHub repository (WORKSPACE_SYNC only)
+   */
+  async createRepo(
+    projectId: string,
+    name: string,
+    token: string,
+    description?: string,
+    isPrivate = true
+  ): Promise<{ success: boolean; repo: { owner: string; name: string; full_name: string; html_url: string }; message: string }> {
+    return request(`/github/create-repo/${projectId}`, {
+      method: 'POST',
+      body: JSON.stringify({ name, description, private: isPrivate }),
+    }, token);
   },
 };
 

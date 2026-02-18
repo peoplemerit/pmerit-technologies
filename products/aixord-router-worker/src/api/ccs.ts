@@ -28,6 +28,7 @@ import type {
   CCSAttestationRequest,
 } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const ccs = new Hono<{ Bindings: Env }>();
 
@@ -49,20 +50,6 @@ const REQUIRED_ARTIFACTS: Record<string, CCSArtifactType[]> = {
   ATTEST: ['CCS-04'],
   UNLOCK: ['CCS-05'],
 };
-
-/**
- * Verify project ownership
- */
-async function verifyProjectOwnership(
-  db: D1Database,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await db.prepare(
-    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
-  ).bind(projectId, userId).first();
-  return !!project;
-}
 
 /**
  * Generate incident number: CCS-YYYY-MM-DD-NNN

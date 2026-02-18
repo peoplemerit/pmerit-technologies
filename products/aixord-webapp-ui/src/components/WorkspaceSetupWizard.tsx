@@ -18,7 +18,7 @@ import {
   fileSystemStorage,
   type LinkedFolder,
 } from '../lib/fileSystem';
-import type { GitHubConnection } from '../lib/api';
+import type { GitHubConnection, GitHubMode } from '../lib/api';
 
 interface WorkspaceSetupWizardProps {
   projectId: string;
@@ -429,22 +429,32 @@ function StepVersionControl({
   onConnect,
   onDisconnect,
   onSelectRepo,
+  onUpgradeMode,
   repos,
+  projectType,
 }: {
   projectId: string;
   githubConnection: GitHubConnection | null;
-  onConnect: () => void;
+  onConnect: (mode?: GitHubMode) => void;
   onDisconnect: () => void;
   onSelectRepo?: (repoOwner: string, repoName: string) => void;
+  onUpgradeMode?: () => void;
   repos?: Array<{ owner: string; name: string; full_name: string; private: boolean }>;
+  projectType?: string;
 }) {
+  const isWorkspaceSync = githubConnection?.github_mode === 'WORKSPACE_SYNC';
+  const defaultMode: GitHubMode = projectType === 'software' ? 'WORKSPACE_SYNC' : 'READ_ONLY';
+
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-white font-medium mb-1">Connect Version Control</h3>
         <p className="text-sm text-gray-400 mb-4">
-          Optionally link a GitHub repository for evidence tracking. Commits, PRs,
-          and releases will feed into the Reconciliation Triad automatically.
+          {isWorkspaceSync || defaultMode === 'WORKSPACE_SYNC' ? (
+            <>Link a GitHub repository. D4-CHAT will commit scaffold files and code to a feature branch (<code className="text-green-400 text-xs">aixord/*</code>).</>
+          ) : (
+            <>Optionally link a GitHub repository for evidence tracking. Commits, PRs, and releases will feed into the Reconciliation Triad automatically.</>
+          )}
         </p>
         <p className="text-xs text-gray-500 mb-4 italic">
           This step is optional. You can skip it and connect later from the Evidence tab.
@@ -457,7 +467,9 @@ function StepVersionControl({
         onConnect={onConnect}
         onDisconnect={onDisconnect}
         onSelectRepo={onSelectRepo}
+        onUpgradeMode={onUpgradeMode}
         repos={repos}
+        defaultMode={defaultMode}
       />
     </div>
   );

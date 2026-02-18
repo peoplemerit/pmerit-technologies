@@ -75,6 +75,38 @@ const workGates = [
 
 const WORKSPACE_GATES = new Set(['GA:ENV', 'GA:FLD']);
 
+// HIGH-01: Gate failure reason + action map for user-facing tooltips
+const GATE_FAILURE_INFO: Record<string, { reason: string; action: string }> = {
+  'GA:LIC': { reason: 'No active subscription', action: 'Subscribe to a plan' },
+  'GA:DIS': { reason: 'Insufficient discussion', action: 'Have at least one conversation' },
+  'GA:TIR': { reason: 'Subscription tier not set', action: 'Activate subscription' },
+  'GA:ENV': { reason: 'Workspace not confirmed', action: 'Set up project workspace' },
+  'GA:FLD': { reason: 'No project folder linked', action: 'Link a project folder' },
+  'GA:CIT': { reason: 'Citations not provided', action: 'Add citations to project' },
+  'GA:CON': { reason: 'Constraints not defined', action: 'Define project constraints' },
+  'GA:BP':  { reason: 'Blueprint incomplete', action: 'Add scopes with deliverables and DoD' },
+  'GA:IVL': { reason: 'Integrity check not passed', action: 'Run integrity validation' },
+  'GA:PS':  { reason: 'Phase start gate pending', action: 'Complete phase prerequisites' },
+  'GA:GP':  { reason: 'General purpose gate pending', action: 'Complete required checks' },
+  'GW:PRE': { reason: 'Prerequisites incomplete', action: 'Complete upstream deliverables' },
+  'GW:VAL': { reason: 'Validation not done', action: 'Validate deliverables' },
+  'GW:DOC': { reason: 'Documentation missing', action: 'Add required documentation' },
+  'GW:QA':  { reason: 'QA not performed', action: 'Run quality assurance checks' },
+  'GW:DEP': { reason: 'Deployment not ready', action: 'Prepare deployment artifacts' },
+  'GW:VER': { reason: 'Verification pending', action: 'Verify completed work' },
+  'GW:ARC': { reason: 'Archive not complete', action: 'Archive project artifacts' },
+};
+
+function getGateTooltip(gateId: string, label: string, isPassed: boolean, isRequired: boolean): string {
+  if (isPassed) return `${label} — Passed ✓`;
+  const info = GATE_FAILURE_INFO[gateId];
+  if (!info) return label;
+  const lines = [`${label} — ${isPassed ? 'Passed' : isRequired ? 'BLOCKING' : 'Pending'}`];
+  lines.push(`Reason: ${info.reason}`);
+  lines.push(`Action: ${info.action}`);
+  return lines.join('\n');
+}
+
 export function GovernanceRibbon({
   currentPhase,
   onSetPhase,
@@ -160,7 +192,9 @@ export function GovernanceRibbon({
               key={gate.id}
               onClick={handleClick}
               disabled={isLoading || (!onToggleGate && !onOpenWorkspaceSetup)}
-              title={isWorkspaceGate && !isPassed ? `${gate.title} — Click to configure workspace` : gate.title}
+              title={isWorkspaceGate && !isPassed
+                ? `${gate.title} — Click to configure workspace\nAction: ${GATE_FAILURE_INFO[gate.id]?.action || 'Set up workspace'}`
+                : getGateTooltip(gate.id, gate.title, isPassed, isRequired)}
               className={`px-1.5 py-0.5 text-xs rounded font-medium transition-colors ${
                 isPassed
                   ? 'bg-green-900/40 text-green-400 border border-green-500/40'
@@ -189,7 +223,7 @@ export function GovernanceRibbon({
                 key={gate.id}
                 onClick={() => onToggleGate && onToggleGate(gate.id)}
                 disabled={isLoading || !onToggleGate}
-                title={gate.title}
+                title={getGateTooltip(gate.id, gate.title, isPassed, isRequired)}
                 className={`px-1.5 py-0.5 text-xs rounded font-medium transition-colors ${
                   isPassed
                     ? 'bg-green-900/40 text-green-400 border border-green-500/40'
@@ -204,6 +238,13 @@ export function GovernanceRibbon({
           })}
         </div>
       )}
+
+      {/* HIGH-01: Gate Legend */}
+      <div className="flex items-center gap-3 text-[10px] text-gray-500 pt-1">
+        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-green-500/40 border border-green-500/40" /> Passed</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-red-500/30 border border-red-500/40" /> Blocking</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-2 h-2 rounded-sm bg-gray-800/50 border border-gray-700/50" /> Not required</span>
+      </div>
 
       {/* Finalize Phase Button — Phase 4 governance transaction */}
       {onFinalizePhase && currentPhase !== 'REVIEW' && (
@@ -222,7 +263,10 @@ export function GovernanceRibbon({
                 disabled={!canFinalize || isLoading || isFinalizing}
                 title={canFinalize
                   ? `Finalize ${currentPhase} phase and advance to ${nextLabel}`
-                  : `Cannot finalize: missing ${missing.join(', ')}`}
+                  : `Cannot finalize — ${missing.length} blocking gate(s):\n${missing.map(g => {
+                      const info = GATE_FAILURE_INFO[g];
+                      return info ? `• ${g}: ${info.reason} → ${info.action}` : `• ${g}`;
+                    }).join('\n')}`}
                 className={`w-full px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                   canFinalize && finalizeReady
                     ? 'bg-violet-600 hover:bg-violet-500 text-white ring-2 ring-violet-400/50 animate-pulse'

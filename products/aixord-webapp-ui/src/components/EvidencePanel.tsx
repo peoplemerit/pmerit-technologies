@@ -12,6 +12,7 @@
 
 import { useState } from 'react';
 import type { AssistanceMode } from '../contexts/UserSettingsContext';
+import type { GitHubMode } from '../lib/api';
 
 // Evidence types matching backend
 interface EvidenceRecord {
@@ -32,6 +33,12 @@ interface EvidenceTriad {
   verified: EvidenceRecord[];
 }
 
+interface LocalArtifact {
+  path: string;
+  file_type: string;
+  persisted_to: 'local' | 'github' | 'r2';
+}
+
 interface EvidencePanelProps {
   evidence: EvidenceTriad | null;
   assistanceMode: AssistanceMode;
@@ -39,6 +46,12 @@ interface EvidencePanelProps {
   isSyncing?: boolean;
   lastSync?: string | null;
   isConnected: boolean;
+  /** DUAL-MODE-01: GitHub connection mode */
+  githubMode?: GitHubMode;
+  /** HIGH-03: Local artifacts written to workspace */
+  localArtifacts?: LocalArtifact[];
+  onDownloadZip?: () => void;
+  onCommitToGitHub?: () => void;
 }
 
 const TYPE_ICONS: Record<EvidenceRecord['evidence_type'], string> = {
@@ -75,6 +88,10 @@ export function EvidencePanel({
   isSyncing = false,
   lastSync,
   isConnected,
+  githubMode = 'READ_ONLY',
+  localArtifacts = [],
+  onDownloadZip,
+  onCommitToGitHub,
 }: EvidencePanelProps) {
   // In GUIDED mode, start collapsed. In EXPERT mode, start expanded.
   const [expanded, setExpanded] = useState(assistanceMode === 'EXPERT');
@@ -267,6 +284,55 @@ export function EvidencePanel({
           {!selectedCategory && (
             <div className="text-sm text-gray-400 text-center py-4">
               Click a category above to view evidence details
+            </div>
+          )}
+
+          {/* HIGH-03: Local Artifacts Section */}
+          {localArtifacts.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400 font-medium">
+                  Local Artifacts ({localArtifacts.length} files written)
+                </span>
+                <div className="flex items-center gap-2">
+                  {onCommitToGitHub && isConnected && githubMode === 'WORKSPACE_SYNC' && (
+                    <button
+                      onClick={onCommitToGitHub}
+                      className="px-2 py-1 text-xs bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded transition-colors"
+                    >
+                      Commit to GitHub
+                    </button>
+                  )}
+                  {onDownloadZip && (
+                    <button
+                      onClick={onDownloadZip}
+                      className="px-2 py-1 text-xs bg-violet-600/20 hover:bg-violet-600/30 text-violet-400 rounded transition-colors"
+                    >
+                      Download ZIP
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {localArtifacts.map((artifact, i) => (
+                  <div key={i} className="flex items-center gap-2 px-2 py-1 bg-gray-900/30 rounded text-xs">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      artifact.persisted_to === 'github' ? 'bg-green-400' :
+                      artifact.persisted_to === 'r2' ? 'bg-blue-400' :
+                      'bg-amber-400'
+                    }`} />
+                    <span className="text-gray-300 truncate flex-1 font-mono" title={artifact.path}>
+                      {artifact.path}
+                    </span>
+                    <span className="text-gray-600 shrink-0">{artifact.file_type}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-3 text-[10px] text-gray-600">
+                <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400" /> Local only</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400" /> Committed</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-400" /> Cloud</span>
+              </div>
             </div>
           )}
 

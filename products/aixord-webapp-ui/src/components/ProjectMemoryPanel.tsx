@@ -52,8 +52,22 @@ export function ProjectMemoryPanel({
 
   if (!capsule) {
     return (
-      <div className="p-4 text-gray-500 text-sm">
-        No continuity data available.
+      <div className="p-4 text-center">
+        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-gray-800/60 mb-2">
+          <svg className="w-5 h-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+          </svg>
+        </div>
+        <p className="text-sm text-gray-400 mb-1">Memory is building...</p>
+        <p className="text-xs text-gray-600 mb-3">
+          Project memory populates automatically as you progress through phases, make decisions, and create deliverables.
+        </p>
+        <button
+          onClick={onRefresh}
+          className="px-3 py-1.5 text-xs bg-violet-600/20 text-violet-400 border border-violet-500/30 rounded hover:bg-violet-600/30 transition-colors"
+        >
+          Rebuild Memory
+        </button>
       </div>
     );
   }

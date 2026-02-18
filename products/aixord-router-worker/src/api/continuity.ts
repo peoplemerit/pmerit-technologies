@@ -13,6 +13,7 @@
 
 import { Hono } from 'hono';
 import type { Env } from '../types';
+import { log } from '../utils/logger';
 import { requireAuth } from '../middleware/requireAuth';
 
 const continuity = new Hono<{ Bindings: Env }>();
@@ -537,7 +538,7 @@ export async function getProjectContinuityCompact(
         'SELECT phase, updated_at FROM project_state WHERE project_id = ?'
       ).bind(projectId).first<{ phase: string; updated_at: string }>();
       currentPhase = state?.phase || 'BRAINSTORM';
-    } catch { /* project_state may not exist yet — default to BRAINSTORM */ }
+    } catch (e) { log.warn('continuity_query_failed', { query: 'project_state', error: e instanceof Error ? e.message : String(e) }); }
 
     // Q2: Session timeline (last 3, compressed)
     let sessionList: Array<{ session_number: number; session_type: string; status: string; summary: string | null; phase: string }> = [];
@@ -548,7 +549,7 @@ export async function getProjectContinuityCompact(
          ORDER BY session_number DESC LIMIT 3`
       ).bind(projectId).all();
       sessionList = (sessionRows?.results as typeof sessionList) || [];
-    } catch { /* project_sessions may not exist or be empty */ }
+    } catch (e) { log.warn('continuity_query_failed', { query: 'project_sessions', error: e instanceof Error ? e.message : String(e) }); }
 
     // Q3: Key decisions (last 5, non-superseded)
     let decisionList: Array<{ action: string; summary: string | null; reason: string; result: string; created_at: string }> = [];
@@ -560,7 +561,7 @@ export async function getProjectContinuityCompact(
          ORDER BY created_at DESC LIMIT 5`
       ).bind(projectId).all();
       decisionList = (decisionRows?.results as typeof decisionList) || [];
-    } catch { /* decision_ledger may not have supersedes_decision_id column or be empty */ }
+    } catch (e) { log.warn('continuity_query_failed', { query: 'decision_ledger', error: e instanceof Error ? e.message : String(e) }); }
 
     // Q4: Active work (TDL, top 3)
     let activeList: Array<{ status: string; priority: string; progress_percent: number; deliverable_name: string }> = [];
@@ -574,7 +575,7 @@ export async function getProjectContinuityCompact(
          LIMIT 3`
       ).bind(projectId).all();
       activeList = (activeWork?.results as typeof activeList) || [];
-    } catch { /* task_assignments or blueprint_deliverables may not exist */ }
+    } catch (e) { log.warn('continuity_query_failed', { query: 'task_assignments', error: e instanceof Error ? e.message : String(e) }); }
 
     // Q5: Open escalations
     let escalationList: Array<{ decision_needed: string }> = [];
@@ -586,7 +587,7 @@ export async function getProjectContinuityCompact(
          LIMIT 3`
       ).bind(projectId).all();
       escalationList = (escalations?.results as typeof escalationList) || [];
-    } catch { /* escalation_log may not exist */ }
+    } catch (e) { log.warn('continuity_query_failed', { query: 'escalation_log', error: e instanceof Error ? e.message : String(e) }); }
 
     // Q6: Pinned items (compressed)
     let pinList: Array<{ pin_type: string; label: string | null }> = [];
@@ -595,7 +596,7 @@ export async function getProjectContinuityCompact(
         `SELECT pin_type, label FROM continuity_pins WHERE project_id = ? LIMIT 5`
       ).bind(projectId).all();
       pinList = (pins?.results as typeof pinList) || [];
-    } catch { /* continuity_pins may not exist if migration 023 wasn't applied */ }
+    } catch (e) { log.warn('continuity_query_failed', { query: 'continuity_pins', error: e instanceof Error ? e.message : String(e) }); }
 
     // Q7: Deliverable progress
     let delivTotal = 0;
@@ -608,7 +609,7 @@ export async function getProjectContinuityCompact(
       ).bind(projectId).first<{ total: number; completed: number }>();
       delivTotal = delivStats?.total || 0;
       delivCompleted = delivStats?.completed || 0;
-    } catch { /* blueprint_deliverables may not exist */ }
+    } catch (e) { log.warn('continuity_query_failed', { query: 'blueprint_deliverables', error: e instanceof Error ? e.message : String(e) }); }
 
     // FIX-5: Brainstorm selected approach (~20 tokens)
     // Gives downstream phases minimal awareness of the chosen brainstorm option
@@ -623,7 +624,7 @@ export async function getProjectContinuityCompact(
         const selected = opts.find(o => o.id === bsArtifact.recommendation);
         selectedApproachName = selected?.title || bsArtifact.recommendation;
       }
-    } catch { /* brainstorm_artifacts may not exist */ }
+    } catch (e) { log.warn('continuity_query_failed', { query: 'brainstorm_artifacts', error: e instanceof Error ? e.message : String(e) }); }
 
     // Build compact string
     const lines: string[] = [];
@@ -682,7 +683,7 @@ export async function getProjectContinuityCompact(
 
     return lines.join('\n');
   } catch (err) {
-    console.error('[PCC] getProjectContinuityCompact failed:', err);
+    log.error('pcc_compact_failed');
     return null;
   }
 }

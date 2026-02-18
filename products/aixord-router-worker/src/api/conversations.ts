@@ -17,25 +17,12 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const conversations = new Hono<{ Bindings: Env }>();
 
 // All routes require auth
 conversations.use('/*', requireAuth);
-
-/**
- * Verify that the authenticated user owns a project
- */
-async function verifyProjectOwnership(
-  db: D1Database,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await db.prepare(
-    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
-  ).bind(projectId, userId).first();
-  return !!project;
-}
 
 /**
  * Verify that the authenticated user owns a conversation

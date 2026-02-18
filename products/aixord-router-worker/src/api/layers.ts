@@ -13,6 +13,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const layers = new Hono<{ Bindings: Env }>();
 
@@ -82,17 +83,6 @@ interface VerifyLayerInput {
 
 function generateId(): string {
   return `layer_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-}
-
-async function verifyProjectOwnership(
-  db: D1Database,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await db.prepare(
-    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
-  ).bind(projectId, userId).first();
-  return !!project;
 }
 
 async function getActiveLayer(

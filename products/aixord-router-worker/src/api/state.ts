@@ -24,6 +24,7 @@ import {
   computeReconciliation,
 } from '../services/readinessEngine';
 import { validatePhaseTransition } from '../governance/phaseContracts';
+import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const state = new Hono<{ Bindings: Env }>();
 
@@ -114,20 +115,6 @@ function checkPhaseTransition(
   }
 
   return { allowed: true, missingGates: [], message: null };
-}
-
-/**
- * Verify project ownership
- */
-async function verifyProjectOwnership(
-  db: D1Database,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await db.prepare(
-    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
-  ).bind(projectId, userId).first();
-  return !!project;
 }
 
 /**
@@ -428,10 +415,7 @@ state.put('/:projectId/gates/:gateId', async (c) => {
   return c.json({ success: true, gates, updated_at: now });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.error(JSON.stringify({
-      type: 'gate_toggle_error', projectId, gateId, userId,
-      error: errMsg, timestamp: new Date().toISOString(),
-    }));
+    log.error('gate_toggle_error', { project_id: projectId, gate_id: gateId });
     return c.json({ error: `Gate toggle failed: ${errMsg}` }, 500);
   }
 });
@@ -491,7 +475,7 @@ state.put('/:projectId/phase', async (c) => {
         'SELECT reassess_count FROM project_state WHERE project_id = ?'
       ).bind(projectId).first<{ reassess_count: number }>();
       reassessCount = countRow?.reassess_count || 0;
-    } catch { /* reassess_count column may not exist yet */ }
+    } catch (e) { log.warn('reassess_count_read_failed', { error: e instanceof Error ? e.message : String(e) }); }
 
     let level = 1; // Surgical Fix (same kingdom)
     if (crossesKingdom) level = 2; // Major Pivot
@@ -533,7 +517,7 @@ state.put('/:projectId/phase', async (c) => {
            WHERE project_id = ? AND status = 'ACTIVE'`
         ).bind(now, projectId).run();
         artifactImpact = 'active_artifacts_superseded';
-      } catch { /* non-blocking */ }
+      } catch (e) { log.warn('artifact_supersede_failed', { level: 2, error: e instanceof Error ? e.message : String(e) }); }
     }
     if (level === 3) {
       try {
@@ -542,7 +526,7 @@ state.put('/:projectId/phase', async (c) => {
            WHERE project_id = ? AND status = 'DRAFT'`
         ).bind(now, projectId).run();
         artifactImpact = 'all_non_frozen_superseded';
-      } catch { /* non-blocking */ }
+      } catch (e) { log.warn('artifact_supersede_failed', { level: 3, error: e instanceof Error ? e.message : String(e) }); }
     }
 
     // Log to reassessment_log
@@ -553,7 +537,7 @@ state.put('/:projectId/phase', async (c) => {
          VALUES (?, ?, ?, ?, ?, ?, ?)`
       ).bind(projectId, level, currentPhase, normalizedPhaseValue,
              reassess_reason, review_summary || null, artifactImpact).run();
-    } catch { /* table may not exist yet — non-blocking */ }
+    } catch (e) { log.warn('reassessment_log_insert_failed', { error: e instanceof Error ? e.message : String(e) }); }
 
     // Increment reassess_count
     try {
@@ -561,7 +545,7 @@ state.put('/:projectId/phase', async (c) => {
         `UPDATE project_state SET reassess_count = COALESCE(reassess_count, 0) + 1
          WHERE project_id = ?`
       ).bind(projectId).run();
-    } catch { /* column may not exist yet — non-blocking */ }
+    } catch (e) { log.warn('reassess_count_increment_failed', { error: e instanceof Error ? e.message : String(e) }); }
 
     // Log to decision_ledger
     try {
@@ -581,7 +565,7 @@ state.put('/:projectId/phase', async (c) => {
         reassess_reason,
         now,
       ).run();
-    } catch { /* non-blocking */ }
+    } catch (e) { log.warn('decision_ledger_insert_failed', { error: e instanceof Error ? e.message : String(e) }); }
 
     // Fall through to phase update below
   }
@@ -1046,7 +1030,7 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
           }
         }
       }
-    } catch { /* fitness_functions table may not exist — non-blocking */ }
+    } catch (e) { log.warn('fitness_functions_query_failed', { error: e instanceof Error ? e.message : String(e) }); }
   }
 
   const failedArtifacts = artifactChecks.filter(a => !a.passed);
@@ -1146,6 +1130,75 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
     ).bind(now, projectId).run();
   }
 
+  // ── CRIT-03 Fix: Auto-generate task assignments on PLAN → EXECUTE ──
+  if (currentPhase === 'PLAN') {
+    try {
+      const assignableDeliverables = await c.env.DB.prepare(
+        `SELECT d.id, d.status
+         FROM blueprint_deliverables d
+         JOIN blueprint_scopes s ON d.scope_id = s.id
+         WHERE s.project_id = ? AND d.status IN ('DRAFT', 'READY')`
+      ).bind(projectId).all<{ id: string; status: string }>();
+
+      if (assignableDeliverables.results?.length) {
+        let assignedCount = 0;
+        for (const del of assignableDeliverables.results) {
+          // Skip if already has an active assignment
+          const existing = await c.env.DB.prepare(
+            `SELECT id FROM task_assignments WHERE deliverable_id = ? AND project_id = ? AND status NOT IN ('ACCEPTED', 'PAUSED')`
+          ).bind(del.id, projectId).first();
+          if (existing) continue;
+
+          await c.env.DB.prepare(
+            `INSERT INTO task_assignments
+             (id, project_id, deliverable_id, session_id, priority, status, authority_scope, escalation_triggers, assigned_by, assigned_at, updated_at)
+             VALUES (?, ?, ?, NULL, 'P1', 'ASSIGNED', '[]', '[]', ?, ?, ?)`
+          ).bind(crypto.randomUUID(), projectId, del.id, userId, now, now).run();
+
+          // Transition deliverable to IN_PROGRESS
+          if (['DRAFT', 'READY'].includes(del.status)) {
+            await c.env.DB.prepare(
+              "UPDATE blueprint_deliverables SET status = 'IN_PROGRESS', updated_at = ? WHERE id = ?"
+            ).bind(now, del.id).run();
+          }
+          assignedCount++;
+        }
+
+        if (assignedCount > 0) {
+          await c.env.DB.prepare(
+            `INSERT INTO decision_ledger (project_id, action, phase_from, phase_to, actor_id, actor_role, result, reason, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).bind(
+            projectId, 'AUTO_TASK_ASSIGN', currentPhase, nextPhase || currentPhase,
+            userId, 'SYSTEM', 'LOGGED',
+            `Auto-assigned ${assignedCount} deliverable(s) on PLAN → EXECUTE finalization`,
+            now
+          ).run();
+        }
+        log.info('auto_assign_on_finalize', { project_id: projectId, assigned: assignedCount });
+      }
+    } catch (err) {
+      log.warn('auto_assign_failed', { project_id: projectId, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  // ── Auto-log phase transition to decision_ledger ──
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO decision_ledger (project_id, action, phase_from, phase_to, actor_id, actor_role, gate_snapshot, result, reason, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      projectId, 'PHASE_FINALIZE', currentPhase, nextPhase || currentPhase,
+      userId, 'DIRECTOR',
+      JSON.stringify(gateChecks.map((g: { check: string; passed: boolean }) => ({ gate: g.check, passed: g.passed }))),
+      'APPROVED',
+      `Finalized ${currentPhase} → ${nextPhase || 'COMPLETE'}`,
+      now
+    ).run();
+  } catch (err) {
+    log.warn('phase_decision_log_failed', { project_id: projectId, error: err instanceof Error ? err.message : String(err) });
+  }
+
   // 7. Artifact state transitions (GFB-01 Task 2)
   // On BRAINSTORM finalize: DRAFT → ACTIVE (artifact becomes governing)
   if (currentPhase === 'BRAINSTORM') {
@@ -1154,7 +1207,7 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
         `UPDATE brainstorm_artifacts SET status = 'ACTIVE', updated_at = ?
          WHERE project_id = ? AND status = 'DRAFT'`
       ).bind(now, projectId).run();
-    } catch { /* Non-blocking — artifact state is advisory */ }
+    } catch (e) { log.warn('artifact_state_update_failed', { error: e instanceof Error ? e.message : String(e) }); }
   }
   // On REVIEW finalize (terminal): ACTIVE → FROZEN (artifact locked)
   if (currentPhase === 'REVIEW') {
@@ -1209,7 +1262,43 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
         finalRecon.conservation.total, finalRecon.conservation.formula, finalRecon.conservation.verified,
         finalRecon.conservation.valid ? 1 : 0, userId, now
       ).run();
-    } catch { /* Non-blocking */ }
+    } catch (e) { log.warn('conservation_validation_failed', { error: e instanceof Error ? e.message : String(e) }); }
+  }
+
+  // ── HIGH-02 Fix: Check security classification and build warnings ──
+  const warnings: string[] = [];
+  try {
+    const classification = await c.env.DB.prepare(
+      'SELECT project_id FROM data_classification WHERE project_id = ?'
+    ).bind(projectId).first();
+    if (!classification) {
+      warnings.push('Security classification not set. Project defaults to maximum restriction (L-SPG4). Classify your project data to unlock AI features.');
+    }
+  } catch {
+    // Non-blocking — just skip warning
+  }
+
+  // ── HIGH-06 Fix: Check deliverable completion on EXECUTE finalize ──
+  if (currentPhase === 'EXECUTE') {
+    try {
+      const totalDels = await c.env.DB.prepare(
+        `SELECT COUNT(*) as total FROM blueprint_deliverables d
+         JOIN blueprint_scopes s ON d.scope_id = s.id
+         WHERE s.project_id = ?`
+      ).bind(projectId).first<{ total: number }>();
+      const doneDels = await c.env.DB.prepare(
+        `SELECT COUNT(*) as done FROM blueprint_deliverables d
+         JOIN blueprint_scopes s ON d.scope_id = s.id
+         WHERE s.project_id = ? AND d.status IN ('DONE', 'VERIFIED', 'LOCKED')`
+      ).bind(projectId).first<{ done: number }>();
+      const total = totalDels?.total || 0;
+      const done = doneDels?.done || 0;
+      if (total > 0 && done < total) {
+        warnings.push(`${done} of ${total} deliverables complete. ${total - done} deliverable(s) not yet finished.`);
+      }
+    } catch {
+      // Non-blocking
+    }
   }
 
   return c.json({
@@ -1219,6 +1308,7 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
     phase_to: nextPhase || currentPhase,
     artifact_checks: artifactChecks,
     ledger_logged: true,
+    warnings: warnings.length > 0 ? warnings : undefined,
     message: nextPhase
       ? `Phase ${currentPhase} finalized. Advanced to ${nextPhase}.`
       : `Phase ${currentPhase} finalized. Project complete.`,
@@ -1230,15 +1320,7 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
     // via app.onError with no way to diagnose the failure remotely.
     const errMsg = err instanceof Error ? err.message : String(err);
     const errStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join(' | ') : undefined;
-    console.error(JSON.stringify({
-      type: 'finalize_error',
-      projectId,
-      phase: requestedPhase,
-      userId,
-      error: errMsg,
-      stack: errStack,
-      timestamp: new Date().toISOString(),
-    }));
+    log.error('finalize_error', { project_id: projectId, phase: requestedPhase });
     return c.json({
       error: `Phase finalization failed: ${errMsg}`,
       phase: requestedPhase,
@@ -1272,10 +1354,7 @@ state.post('/:projectId/gates/evaluate', async (c) => {
     return c.json(result);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.error(JSON.stringify({
-      type: 'gate_evaluate_error', projectId, userId,
-      error: errMsg, timestamp: new Date().toISOString(),
-    }));
+    log.error('gate_evaluate_error', { project_id: projectId });
     return c.json({ error: `Gate evaluation failed: ${errMsg}` }, 500);
   }
 });

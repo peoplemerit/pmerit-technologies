@@ -1,5 +1,5 @@
 /**
- * Circuit Breaker for AI Provider Health — Phase 1.4
+ * Circuit Breaker for AI Provider Health — Phase 1.4 + M-2 D1 Persistence
  *
  * Tracks per-provider failure rates and short-circuits requests to unhealthy
  * providers. Uses a simple in-memory state machine (CLOSED → OPEN → HALF_OPEN).
@@ -11,10 +11,9 @@
  *   HALF_OPEN — One probe request allowed through. If it succeeds → CLOSED.
  *              If it fails → OPEN (reset cooldown).
  *
- * IMPORTANT: This is Worker-level in-memory state. It resets on cold starts
- * (which is acceptable for Workers — cold starts are ~5ms and rare under load).
- * For multi-isolate consistency, providers that fail will be re-discovered quickly
- * because the failure threshold is low (3 failures).
+ * M-2: State persists to D1 on transitions and hydrates on cold start.
+ * In-memory state is authoritative during the isolate lifetime; D1 is
+ * only used for cross-isolate consistency on cold starts.
  */
 
 import type { Provider } from '../types';
@@ -54,10 +53,11 @@ const DEFAULT_CONFIG: CircuitBreakerConfig = {
 };
 
 // =============================================================================
-// In-Memory State (per-isolate, resets on cold start)
+// In-Memory State (per-isolate, hydrated from D1 on cold start)
 // =============================================================================
 
 const circuitState = new Map<Provider, CircuitBreakerEntry>();
+let hydrated = false;
 
 function getOrCreate(provider: Provider): CircuitBreakerEntry {
   let entry = circuitState.get(provider);
@@ -75,6 +75,63 @@ function getOrCreate(provider: Provider): CircuitBreakerEntry {
 }
 
 // =============================================================================
+// D1 Persistence (M-2)
+// =============================================================================
+
+/**
+ * Hydrate in-memory state from D1 on cold start. Called once per isolate.
+ * Non-blocking — if D1 fails, we start with clean CLOSED state.
+ */
+export async function hydrateFromD1(db: D1Database): Promise<void> {
+  if (hydrated) return;
+  hydrated = true;
+  try {
+    const rows = await db.prepare(
+      'SELECT provider, state, failure_count, last_failure_time, last_success_time, consecutive_successes FROM circuit_breaker_state'
+    ).all<{
+      provider: string;
+      state: string;
+      failure_count: number;
+      last_failure_time: number;
+      last_success_time: number;
+      consecutive_successes: number;
+    }>();
+    for (const row of rows.results) {
+      circuitState.set(row.provider as Provider, {
+        state: row.state as CircuitState,
+        failureCount: row.failure_count,
+        lastFailureTime: row.last_failure_time,
+        lastSuccessTime: row.last_success_time,
+        consecutiveSuccesses: row.consecutive_successes,
+      });
+    }
+    log.info('circuit_hydrated', { providers: rows.results.length });
+  } catch {
+    log.warn('circuit_hydrate_failed');
+  }
+}
+
+/**
+ * Persist a provider's circuit state to D1. Fire-and-forget on transitions.
+ */
+function persistToD1(db: D1Database, provider: Provider, entry: CircuitBreakerEntry): void {
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO circuit_breaker_state (provider, state, failure_count, last_failure_time, last_success_time, consecutive_successes, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(provider) DO UPDATE SET
+      state = excluded.state,
+      failure_count = excluded.failure_count,
+      last_failure_time = excluded.last_failure_time,
+      last_success_time = excluded.last_success_time,
+      consecutive_successes = excluded.consecutive_successes,
+      updated_at = excluded.updated_at
+  `).bind(provider, entry.state, entry.failureCount, entry.lastFailureTime, entry.lastSuccessTime, entry.consecutiveSuccesses, now)
+    .run()
+    .catch(() => { /* fire-and-forget */ });
+}
+
+// =============================================================================
 // Public API
 // =============================================================================
 
@@ -89,7 +146,8 @@ function getOrCreate(provider: Provider): CircuitBreakerEntry {
  */
 export function isCircuitClosed(
   provider: Provider,
-  config: CircuitBreakerConfig = DEFAULT_CONFIG
+  config: CircuitBreakerConfig = DEFAULT_CONFIG,
+  db?: D1Database
 ): boolean {
   const entry = getOrCreate(provider);
 
@@ -108,6 +166,7 @@ export function isCircuitClosed(
         entry.state = 'HALF_OPEN';
         entry.consecutiveSuccesses = 0;
         log.info('circuit_transition', { provider, from: 'OPEN', to: 'HALF_OPEN', reason: 'cooldown_elapsed' });
+        if (db) persistToD1(db, provider, entry);
         return true;
       }
       // Still in cooldown
@@ -124,7 +183,8 @@ export function isCircuitClosed(
  */
 export function recordSuccess(
   provider: Provider,
-  config: CircuitBreakerConfig = DEFAULT_CONFIG
+  config: CircuitBreakerConfig = DEFAULT_CONFIG,
+  db?: D1Database
 ): void {
   const entry = getOrCreate(provider);
   entry.lastSuccessTime = Date.now();
@@ -137,6 +197,7 @@ export function recordSuccess(
         entry.failureCount = 0;
         entry.consecutiveSuccesses = 0;
         log.info('circuit_transition', { provider, from: 'HALF_OPEN', to: 'CLOSED', reason: 'probe_succeeded' });
+        if (db) persistToD1(db, provider, entry);
       }
       break;
 
@@ -160,7 +221,8 @@ export function recordSuccess(
  */
 export function recordFailure(
   provider: Provider,
-  config: CircuitBreakerConfig = DEFAULT_CONFIG
+  config: CircuitBreakerConfig = DEFAULT_CONFIG,
+  db?: D1Database
 ): void {
   const entry = getOrCreate(provider);
   entry.lastFailureTime = Date.now();
@@ -172,6 +234,7 @@ export function recordFailure(
       if (entry.failureCount >= config.failureThreshold) {
         entry.state = 'OPEN';
         log.warn('circuit_transition', { provider, from: 'CLOSED', to: 'OPEN', reason: 'failure_threshold', failure_count: entry.failureCount });
+        if (db) persistToD1(db, provider, entry);
       }
       break;
 
@@ -179,6 +242,7 @@ export function recordFailure(
       // Probe failed — back to OPEN
       entry.state = 'OPEN';
       log.warn('circuit_transition', { provider, from: 'HALF_OPEN', to: 'OPEN', reason: 'probe_failed' });
+      if (db) persistToD1(db, provider, entry);
       break;
 
     case 'OPEN':

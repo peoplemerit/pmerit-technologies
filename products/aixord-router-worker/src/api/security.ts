@@ -22,6 +22,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { log } from '../utils/logger';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -53,7 +54,7 @@ app.get('/:projectId/security/classification', requireAuth, async (c) => {
 
   // Verify project ownership
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -246,10 +247,10 @@ app.put('/:projectId/security/classification', requireAuth, async (c) => {
     ] : []
   });
   } catch (error) {
-    console.error('Error setting classification:', error);
+    log.error('classification_set_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to set data classification',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -268,7 +269,7 @@ app.get('/:projectId/security/gates', requireAuth, async (c) => {
 
   // Verify project ownership
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -489,8 +490,8 @@ app.post('/:projectId/security/classify', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id, owner_id FROM projects WHERE id = ? AND user_id = ?
-  `).bind(projectId, userId).first();
+    SELECT id, owner_id FROM projects WHERE id = ? AND owner_id = ?
+  `).bind(projectId, userId).first<{ id: string; owner_id: string }>();
 
   if (!project) {
     return c.json({ error: 'Project not found' }, 404);
@@ -617,10 +618,10 @@ app.post('/:projectId/security/classify', requireAuth, async (c) => {
       retention_expires_at: retentionExpiresAt
     });
   } catch (error) {
-    console.error('Error classifying resource:', error);
+    log.error('resource_classify_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to classify resource',
-      details: error instanceof Error ? error.message : 'Unknown error'
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -634,7 +635,7 @@ app.get('/:projectId/security/classifications', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -676,7 +677,7 @@ app.get('/:projectId/security/resource/:resourceType/:resourceId', requireAuth, 
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -718,7 +719,7 @@ app.put('/:projectId/security/resource/:resourceType/:resourceId/jurisdiction', 
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -788,7 +789,7 @@ app.get('/:projectId/security/secrets/audit', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -890,5 +891,101 @@ export async function auditSecretAccess(
     `).bind(now, projectId).run();
   }
 }
+
+// =============================================================================
+// HIGH-02 Fix: Security Classification Auto-Suggest
+// =============================================================================
+
+/**
+ * GET /api/v1/projects/:projectId/security/suggest
+ * Suggests data classifications based on project name, description, and blueprint.
+ * Returns suggestions for user confirmation — never auto-applies.
+ */
+app.get('/:projectId/security/suggest', requireAuth, async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId');
+
+  // Verify project ownership
+  const project = await c.env.DB.prepare(
+    'SELECT id, name, description FROM projects WHERE id = ? AND owner_id = ?'
+  ).bind(projectId, userId).first<{ id: string; name: string; description: string }>();
+
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  // Gather all text for keyword matching
+  let scopeText = '';
+  try {
+    const scopes = await c.env.DB.prepare(
+      'SELECT title, description FROM blueprint_scopes WHERE project_id = ?'
+    ).bind(projectId).all<{ title: string; description: string }>();
+    scopeText = (scopes.results || []).map(s => `${s.title} ${s.description || ''}`).join(' ');
+  } catch {
+    // Blueprint may not exist yet
+  }
+
+  const allText = [
+    project.name || '',
+    project.description || '',
+    scopeText,
+  ].join(' ').toLowerCase();
+
+  // Default suggestions: low-risk project
+  const suggestions: Record<string, string | boolean> = {
+    pii: false,
+    phi: false,
+    financial: false,
+    legal: false,
+    minor_data: false,
+    ai_exposure: 'PUBLIC',
+  };
+  const reasons: string[] = [];
+
+  // Keyword matching for sensitive data types
+  if (/\b(health|medical|patient|hipaa|diagnosis|prescription|clinic)\b/.test(allText)) {
+    suggestions.phi = true;
+    suggestions.ai_exposure = 'CONFIDENTIAL';
+    reasons.push('Project mentions health/medical terms — PHI likely present');
+  }
+
+  if (/\b(payment|billing|credit.?card|stripe|financial|banking|invoice|accounting)\b/.test(allText)) {
+    suggestions.financial = true;
+    reasons.push('Project mentions financial/payment terms');
+  }
+
+  if (/\b(child|student|minor|k-?12|school|education|coppa|ferpa)\b/.test(allText)) {
+    suggestions.minor_data = true;
+    suggestions.ai_exposure = 'RESTRICTED';
+    reasons.push('Project mentions minors/students — COPPA/FERPA may apply');
+  }
+
+  if (/\b(pii|personal.?data|ssn|social.?security|address|phone|email.?list|gdpr)\b/.test(allText)) {
+    suggestions.pii = true;
+    if (suggestions.ai_exposure === 'PUBLIC') {
+      suggestions.ai_exposure = 'INTERNAL';
+    }
+    reasons.push('Project mentions personal data/PII');
+  }
+
+  if (/\b(legal|compliance|contract|litigation|attorney|regulatory)\b/.test(allText)) {
+    suggestions.legal = true;
+    reasons.push('Project mentions legal/compliance terms');
+  }
+
+  // Determine confidence
+  const confidence = reasons.length === 0 ? 'medium' : 'low';
+  if (reasons.length === 0) {
+    reasons.push('No sensitive data indicators found — suggesting low-risk defaults');
+  }
+
+  return c.json({
+    suggestions,
+    confidence,
+    reasons,
+    project_name: project.name,
+    note: 'These are suggestions based on keyword analysis. Please review and confirm before applying.',
+  });
+});
 
 export default app;

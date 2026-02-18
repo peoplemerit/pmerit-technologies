@@ -22,6 +22,7 @@ import { validateBody } from '../middleware/validateBody';
 import { loginSchema, registerSchema } from '../schemas/common';
 import { isByokTier } from '../config/tiers';
 import { hashPasswordPBKDF2, verifyPasswordPBKDF2, hashSHA256 } from '../utils/crypto';
+import { log } from '../utils/logger';
 
 // Deadline after which plaintext token fallback is removed (matches requireAuth.ts)
 const LEGACY_TOKEN_DEADLINE = new Date('2026-03-15T00:00:00Z').getTime();
@@ -86,38 +87,28 @@ async function sendEmail(
     const result = await response.json() as { id?: string; message?: string; error?: unknown; statusCode?: number; name?: string };
 
     if (response.ok && result.id) {
-      console.log(JSON.stringify({
-        type: 'email_sent_success',
-        to,
+      log.info('email_sent_success', {
         subject,
         resend_id: result.id,
         status: response.status,
-        timestamp: new Date().toISOString(),
-      }));
+      });
       return true;
     }
 
-    console.error(JSON.stringify({
-      type: 'email_send_failed',
-      to,
+    log.error('email_send_failed', {
       subject,
       status: response.status,
       resend_error: result.message || result.error,
       resend_name: result.name,
       resend_status_code: result.statusCode,
-      full_result: JSON.stringify(result),
-      timestamp: new Date().toISOString(),
-    }));
+    });
     return false;
 
   } catch (error) {
-    console.error(JSON.stringify({
-      type: 'email_send_error',
-      to,
+    log.error('email_send_error', {
       subject,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString(),
-    }));
+      error: error instanceof Error ? error.constructor.name : 'Unknown',
+    });
     return false;
   }
 }
@@ -277,9 +268,11 @@ auth.post('/login', validateBody(loginSchema), async (c) => {
     // Modern: PBKDF2 verification
     passwordValid = await verifyPasswordPBKDF2(password, user.password_salt, user.password_hash);
   } else {
-    // Legacy: SHA-256 with global salt
-    const globalSalt = c.env.AUTH_SALT || 'default-salt-change-in-production';
-    const legacyHash = await hashPasswordLegacy(password, globalSalt);
+    // Legacy: SHA-256 with global salt — fail-closed if secret not configured
+    if (!c.env.AUTH_SALT) {
+      return c.json({ error: 'Server configuration error' }, 500);
+    }
+    const legacyHash = await hashPasswordLegacy(password, c.env.AUTH_SALT);
     passwordValid = legacyHash === user.password_hash;
 
     // Transparent upgrade: re-hash with PBKDF2 on successful legacy login
@@ -288,7 +281,7 @@ auth.post('/login', validateBody(loginSchema), async (c) => {
       await c.env.DB.prepare(
         'UPDATE users SET password_hash = ?, password_salt = ?, hash_algorithm = ?, updated_at = ? WHERE id = ?'
       ).bind(pbkdf2Result.hash, pbkdf2Result.salt, 'pbkdf2', new Date().toISOString(), user.id).run();
-      console.log(`[AUTH] Transparent PBKDF2 upgrade for user ${user.id.substring(0, 8)}...`);
+      log.info('auth_pbkdf2_upgrade', { userId: user.id.substring(0, 8) });
     }
   }
 
@@ -461,7 +454,7 @@ auth.get('/subscription', async (c) => {
           period_end = excluded.period_end,
           updated_at = datetime('now')
       `).bind(crypto.randomUUID(), session.user_id, trialExpiry.toISOString()).run();
-      console.log(`[FIX-TIER] Auto-upgraded NONE user ${session.user_id.substring(0, 8)}... to TRIAL via subscription endpoint`);
+      log.info('tier_auto_upgrade', { userId: session.user_id.substring(0, 8), from: 'NONE', to: 'TRIAL', source: 'subscription_endpoint' });
       userTier = 'TRIAL';
     }
 
@@ -819,9 +812,11 @@ auth.post('/change-password', async (c) => {
   if (algorithm === 'pbkdf2' && user.password_salt) {
     passwordValid = await verifyPasswordPBKDF2(current_password, user.password_salt, user.password_hash);
   } else {
-    // Legacy SHA-256
-    const globalSalt = c.env.AUTH_SALT || 'default-salt-change-in-production';
-    const legacyHash = await hashPasswordLegacy(current_password, globalSalt);
+    // Legacy SHA-256 — fail-closed if secret not configured
+    if (!c.env.AUTH_SALT) {
+      return c.json({ error: 'Server configuration error' }, 500);
+    }
+    const legacyHash = await hashPasswordLegacy(current_password, c.env.AUTH_SALT);
     passwordValid = legacyHash === user.password_hash;
   }
 
@@ -843,11 +838,9 @@ auth.post('/change-password', async (c) => {
   ).bind(user.id).run();
 
   // Audit log
-  console.log(JSON.stringify({
-    type: 'password_changed',
-    user_id: user.id.substring(0, 8) + '...',
-    timestamp: new Date().toISOString(),
-  }));
+  log.info('password_changed', {
+    userId: user.id.substring(0, 8),
+  });
 
   return c.json({
     success: true,
@@ -1005,8 +998,11 @@ auth.delete('/account', async (c) => {
   if (user.hash_algorithm === 'pbkdf2') {
     passwordValid = await verifyPasswordPBKDF2(password, user.password_hash, user.password_salt);
   } else {
-    // Legacy SHA-256 hash
-    const legacyHash = await hashPasswordLegacy(password, c.env.AUTH_SALT || '');
+    // Legacy SHA-256 hash — fail-closed if secret not configured
+    if (!c.env.AUTH_SALT) {
+      return c.json({ error: 'Server configuration error' }, 500);
+    }
+    const legacyHash = await hashPasswordLegacy(password, c.env.AUTH_SALT);
     passwordValid = legacyHash === user.password_hash;
   }
 
@@ -1035,11 +1031,9 @@ auth.delete('/account', async (c) => {
   // Finally, delete the user record itself
   await c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId).run();
 
-  console.log(JSON.stringify({
-    type: 'account_deleted',
-    user_id: userId.substring(0, 8) + '...',
-    timestamp: new Date().toISOString(),
-  }));
+  log.info('account_deleted', {
+    userId: userId.substring(0, 8),
+  });
 
   return c.json({
     success: true,

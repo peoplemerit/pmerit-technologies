@@ -14,6 +14,7 @@ import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
 import { validateBody } from '../middleware/validateBody';
 import { createProjectSchema, updateProjectSchema } from '../schemas/common';
+import { log } from '../utils/logger';
 
 const projects = new Hono<{ Bindings: Env }>();
 
@@ -134,10 +135,10 @@ projects.post('/', validateBody(createProjectSchema), async (c) => {
       updated_at: now
     }, 201);
   } catch (error) {
-    console.error('Create project error:', error);
+    log.error('project_create_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to create project',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -284,10 +285,10 @@ projects.delete('/:id', async (c) => {
 
     return c.json({ success: true });
   } catch (error) {
-    console.error('Delete project error:', error);
+    log.error('project_delete_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to delete project',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });

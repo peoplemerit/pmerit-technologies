@@ -6,6 +6,7 @@
 
 import type { SubscriptionTier } from '../types';
 import { STRIPE_PRICE_TO_TIER } from '../config/tiers';
+import { log } from '../utils/logger';
 
 // =============================================================================
 // STRIPE TYPES
@@ -121,7 +122,7 @@ export async function handleStripeWebhook(
   event: StripeWebhookEvent,
   db: D1Database
 ): Promise<{ success: boolean; message: string }> {
-  console.log(`[WEBHOOK] Processing event: ${event.type} (${event.id})`);
+  log.info('webhook_event_received', { type: event.type, eventId: event.id });
 
   switch (event.type) {
     case 'checkout.session.completed':
@@ -138,7 +139,7 @@ export async function handleStripeWebhook(
       return handlePaymentFailed(event, db);
 
     default:
-      console.log(`[WEBHOOK] Ignored event type: ${event.type}`);
+      log.info('webhook_event_ignored', { type: event.type });
       return { success: true, message: `Ignored event type: ${event.type}` };
   }
 }
@@ -159,7 +160,7 @@ async function handleCheckoutCompleted(
   // Resolve user ID from metadata or client_reference_id
   const userId = session.metadata?.user_id || session.client_reference_id;
   if (!userId) {
-    console.error('[WEBHOOK] checkout.session.completed: No user_id in metadata or client_reference_id');
+    log.error('checkout_no_user_id', { sessionId: session.id });
     return { success: false, message: 'No user_id found in checkout session' };
   }
 
@@ -168,7 +169,7 @@ async function handleCheckoutCompleted(
   if (!priceId) {
     // Price ID may not be expanded in the webhook payload — we'll get it from
     // the subsequent customer.subscription.created event. Log but don't fail.
-    console.warn('[WEBHOOK] checkout.session.completed: No price_id found, will rely on subscription.created event');
+    log.warn('checkout_no_price_id', { sessionId: session.id, fallback: 'subscription.created' });
   }
 
   const tier = priceId ? PRICE_TO_TIER[priceId] : null;
@@ -178,7 +179,7 @@ async function handleCheckoutCompleted(
     await db.prepare(
       'UPDATE users SET stripe_customer_id = ?, updated_at = datetime(\'now\') WHERE id = ?'
     ).bind(session.customer, userId).run();
-    console.log(`[WEBHOOK] Stored stripe_customer_id=${session.customer} for user=${userId}`);
+    log.info('checkout_customer_id_stored', { userId: userId.slice(0, 8), customerId: session.customer.slice(0, 8) });
   }
 
   // If we have tier, update everything atomically. Otherwise wait for subscription.created.
@@ -214,11 +215,11 @@ async function handleCheckoutCompleted(
       ).bind(userId, currentPeriod),
     ]);
 
-    console.log(`[WEBHOOK] Checkout completed (atomic): user=${userId}, tier=${tier}, customer=${session.customer}`);
+    log.info('checkout_completed_atomic', { userId: userId.slice(0, 8), tier, customerId: session.customer.slice(0, 8) });
     return { success: true, message: `Checkout completed: user=${userId} activated ${tier}` };
   }
 
-  console.log(`[WEBHOOK] Checkout completed (tier pending): user=${userId}, customer=${session.customer}`);
+  log.info('checkout_completed_tier_pending', { userId: userId.slice(0, 8), customerId: session.customer.slice(0, 8) });
   return { success: true, message: `Checkout completed: customer stored, tier will be set by subscription.created` };
 }
 
@@ -314,14 +315,14 @@ async function handleSubscriptionUpdate(
           'UPDATE users SET subscription_tier = ?, stripe_customer_id = ?, updated_at = datetime(\'now\') WHERE id = ?'
         ).bind(tier, subscription.customer, resolvedUserId)
       );
-      console.log(`[WEBHOOK] Batching users.subscription_tier=${tier} for user=${resolvedUserId}`);
+      log.info('subscription_tier_batch_update', { userId: resolvedUserId.slice(0, 8), tier });
     } else if (status === 'cancelled' || status === 'expired') {
       batchStatements.push(
         db.prepare(
           'UPDATE users SET subscription_tier = \'TRIAL\', updated_at = datetime(\'now\') WHERE id = ?'
         ).bind(resolvedUserId)
       );
-      console.log(`[WEBHOOK] Batching downgrade to TRIAL for user=${resolvedUserId}`);
+      log.info('subscription_tier_batch_downgrade', { userId: resolvedUserId.slice(0, 8), tier: 'TRIAL' });
     }
 
     // Backfill stripe_customer_id if it was missing from users table
@@ -331,13 +332,13 @@ async function handleSubscriptionUpdate(
           'UPDATE users SET stripe_customer_id = ?, updated_at = datetime(\'now\') WHERE id = ?'
         ).bind(subscription.customer, resolvedUserId)
       );
-      console.log(`[WEBHOOK] Batching stripe_customer_id backfill for user=${resolvedUserId}`);
+      log.info('subscription_customer_id_backfill', { userId: resolvedUserId.slice(0, 8) });
     }
   }
 
   // Execute all writes atomically
   await db.batch(batchStatements);
-  console.log(`[WEBHOOK] Subscription updated (atomic, ${batchStatements.length} ops): ${subscription.id} → ${tier} (${status})`);
+  log.info('subscription_updated_atomic', { subscriptionId: subscription.id.slice(0, 8), tier, status, batchOps: batchStatements.length });
 
   return { success: true, message: `Subscription ${subscription.id} updated to ${tier} (${status})` };
 }
@@ -368,7 +369,7 @@ async function handleSubscriptionDeleted(
         'UPDATE users SET subscription_tier = \'TRIAL\', updated_at = datetime(\'now\') WHERE id = ?'
       ).bind(user.user_id),
     ]);
-    console.log(`[WEBHOOK] Subscription deleted (atomic): downgraded user=${user.user_id} to TRIAL`);
+    log.info('subscription_deleted_atomic', { userId: user.user_id.slice(0, 8), downgradedTo: 'TRIAL' });
   } else {
     // No user found — still mark subscription as cancelled
     await db.prepare(`
@@ -376,7 +377,7 @@ async function handleSubscriptionDeleted(
       SET status = 'cancelled', updated_at = datetime('now')
       WHERE stripe_subscription_id = ?
     `).bind(subscription.id).run();
-    console.warn(`[WEBHOOK] Subscription deleted but no user found for customer=${subscription.customer}`);
+    log.warn('subscription_deleted_no_user', { customerId: subscription.customer.slice(0, 8) });
   }
 
   return { success: true, message: `Subscription ${subscription.id} cancelled, user downgraded to TRIAL` };
@@ -390,7 +391,7 @@ async function handlePaymentFailed(
   db: D1Database
 ): Promise<{ success: boolean; message: string }> {
   // Could send notification email, update status, etc.
-  console.error(`Payment failed for event: ${event.id}`);
+  log.error('payment_failed', { eventId: event.id });
   return { success: true, message: 'Payment failure logged' };
 }
 

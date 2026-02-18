@@ -12,6 +12,7 @@ import { requireAuth } from '../middleware/requireAuth';
 import { selectAgentForTask, AGENT_REGISTRY, type TaskType } from '../agents/registry';
 import { validateAuditGate } from '../lib/gates/ga-aud';
 import { detectDiminishingReturns } from '../lib/diminishing-returns';
+import { log } from '../utils/logger';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -80,7 +81,7 @@ app.post('/:projectId/agents', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -154,7 +155,7 @@ app.get('/:projectId/agents', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -192,7 +193,7 @@ app.get('/:projectId/agents/:agentId', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -234,7 +235,7 @@ app.put('/:projectId/agents/:agentId', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -307,7 +308,7 @@ app.delete('/:projectId/agents/:agentId', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -344,7 +345,7 @@ app.post('/:projectId/tasks', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -399,7 +400,7 @@ app.get('/:projectId/tasks', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -444,7 +445,7 @@ app.get('/:projectId/tasks/:taskId', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -475,7 +476,7 @@ app.post('/:projectId/agents/orchestrate', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -538,7 +539,7 @@ app.post('/:projectId/tasks/:taskId/execute', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -625,7 +626,7 @@ app.post('/:projectId/tasks/:taskId/approve', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -691,7 +692,7 @@ app.get('/:projectId/agents/audit-log', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(`
-    SELECT id FROM projects WHERE id = ? AND user_id = ?
+    SELECT id FROM projects WHERE id = ? AND owner_id = ?
   `).bind(projectId, userId).first();
 
   if (!project) {
@@ -729,7 +730,7 @@ app.post('/:projectId/audit-findings', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(
-    `SELECT id FROM projects WHERE id = ? AND user_id = ?`
+    `SELECT id FROM projects WHERE id = ? AND owner_id = ?`
   ).bind(projectId, userId).first();
 
   if (!project) {
@@ -848,7 +849,7 @@ app.get('/:projectId/audit-findings', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(
-    `SELECT id FROM projects WHERE id = ? AND user_id = ?`
+    `SELECT id FROM projects WHERE id = ? AND owner_id = ?`
   ).bind(projectId, userId).first();
 
   if (!project) {
@@ -897,7 +898,7 @@ app.put('/:projectId/audit-findings/:findingId/triage', requireAuth, async (c) =
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(
-    `SELECT id FROM projects WHERE id = ? AND user_id = ?`
+    `SELECT id FROM projects WHERE id = ? AND owner_id = ?`
   ).bind(projectId, userId).first();
 
   if (!project) {
@@ -960,7 +961,7 @@ app.get('/:projectId/root-cause-registry', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(
-    `SELECT id FROM projects WHERE id = ? AND user_id = ?`
+    `SELECT id FROM projects WHERE id = ? AND owner_id = ?`
   ).bind(projectId, userId).first();
 
   if (!project) {
@@ -998,7 +999,7 @@ app.put('/:projectId/root-cause-registry/:registryId/resolve', requireAuth, asyn
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(
-    `SELECT id FROM projects WHERE id = ? AND user_id = ?`
+    `SELECT id FROM projects WHERE id = ? AND owner_id = ?`
   ).bind(projectId, userId).first();
 
   if (!project) {
@@ -1051,7 +1052,7 @@ app.post('/:projectId/agents/audit-diff', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(
-    `SELECT id FROM projects WHERE id = ? AND user_id = ?`
+    `SELECT id FROM projects WHERE id = ? AND owner_id = ?`
   ).bind(projectId, userId).first();
 
   if (!project) {
@@ -1167,7 +1168,7 @@ app.get('/:projectId/audit-config', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(
-    `SELECT id FROM projects WHERE id = ? AND user_id = ?`
+    `SELECT id FROM projects WHERE id = ? AND owner_id = ?`
   ).bind(projectId, userId).first();
 
   if (!project) {
@@ -1201,7 +1202,7 @@ app.put('/:projectId/audit-config', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(
-    `SELECT id FROM projects WHERE id = ? AND user_id = ?`
+    `SELECT id FROM projects WHERE id = ? AND owner_id = ?`
   ).bind(projectId, userId).first();
 
   if (!project) {
@@ -1272,7 +1273,7 @@ app.get('/:projectId/agents/context-budget', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(
-    `SELECT id FROM projects WHERE id = ? AND user_id = ?`
+    `SELECT id FROM projects WHERE id = ? AND owner_id = ?`
   ).bind(projectId, userId).first();
 
   if (!project) {
@@ -1374,7 +1375,7 @@ app.get('/:projectId/gates/ga-aud', requireAuth, async (c) => {
   // Verify project ownership
   const userId = (c as any).userId;
   const project = await c.env.DB.prepare(
-    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
   ).bind(projectId, userId).first();
 
   if (!project) {
@@ -1394,8 +1395,8 @@ app.get('/:projectId/gates/ga-aud', requireAuth, async (c) => {
       ...result
     });
   } catch (error: any) {
-    console.error('GA:AUD validation error:', error);
-    return c.json({ success: false, error: error.message }, 500);
+    log.error('ga_aud_validation_failed', { error: error.message || String(error), projectId });
+    return c.json({ success: false, error: 'GA:AUD validation failed', error_code: 'INTERNAL_ERROR' }, 500);
   }
 });
 
@@ -1411,7 +1412,7 @@ app.get('/:projectId/agents/diminishing-returns', requireAuth, async (c) => {
   // Verify project ownership
   const userId = (c as any).userId;
   const project = await c.env.DB.prepare(
-    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
   ).bind(projectId, userId).first();
 
   if (!project) {
@@ -1433,8 +1434,8 @@ app.get('/:projectId/agents/diminishing-returns', requireAuth, async (c) => {
       ...result
     });
   } catch (error: any) {
-    console.error('Diminishing returns detection error:', error);
-    return c.json({ success: false, error: error.message }, 500);
+    log.error('diminishing_returns_detection_failed', { error: error.message || String(error), projectId });
+    return c.json({ success: false, error: 'Diminishing returns detection failed', error_code: 'INTERNAL_ERROR' }, 500);
   }
 });
 
@@ -1455,7 +1456,7 @@ app.post('/:projectId/agents/audit-incremental', requireAuth, async (c) => {
   // Verify project ownership
   const userId = (c as any).userId;
   const project = await c.env.DB.prepare(
-    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
   ).bind(projectId, userId).first();
 
   if (!project) {
@@ -1505,8 +1506,8 @@ app.post('/:projectId/agents/audit-incremental', requireAuth, async (c) => {
       }
     });
   } catch (error: any) {
-    console.error('Incremental audit error:', error);
-    return c.json({ success: false, error: error.message }, 500);
+    log.error('incremental_audit_failed', { error: error.message || String(error), projectId });
+    return c.json({ success: false, error: 'Incremental audit failed', error_code: 'INTERNAL_ERROR' }, 500);
   }
 });
 
@@ -1534,7 +1535,7 @@ app.post('/:projectId/tasks/:taskId/guided-plan', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(
-    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
   ).bind(projectId, userId).first();
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
@@ -1686,8 +1687,8 @@ Output ONLY the JSON array, no markdown or explanation.`;
       })),
     }, 201);
   } catch (err: any) {
-    console.error('Guided plan generation failed:', err);
-    return c.json({ error: `Failed to generate guided plan: ${err.message}` }, 500);
+    log.error('guided_plan_generation_failed', { error: err.message || String(err), projectId, taskId });
+    return c.json({ error: 'Failed to generate guided plan', error_code: 'INTERNAL_ERROR' }, 500);
   }
 });
 
@@ -1701,7 +1702,7 @@ app.get('/:projectId/tasks/:taskId/guided-steps', requireAuth, async (c) => {
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(
-    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
   ).bind(projectId, userId).first();
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
@@ -1738,7 +1739,7 @@ app.post('/:projectId/tasks/:taskId/guided-steps/:stepNumber/complete', requireA
   const userId = c.get('userId');
 
   const project = await c.env.DB.prepare(
-    'SELECT id FROM projects WHERE id = ? AND user_id = ?'
+    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
   ).bind(projectId, userId).first();
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
@@ -1822,7 +1823,7 @@ Output JSON only:
 
       validation = JSON.parse(cleaned);
     } catch (err) {
-      console.warn('[GuidedStep] AI validation failed, marking as COMPLETED without validation:', err);
+      log.warn('guided_step_validation_failed');
       validation = {
         passed: true,
         feedback: 'AI validation unavailable — step marked complete based on human evidence',

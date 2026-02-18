@@ -21,25 +21,12 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const engineering = new Hono<{ Bindings: Env }>();
 
 // All routes require auth
 engineering.use('/*', requireAuth);
-
-/**
- * Verify project ownership
- */
-async function verifyProjectOwnership(
-  db: D1Database,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await db.prepare(
-    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
-  ).bind(projectId, userId).first();
-  return !!project;
-}
 
 // ============================================================================
 // §64.3 — SYSTEM ARCHITECTURE RECORDS (SAR)

@@ -14,25 +14,42 @@ import type { Provider, Subscription, Env } from '../types';
 import { RouterError } from '../types';
 import { isByokTier, isPlatformTier } from '../config/tiers';
 import { decryptAESGCM } from '../utils/crypto';
+import { log } from '../utils/logger';
 
 /**
  * Cache for BYOK API keys
  * Key format: "userId:provider"
  * Value: { key: string, timestamp: number, updated_at: string }
+ *
+ * M-3 fix: Maximum cache size to prevent unbounded growth
  */
 const KEY_CACHE = new Map<string, { key: string; timestamp: number; updated_at: string }>();
+const CACHE_TTL = 30000; // 30 seconds
+const CACHE_MAX_SIZE = 10000; // Max entries before eviction
 
 /**
- * Cache TTL (30 seconds)
- * Keys are cached to reduce database queries, but short enough to pick up changes quickly
+ * Evict expired entries from cache. Called when cache exceeds CACHE_MAX_SIZE.
  */
-const CACHE_TTL = 30000;
+function evictStaleEntries(): void {
+  const now = Date.now();
+  for (const [key, entry] of KEY_CACHE) {
+    if (now - entry.timestamp > CACHE_TTL) {
+      KEY_CACHE.delete(key);
+    }
+  }
+  // If still over limit after TTL eviction, drop oldest 25%
+  if (KEY_CACHE.size > CACHE_MAX_SIZE) {
+    const entries = Array.from(KEY_CACHE.entries())
+      .sort((a, b) => a[1].timestamp - b[1].timestamp);
+    const toRemove = Math.floor(entries.length * 0.25);
+    for (let i = 0; i < toRemove; i++) {
+      KEY_CACHE.delete(entries[i][0]);
+    }
+  }
+}
 
 /**
  * Resolve the API key to use for a given provider
- *
- * - BYOK tiers: Fetch user-provided key from database (with caching)
- * - Platform tiers: Use environment secrets
  */
 export async function resolveApiKey(
   subscription: Subscription,
@@ -42,7 +59,6 @@ export async function resolveApiKey(
 ): Promise<string> {
   const tier = subscription.tier;
 
-  // Route based on tier classification (derived from config/tiers.ts)
   if (isByokTier(tier)) {
     return await resolveBYOKKey(provider, env, userId);
   } else if (isPlatformTier(tier)) {
@@ -58,21 +74,19 @@ export async function resolveApiKey(
 
 /**
  * Resolve BYOK key from database (with caching)
- * Used for: MANUSCRIPT_BYOK, BYOK_STANDARD
  */
 async function resolveBYOKKey(
   provider: Provider,
   env: Env,
   userId: string
 ): Promise<string> {
-  // Cache key: userId:provider
   const cacheKey = `${userId}:${provider}`;
   const cached = KEY_CACHE.get(cacheKey);
   const now = Date.now();
 
   // Return cached if fresh
   if (cached && (now - cached.timestamp) < CACHE_TTL) {
-    console.log(`[BYOK] [CACHE HIT] Using cached ${provider} key for user ${userId.substring(0, 8)}... | Updated: ${cached.updated_at}`);
+    log.info('byok_cache_hit', { provider, user_id: userId.substring(0, 8) });
     return cached.key;
   }
 
@@ -96,45 +110,45 @@ async function resolveBYOKKey(
     );
   }
 
-  // Decrypt API key (HANDOFF-COPILOT-AUDIT-01)
-  // Transparent migration: try decrypt first, if it fails (plaintext), use as-is
+  // Decrypt API key
   let decryptedKey: string;
   const encKey = env.API_KEY_ENCRYPTION_KEY;
   if (encKey) {
     try {
       decryptedKey = await decryptAESGCM(userKey.api_key, encKey);
     } catch {
-      // Not encrypted (plaintext legacy key) — use as-is
       decryptedKey = userKey.api_key;
     }
   } else {
     decryptedKey = userKey.api_key;
   }
 
-  // Update cache (cache the decrypted key)
+  // M-3: Evict stale entries if cache exceeds max size
+  if (KEY_CACHE.size >= CACHE_MAX_SIZE) {
+    evictStaleEntries();
+  }
+
+  // Update cache
   KEY_CACHE.set(cacheKey, {
     key: decryptedKey,
     timestamp: now,
     updated_at: userKey.updated_at
   });
 
-  console.log(`[BYOK] [CACHE MISS] Fetched fresh ${provider} key for user ${userId.substring(0, 8)}... | Updated: ${userKey.updated_at}`);
+  log.info('byok_cache_miss', { provider, user_id: userId.substring(0, 8) });
 
   return decryptedKey;
 }
 
 /**
  * Resolve Platform key from environment secrets
- * Used for: TRIAL, PLATFORM_STANDARD, PLATFORM_PRO, ENTERPRISE
- *
- * Cost Tracking: Log platform key usage for billing analysis
+ * H-2 fix: No key content logged (even prefixes)
  */
 function resolvePlatformKey(
   provider: Provider,
   env: Env,
   userId: string
 ): string {
-  // CLEANUP: Single naming convention — PLATFORM_* keys only
   const keyMap: Record<Provider, string | undefined> = {
     anthropic: env.PLATFORM_ANTHROPIC_KEY,
     openai: env.PLATFORM_OPENAI_KEY,
@@ -157,9 +171,8 @@ function resolvePlatformKey(
     );
   }
 
-  // Cost tracking log (distinguish platform usage from BYOK)
-  const keyPreview = key.substring(0, 15) + '...';
-  console.log(`[PLATFORM KEY] Using ${provider} platform key for user ${userId.substring(0, 8)}... | Preview: ${keyPreview}`);
+  // H-2 fix: Log usage without any key content
+  log.info('platform_key_resolved', { provider, user_id: userId.substring(0, 8) });
 
   return key;
 }
@@ -183,18 +196,13 @@ export async function isProviderAvailable(
 
 /**
  * Invalidate cached API key(s)
- * Called after updating/deleting keys to ensure fresh data is used
- * 
- * @param userId - User ID whose keys to invalidate
- * @param provider - Specific provider to invalidate, or undefined to clear all for user
  */
 export function invalidateKeyCache(userId: string, provider?: Provider): void {
   if (provider) {
     const cacheKey = `${userId}:${provider}`;
     KEY_CACHE.delete(cacheKey);
-    console.log(`[CACHE CLEAR] Cleared ${provider} key for user ${userId.substring(0, 8)}...`);
+    log.info('cache_invalidated', { provider, user_id: userId.substring(0, 8) });
   } else {
-    // Clear all keys for user
     let cleared = 0;
     for (const key of KEY_CACHE.keys()) {
       if (key.startsWith(`${userId}:`)) {
@@ -202,6 +210,6 @@ export function invalidateKeyCache(userId: string, provider?: Provider): void {
         cleared++;
       }
     }
-    console.log(`[CACHE CLEAR] Cleared ${cleared} keys for user ${userId.substring(0, 8)}...`);
+    log.info('cache_invalidated_all', { count: cleared, user_id: userId.substring(0, 8) });
   }
 }

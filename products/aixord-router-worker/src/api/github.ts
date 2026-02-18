@@ -1,21 +1,47 @@
 /**
- * GitHub API (HANDOFF-D4-GITHUB-EVIDENCE)
+ * GitHub API (HANDOFF-D4-GITHUB-EVIDENCE + DUAL-MODE-01)
  *
- * OAuth integration for read-only GitHub evidence collection.
+ * OAuth integration for GitHub evidence + optional workspace sync.
  * Evidence augments the Reconciliation Triad - it INFORMS, never overrides.
  *
+ * Two modes:
+ * - READ_ONLY:      Evidence sync only (commits, PRs, releases → triad)
+ * - WORKSPACE_SYNC: Full read-write (create repos, commit scaffold, push code)
+ *
  * Endpoints:
- * - POST   /api/v1/github/connect        - Initiate OAuth flow
- * - GET    /api/v1/github/callback       - OAuth callback handler
- * - GET    /api/v1/github/status/:projectId - Get connection status
+ * - POST   /api/v1/github/connect             - Initiate OAuth flow (mode-aware)
+ * - GET    /api/v1/github/callback            - OAuth callback handler
+ * - GET    /api/v1/github/status/:projectId   - Get connection status
  * - DELETE /api/v1/github/disconnect/:projectId - Remove connection
- * - GET    /api/v1/github/repos          - List user's repos
+ * - GET    /api/v1/github/repos               - List user's repos
+ * - PUT    /api/v1/github/repo/:projectId     - Select repo
+ * - PUT    /api/v1/github/mode/:projectId     - Switch mode
+ * - POST   /api/v1/github/commit/:projectId   - Commit files (WORKSPACE_SYNC)
+ * - GET    /api/v1/github/commits/:projectId  - List platform commits
+ * - POST   /api/v1/github/create-repo/:projectId - Create new repo (WORKSPACE_SYNC)
  */
 
 import { Hono } from 'hono';
-import type { Env, GitHubConnection } from '../types';
+import type { Env, GitHubConnection, GitHubMode } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
 import { encryptAESGCM, decryptAESGCM } from '../utils/crypto';
+import { log } from '../utils/logger';
+
+// =============================================================================
+// MODE-DEPENDENT OAUTH SCOPES (DUAL-MODE-01)
+// =============================================================================
+
+/** OAuth scopes per GitHub mode */
+const GITHUB_SCOPES: Record<GitHubMode, string[]> = {
+  'READ_ONLY': ['repo:status', 'read:org', 'public_repo'],
+  'WORKSPACE_SYNC': ['repo', 'read:org'],   // 'repo' grants full read-write
+};
+
+/** Validate mode string */
+function parseGitHubMode(mode?: string): GitHubMode {
+  if (mode === 'WORKSPACE_SYNC') return 'WORKSPACE_SYNC';
+  return 'READ_ONLY';
+}
 
 const github = new Hono<{ Bindings: Env }>();
 
@@ -60,9 +86,11 @@ github.post('/connect', async (c) => {
       project_id: string;
       repo_owner?: string;
       repo_name?: string;
+      mode?: string;   // 'READ_ONLY' | 'WORKSPACE_SYNC'
     }>();
 
     const { project_id, repo_owner, repo_name } = body;
+    const mode = parseGitHubMode(body.mode);
 
     if (!project_id) {
       return c.json({ error: 'project_id required' }, 400);
@@ -89,6 +117,7 @@ github.post('/connect', async (c) => {
       user_id: userId,
       repo_owner: repo_owner || null,
       repo_name: repo_name || null,
+      github_mode: mode,
       created_at: new Date().toISOString()
     });
 
@@ -98,9 +127,8 @@ github.post('/connect', async (c) => {
       'INSERT INTO oauth_states (state, data, expires_at) VALUES (?, ?, ?)'
     ).bind(state, stateData, expiresAt).run();
 
-    // Build authorization URL
-    // Request minimal read-only scopes
-    const scopes = ['repo:status', 'read:org', 'public_repo'].join(' ');
+    // Build authorization URL — scopes depend on requested mode
+    const scopes = GITHUB_SCOPES[mode].join(' ');
     const redirectUri = c.env.GITHUB_REDIRECT_URI || 'https://aixord-router.pmerit.workers.dev/api/v1/github/callback';
 
     const authUrl = new URL('https://github.com/login/oauth/authorize');
@@ -116,10 +144,10 @@ github.post('/connect', async (c) => {
     });
 
   } catch (error) {
-    console.error('GitHub connect error:', error);
+    log.error('github_connect_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to initiate GitHub connection',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -156,7 +184,9 @@ github.get('/callback', async (c) => {
       user_id: string;
       repo_owner: string | null;
       repo_name: string | null;
+      github_mode?: string;
     };
+    const mode = parseGitHubMode(stateData.github_mode);
 
     // Delete used state
     await c.env.DB.prepare('DELETE FROM oauth_states WHERE state = ?').bind(state).run();
@@ -183,54 +213,79 @@ github.get('/callback', async (c) => {
     };
 
     if (tokenData.error || !tokenData.access_token) {
-      console.error('GitHub token exchange error:', tokenData);
+      log.error('github_token_exchange_failed', { error: tokenData.error });
       return c.json({
         error: 'Failed to exchange code for token',
         detail: tokenData.error_description || tokenData.error
       }, 400);
     }
 
-    // Encrypt the access token for storage
-    const encryptionKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY || 'default-key-change-in-production';
+    // Encrypt the access token for storage — fail-closed if secret not configured
+    const encryptionKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      return c.json({ error: 'Server configuration error', error_code: 'CONFIG_MISSING' }, 500);
+    }
     const encryptedToken = await encryptToken(tokenData.access_token, encryptionKey);
 
     // If repo not specified, we'll need to prompt user to select one
     // For now, store connection without specific repo
     const now = new Date().toISOString();
 
-    // Upsert connection (one connection per project)
+    // UPGRADE-UX-01: Check if this is a mode upgrade (existing READ_ONLY → WORKSPACE_SYNC)
+    const existingConnection = await c.env.DB.prepare(
+      'SELECT github_mode, repo_owner, repo_name FROM github_connections WHERE project_id = ?'
+    ).bind(stateData.project_id).first<{ github_mode: string; repo_owner: string; repo_name: string }>();
+
+    const isUpgrade = existingConnection
+      && existingConnection.github_mode === 'READ_ONLY'
+      && mode === 'WORKSPACE_SYNC';
+
+    // Upsert connection (one connection per project) — includes mode
+    // On upgrade: preserve existing repo_owner/repo_name instead of resetting to PENDING
+    const repoOwner = isUpgrade ? existingConnection.repo_owner : (stateData.repo_owner || 'PENDING');
+    const repoName = isUpgrade ? existingConnection.repo_name : (stateData.repo_name || 'PENDING');
+
     await c.env.DB.prepare(`
-      INSERT INTO github_connections (project_id, user_id, repo_owner, repo_name, access_token_encrypted, scope, connected_at)
-      VALUES (?, ?, ?, ?, ?, 'READ_ONLY', ?)
+      INSERT INTO github_connections (project_id, user_id, repo_owner, repo_name, access_token_encrypted, scope, github_mode, connected_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(project_id) DO UPDATE SET
         user_id = excluded.user_id,
         repo_owner = excluded.repo_owner,
         repo_name = excluded.repo_name,
         access_token_encrypted = excluded.access_token_encrypted,
+        scope = excluded.scope,
+        github_mode = excluded.github_mode,
         connected_at = excluded.connected_at
     `).bind(
       stateData.project_id,
       stateData.user_id,
-      stateData.repo_owner || 'PENDING',  // Will be updated when user selects repo
-      stateData.repo_name || 'PENDING',
+      repoOwner,
+      repoName,
       encryptedToken,
+      mode,   // 'READ_ONLY' or 'WORKSPACE_SYNC'
+      mode,
       now
     ).run();
 
     // D12: Redirect to originating project page (not /settings)
+    // UPGRADE-UX-01: Set ?github_upgraded=true on actual mode upgrades for success toast
     const frontendUrl = c.env.FRONTEND_URL || 'https://aixord.pmerit.com';
     const redirectUrl = new URL(`${frontendUrl}/project/${stateData.project_id}`);
-    redirectUrl.searchParams.set('github', 'connected');
+    if (isUpgrade) {
+      redirectUrl.searchParams.set('github_upgraded', 'true');
+    } else {
+      redirectUrl.searchParams.set('github', 'connected');
+    }
 
     return c.redirect(redirectUrl.toString());
 
   } catch (error) {
-    console.error('GitHub callback error:', error);
+    log.error('github_callback_failed', { error: error instanceof Error ? error.message : String(error) });
     // D12: On error, redirect to dashboard with error param
     const frontendUrl = c.env.FRONTEND_URL || 'https://aixord.pmerit.com';
     const errorUrl = new URL(`${frontendUrl}/dashboard`);
     errorUrl.searchParams.set('github', 'error');
-    errorUrl.searchParams.set('error', error instanceof Error ? error.message : 'OAuth callback failed');
+    errorUrl.searchParams.set('error', 'OAuth callback failed');
     return c.redirect(errorUrl.toString());
   }
 });
@@ -256,7 +311,7 @@ github.get('/status/:projectId', async (c) => {
 
     // Get connection
     const connection = await c.env.DB.prepare(`
-      SELECT project_id, repo_owner, repo_name, scope, connected_at, last_sync
+      SELECT project_id, repo_owner, repo_name, scope, github_mode, connected_at, last_sync
       FROM github_connections
       WHERE project_id = ? AND user_id = ?
     `).bind(projectId, userId).first<{
@@ -264,6 +319,7 @@ github.get('/status/:projectId', async (c) => {
       repo_owner: string;
       repo_name: string;
       scope: string;
+      github_mode: string;
       connected_at: string;
       last_sync: string | null;
     }>();
@@ -275,18 +331,21 @@ github.get('/status/:projectId', async (c) => {
         repo_owner: null,
         repo_name: null,
         scope: 'READ_ONLY',
+        github_mode: 'READ_ONLY',
         connected_at: null,
         last_sync: null
       };
       return c.json(status);
     }
 
+    const connMode = parseGitHubMode(connection.github_mode);
     const status: GitHubConnection = {
       project_id: connection.project_id,
       connected: true,
       repo_owner: connection.repo_owner === 'PENDING' ? null : connection.repo_owner,
       repo_name: connection.repo_name === 'PENDING' ? null : connection.repo_name,
-      scope: 'READ_ONLY',
+      scope: connMode,
+      github_mode: connMode,
       connected_at: connection.connected_at,
       last_sync: connection.last_sync
     };
@@ -294,10 +353,10 @@ github.get('/status/:projectId', async (c) => {
     return c.json(status);
 
   } catch (error) {
-    console.error('GitHub status error:', error);
+    log.error('github_status_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to get connection status',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -342,10 +401,10 @@ github.delete('/disconnect/:projectId', async (c) => {
     });
 
   } catch (error) {
-    console.error('GitHub disconnect error:', error);
+    log.error('github_disconnect_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to disconnect GitHub',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -378,8 +437,11 @@ github.get('/repos', async (c) => {
       return c.json({ error: 'GitHub not connected for this project' }, 404);
     }
 
-    // Decrypt token
-    const encryptionKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY || 'default-key-change-in-production';
+    // Decrypt token — fail-closed if secret not configured
+    const encryptionKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      return c.json({ error: 'Server configuration error', error_code: 'CONFIG_MISSING' }, 500);
+    }
     const accessToken = await decryptToken(connection.access_token_encrypted, encryptionKey);
 
     // Fetch repos from GitHub
@@ -393,7 +455,7 @@ github.get('/repos', async (c) => {
 
     if (!reposResponse.ok) {
       const error = await reposResponse.text();
-      console.error('GitHub repos fetch error:', error);
+      log.error('github_repos_fetch_failed');
       return c.json({ error: 'Failed to fetch repositories' }, 502);
     }
 
@@ -423,10 +485,10 @@ github.get('/repos', async (c) => {
     return c.json({ repos: repoList });
 
   } catch (error) {
-    console.error('GitHub repos error:', error);
+    log.error('github_repos_fetch_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to fetch repositories',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
     }, 500);
   }
 });
@@ -482,10 +544,318 @@ github.put('/repo/:projectId', async (c) => {
     });
 
   } catch (error) {
-    console.error('GitHub repo update error:', error);
+    log.error('github_repo_update_failed', { error: error instanceof Error ? error.message : String(error) });
     return c.json({
       error: 'Failed to update repository',
-      detail: error instanceof Error ? error.message : String(error)
+      error_code: 'INTERNAL_ERROR'
+    }, 500);
+  }
+});
+
+// =============================================================================
+// DUAL-MODE: MODE SWITCH (DUAL-MODE-01)
+// =============================================================================
+
+/**
+ * PUT /api/v1/github/mode/:projectId
+ *
+ * Switch GitHub mode for a project.
+ * Upgrading READ_ONLY → WORKSPACE_SYNC requires re-OAuth (different scopes).
+ * Downgrading WORKSPACE_SYNC → READ_ONLY is instant (token still works).
+ */
+github.put('/mode/:projectId', async (c) => {
+  try {
+    const userId = c.get('userId');
+    const projectId = c.req.param('projectId');
+    const body = await c.req.json<{ mode: string }>();
+    const newMode = parseGitHubMode(body.mode);
+
+    // Verify project ownership
+    const project = await c.env.DB.prepare(
+      'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
+    ).bind(projectId, userId).first();
+
+    if (!project) {
+      return c.json({ error: 'Project not found' }, 404);
+    }
+
+    // Get current connection
+    const connection = await c.env.DB.prepare(
+      'SELECT github_mode FROM github_connections WHERE project_id = ? AND user_id = ?'
+    ).bind(projectId, userId).first<{ github_mode: string }>();
+
+    if (!connection) {
+      return c.json({ error: 'GitHub not connected for this project' }, 404);
+    }
+
+    const currentMode = parseGitHubMode(connection.github_mode);
+
+    // Upgrading from READ_ONLY to WORKSPACE_SYNC requires re-OAuth (broader scopes)
+    if (currentMode === 'READ_ONLY' && newMode === 'WORKSPACE_SYNC') {
+      return c.json({
+        requires_reauth: true,
+        message: 'Upgrading to WORKSPACE_SYNC requires re-authorization with write permissions. Call POST /github/connect with mode=WORKSPACE_SYNC.',
+        current_mode: currentMode,
+        requested_mode: newMode
+      });
+    }
+
+    // Downgrading WORKSPACE_SYNC → READ_ONLY is instant
+    await c.env.DB.prepare(
+      'UPDATE github_connections SET scope = ?, github_mode = ? WHERE project_id = ? AND user_id = ?'
+    ).bind(newMode, newMode, projectId, userId).run();
+
+    return c.json({
+      success: true,
+      github_mode: newMode,
+      message: `Mode switched to ${newMode}`
+    });
+
+  } catch (error) {
+    log.error('github_mode_switch_failed', { error: error instanceof Error ? error.message : String(error) });
+    return c.json({ error: 'Failed to switch mode', error_code: 'INTERNAL_ERROR' }, 500);
+  }
+});
+
+// =============================================================================
+// WRITE OPERATIONS (WORKSPACE_SYNC mode only) — DUAL-MODE-01
+// =============================================================================
+
+/**
+ * POST /api/v1/github/commit/:projectId
+ *
+ * Commit files to GitHub using Git Trees API (atomic multi-file commit).
+ * Only available in WORKSPACE_SYNC mode.
+ * All writes go to feature branch `aixord/{slug}`, never main.
+ */
+github.post('/commit/:projectId', async (c) => {
+  try {
+    const userId = c.get('userId');
+    const projectId = c.req.param('projectId');
+    const body = await c.req.json<{
+      files: Array<{ path: string; content: string }>;
+      message: string;
+      branch?: string;
+    }>();
+
+    if (!body.files?.length || !body.message) {
+      return c.json({ error: 'files array and message required' }, 400);
+    }
+
+    // Get connection and verify mode
+    const connection = await c.env.DB.prepare(`
+      SELECT repo_owner, repo_name, access_token_encrypted, github_mode
+      FROM github_connections
+      WHERE project_id = ? AND user_id = ?
+    `).bind(projectId, userId).first<{
+      repo_owner: string;
+      repo_name: string;
+      access_token_encrypted: string;
+      github_mode: string;
+    }>();
+
+    if (!connection) {
+      return c.json({ error: 'GitHub not connected for this project' }, 404);
+    }
+
+    if (connection.github_mode !== 'WORKSPACE_SYNC') {
+      return c.json({
+        error: 'Write operations require WORKSPACE_SYNC mode',
+        current_mode: connection.github_mode,
+        hint: 'Switch to WORKSPACE_SYNC mode via PUT /github/mode/:projectId'
+      }, 403);
+    }
+
+    if (connection.repo_owner === 'PENDING' || connection.repo_name === 'PENDING') {
+      return c.json({ error: 'No repository selected. Select a repo first.' }, 400);
+    }
+
+    // Decrypt token
+    const encryptionKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      return c.json({ error: 'Server configuration error', error_code: 'CONFIG_MISSING' }, 500);
+    }
+    const accessToken = await decryptToken(connection.access_token_encrypted, encryptionKey);
+
+    // Determine branch name
+    const projectRow = await c.env.DB.prepare(
+      'SELECT name FROM projects WHERE id = ?'
+    ).bind(projectId).first<{ name: string }>();
+    const slug = (projectRow?.name || projectId).toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 50);
+    const branch = body.branch || `aixord/${slug}`;
+
+    // Import and call the write service
+    const { commitFilesToGitHub } = await import('../services/github-write');
+    const result = await commitFilesToGitHub(
+      accessToken,
+      connection.repo_owner,
+      connection.repo_name,
+      branch,
+      body.files,
+      body.message
+    );
+
+    // Record commit in DB
+    const now = new Date().toISOString();
+    await c.env.DB.prepare(`
+      INSERT INTO github_commits (id, project_id, branch, commit_sha, tree_sha, message, files_count, committed_by, committed_at, pr_number, pr_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      crypto.randomUUID(),
+      projectId,
+      result.branch,
+      result.commit_sha,
+      result.tree_sha,
+      body.message.slice(0, 500),
+      result.files_committed,
+      userId,
+      now,
+      result.pr_number || null,
+      result.pr_url || null
+    ).run();
+
+    return c.json(result);
+
+  } catch (error) {
+    log.error('github_commit_failed', { error: error instanceof Error ? error.message : String(error) });
+    return c.json({
+      error: 'Failed to commit files to GitHub',
+      detail: error instanceof Error ? error.message : String(error),
+      error_code: 'COMMIT_FAILED'
+    }, 500);
+  }
+});
+
+/**
+ * GET /api/v1/github/commits/:projectId
+ *
+ * List platform-made commits for a project.
+ */
+github.get('/commits/:projectId', async (c) => {
+  try {
+    const userId = c.get('userId');
+    const projectId = c.req.param('projectId');
+
+    // Verify project ownership
+    const project = await c.env.DB.prepare(
+      'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
+    ).bind(projectId, userId).first();
+
+    if (!project) {
+      return c.json({ error: 'Project not found' }, 404);
+    }
+
+    const page = parseInt(c.req.query('page') || '1');
+    const perPage = Math.min(parseInt(c.req.query('per_page') || '20'), 100);
+    const offset = (page - 1) * perPage;
+
+    const commits = await c.env.DB.prepare(`
+      SELECT id, branch, commit_sha, tree_sha, message, files_count, committed_by, committed_at, pr_number, pr_url
+      FROM github_commits
+      WHERE project_id = ?
+      ORDER BY committed_at DESC
+      LIMIT ? OFFSET ?
+    `).bind(projectId, perPage, offset).all();
+
+    const countResult = await c.env.DB.prepare(
+      'SELECT COUNT(*) as total FROM github_commits WHERE project_id = ?'
+    ).bind(projectId).first<{ total: number }>();
+
+    return c.json({
+      commits: commits.results,
+      total: countResult?.total ?? 0,
+      page,
+      per_page: perPage
+    });
+
+  } catch (error) {
+    log.error('github_commits_list_failed', { error: error instanceof Error ? error.message : String(error) });
+    return c.json({ error: 'Failed to list commits', error_code: 'INTERNAL_ERROR' }, 500);
+  }
+});
+
+/**
+ * POST /api/v1/github/create-repo/:projectId
+ *
+ * Create a new GitHub repository and auto-select it for the project.
+ * Only available in WORKSPACE_SYNC mode.
+ */
+github.post('/create-repo/:projectId', async (c) => {
+  try {
+    const userId = c.get('userId');
+    const projectId = c.req.param('projectId');
+    const body = await c.req.json<{
+      name: string;
+      description?: string;
+      private?: boolean;
+    }>();
+
+    if (!body.name) {
+      return c.json({ error: 'Repository name required' }, 400);
+    }
+
+    // Get connection and verify mode
+    const connection = await c.env.DB.prepare(`
+      SELECT access_token_encrypted, github_mode
+      FROM github_connections
+      WHERE project_id = ? AND user_id = ?
+    `).bind(projectId, userId).first<{
+      access_token_encrypted: string;
+      github_mode: string;
+    }>();
+
+    if (!connection) {
+      return c.json({ error: 'GitHub not connected for this project' }, 404);
+    }
+
+    if (connection.github_mode !== 'WORKSPACE_SYNC') {
+      return c.json({
+        error: 'Creating repos requires WORKSPACE_SYNC mode',
+        current_mode: connection.github_mode
+      }, 403);
+    }
+
+    // Decrypt token
+    const encryptionKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      return c.json({ error: 'Server configuration error', error_code: 'CONFIG_MISSING' }, 500);
+    }
+    const accessToken = await decryptToken(connection.access_token_encrypted, encryptionKey);
+
+    // Import and call the write service
+    const { createGitHubRepo } = await import('../services/github-write');
+    const repo = await createGitHubRepo(
+      accessToken,
+      body.name,
+      body.description || '',
+      body.private ?? true  // Default to private for safety
+    );
+
+    // Auto-select the created repo
+    const now = new Date().toISOString();
+    await c.env.DB.prepare(`
+      UPDATE github_connections
+      SET repo_owner = ?, repo_name = ?, last_sync = NULL
+      WHERE project_id = ? AND user_id = ?
+    `).bind(repo.owner, repo.name, projectId, userId).run();
+
+    // Clear any old evidence (new repo = fresh start)
+    await c.env.DB.prepare(
+      'DELETE FROM github_evidence WHERE project_id = ?'
+    ).bind(projectId).run();
+
+    return c.json({
+      success: true,
+      repo,
+      message: `Repository ${repo.full_name} created and selected`
+    });
+
+  } catch (error) {
+    log.error('github_create_repo_failed', { error: error instanceof Error ? error.message : String(error) });
+    return c.json({
+      error: 'Failed to create repository',
+      detail: error instanceof Error ? error.message : String(error),
+      error_code: 'CREATE_REPO_FAILED'
     }, 500);
   }
 });

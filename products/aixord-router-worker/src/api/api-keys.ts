@@ -9,6 +9,7 @@ import { nanoid } from 'nanoid';
 import { requireAuth } from '../middleware/requireAuth';
 import { invalidateKeyCache } from '../routing/key-resolver';
 import { encryptAESGCM, decryptAESGCM, maskApiKey, verifyPasswordPBKDF2 } from '../utils/crypto';
+import { log } from '../utils/logger';
 
 /**
  * Decrypt an API key, with transparent migration for plaintext keys.
@@ -178,13 +179,7 @@ app.post('/:id/reveal', async (c) => {
 
   if (!isValidPassword) {
     // Log failed reveal attempt
-    console.log(JSON.stringify({
-      type: 'API_KEY_REVEAL_FAILED',
-      user_id: userId.substring(0, 8) + '...',
-      key_id: id,
-      reason: 'invalid_password',
-      timestamp: new Date().toISOString()
-    }));
+    log.info('api_key_reveal_failed', { key_id: id, reason: 'invalid_password' });
 
     return c.json({ success: false, error: 'Invalid password' }, 401);
   }
@@ -207,13 +202,7 @@ app.post('/:id/reveal', async (c) => {
   const plaintextKey = await decryptApiKey(keyRecord.api_key, c.env.API_KEY_ENCRYPTION_KEY);
 
   // Log successful reveal
-  console.log(JSON.stringify({
-    type: 'API_KEY_REVEALED',
-    user_id: userId.substring(0, 8) + '...',
-    key_id: id,
-    provider: keyRecord.provider,
-    timestamp: new Date().toISOString()
-  }));
+  log.info('api_key_revealed', { key_id: id, provider: keyRecord.provider });
 
   return c.json({
     success: true,
@@ -288,7 +277,7 @@ app.post('/', async (c) => {
 
     // Invalidate cache to ensure new key is used immediately
     invalidateKeyCache(userId, body.provider as Provider);
-    console.log(`[API KEY UPDATED] ${body.provider} key for user ${userId.substring(0, 8)}... - cache invalidated`);
+    log.info('api_key_updated', { provider: body.provider });
 
     return c.json({
       success: true,
@@ -314,7 +303,7 @@ app.post('/', async (c) => {
 
     // Invalidate cache to ensure new key is used immediately
     invalidateKeyCache(userId, body.provider as Provider);
-    console.log(`[API KEY SAVED] ${body.provider} key for user ${userId.substring(0, 8)}... - cache invalidated`);
+    log.info('api_key_saved', { provider: body.provider });
 
     return c.json({
       success: true,
@@ -350,7 +339,7 @@ app.delete('/:provider', async (c) => {
 
   // Invalidate cache after deletion
   invalidateKeyCache(userId, provider as Provider);
-  console.log(`[API KEY DELETED] ${provider} key for user ${userId.substring(0, 8)}... - cache invalidated`);
+  log.info('api_key_deleted', { provider });
 
   return c.json({
     success: true,
@@ -427,9 +416,11 @@ app.post('/test', async (c) => {
       stage: 'api_test',
     });
   } catch (error: any) {
+    log.error('api_key_test_failed', { error: error.message || String(error), provider: body.provider });
     return c.json({
       valid: false,
-      error: error.message || 'Test failed',
+      error: 'API key test failed',
+      error_code: 'INTERNAL_ERROR',
       stage: 'api_test',
     });
   }

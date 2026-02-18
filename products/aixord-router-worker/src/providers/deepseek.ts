@@ -7,6 +7,7 @@
 
 import type { Message, CallOptions, ProviderResponse } from '../types';
 import { RouterError } from '../types';
+import { log } from '../utils/logger';
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 
@@ -40,10 +41,8 @@ export async function callDeepSeek(
   if (!response.ok) {
     const errorText = await response.text();
     
-    // Enhanced error logging for DeepSeek API issues
-    console.error(`[DeepSeek Provider] API error ${response.status}:`, errorText);
-    console.error(`[DeepSeek Provider] Model: ${model}`);
-    console.error(`[DeepSeek Provider] Auth header present: ${!!apiKey}`);
+    // Structured error logging (no auth header presence — security concern)
+    log.error('deepseek_api_error', { status: response.status, model });
     
     throw new RouterError(
       'DEEPSEEK_ERROR',

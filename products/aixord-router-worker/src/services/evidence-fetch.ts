@@ -18,6 +18,7 @@ import type {
   EvidenceSyncResult,
   GitHubEvidenceRecord
 } from '../types';
+import { log } from '../utils/logger';
 
 // =============================================================================
 // EVIDENCE TYPE → TRIAD MAPPING
@@ -115,13 +116,13 @@ async function fetchGitHub<T>(
     });
 
     if (!response.ok) {
-      console.error(`GitHub API error: ${response.status} for ${endpoint}`);
+      log.error('github_api_error', { status: response.status });
       return null;
     }
 
     return await response.json() as T;
   } catch (error) {
-    console.error(`GitHub fetch error for ${endpoint}:`, error);
+    log.error('github_fetch_error');
     return null;
   }
 }
@@ -370,7 +371,7 @@ export async function syncProjectEvidence(
     };
 
   } catch (error) {
-    console.error('Evidence sync error:', error);
+    log.error('evidence_sync_error');
     return {
       project_id: projectId,
       synced_at: new Date().toISOString(),

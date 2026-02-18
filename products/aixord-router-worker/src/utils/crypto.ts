@@ -13,6 +13,8 @@
  * All functions use the Web Crypto API (available in Cloudflare Workers).
  */
 
+import { log } from './logger';
+
 // =============================================================================
 // AES-256-GCM ENCRYPTION
 // =============================================================================
@@ -232,7 +234,7 @@ export async function maskApiKey(encryptedKey: string, encryptionKey: string | u
 
     return `${prefix}...${suffix}`;
   } catch (error) {
-    console.error('Error masking API key:', error);
+    log.error('api_key_mask_failed');
     return '***'; // Fail safe
   }
 }

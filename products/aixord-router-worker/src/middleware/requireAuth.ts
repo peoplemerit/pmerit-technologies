@@ -5,10 +5,10 @@
  * HANDOFF-COPILOT-AUDIT-01: Uses SHA-256 token hash for DB lookup
  * with transparent fallback to plaintext for migration period.
  *
- * MIGRATION DEADLINE: 2026-03-15
+ * MIGRATION DEADLINE: 2026-02-28 (H-3 fix: accelerated from 2026-03-15)
  * After this date, plaintext token fallback is removed.
  * All sessions created after 2026-02-15 already use token_hash.
- * The 30-day window covers max session lifetime (7 days) with margin.
+ * Max session lifetime is 7 days — any pre-hash session has expired by now.
  */
 
 import { Context, Next } from 'hono';
@@ -16,8 +16,8 @@ import type { Env } from '../types';
 import { hashSHA256 } from '../utils/crypto';
 import { log } from '../utils/logger';
 
-// Deadline after which plaintext token fallback is removed
-const LEGACY_TOKEN_DEADLINE = new Date('2026-03-15T00:00:00Z').getTime();
+// Deadline after which plaintext token fallback is removed (H-3: accelerated)
+const LEGACY_TOKEN_DEADLINE = new Date('2026-02-28T00:00:00Z').getTime();
 
 // Extend Hono context to include user info
 declare module 'hono' {

@@ -16,25 +16,12 @@ import { requireAuth } from '../middleware/requireAuth';
 import { log } from '../utils/logger';
 import { triggerGateEvaluation } from '../services/gateRules';
 import { computeScopeReadiness } from '../services/readinessEngine';
+import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const blueprint = new Hono<{ Bindings: Env }>();
 
 // All routes require auth
 blueprint.use('/*', requireAuth);
-
-/**
- * Verify project ownership
- */
-async function verifyProjectOwnership(
-  db: D1Database,
-  projectId: string,
-  userId: string
-): Promise<boolean> {
-  const project = await db.prepare(
-    'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
-  ).bind(projectId, userId).first();
-  return !!project;
-}
 
 // ============================================================================
 // SCOPES CRUD — L-BPX2, L-BPX3
@@ -1064,7 +1051,7 @@ blueprint.post('/:projectId/blueprint/import', async (c) => {
         ).run();
       } catch {
         // session_events table may not exist — non-blocking
-        console.warn('Could not store plan metadata in session_events');
+        log.warn('plan_metadata_store_failed');
       }
     }
 
@@ -1075,6 +1062,68 @@ blueprint.post('/:projectId/blueprint/import', async (c) => {
       // Non-blocking — gates will be re-evaluated on next check
     }
 
+    // ── CRIT-01/CRIT-02 Fix: Auto-generate scaffold template from blueprint ──
+    let scaffoldGenerated = false;
+    try {
+      const { generateScaffoldFromBlueprint } = await import('../services/scaffoldTemplates');
+      const scaffold = await generateScaffoldFromBlueprint(c.env.DB, projectId);
+      await c.env.DB.prepare(
+        `INSERT INTO artifacts (id, project_id, type, name, content, version, created_at, created_by)
+         VALUES (?, ?, 'scaffold', 'project_scaffold', ?, 1, ?, ?)`
+      ).bind(
+        crypto.randomUUID(), projectId,
+        JSON.stringify(scaffold),
+        now, userId
+      ).run();
+      scaffoldGenerated = true;
+      log.info('scaffold_auto_generated', { project_id: projectId, template_type: scaffold.template_type, node_count: scaffold.nodes.length });
+    } catch (err) {
+      log.warn('scaffold_generation_failed', { project_id: projectId, error: err instanceof Error ? err.message : String(err) });
+    }
+
+    // ── HIGH-04 Fix: Auto-generate engineering skeleton from blueprint ──
+    let engineeringGenerated = false;
+    try {
+      // Create a basic SAR from the first scope
+      if (createdScopeIds.length > 0) {
+        const firstScope = await c.env.DB.prepare(
+          'SELECT title, description FROM blueprint_scopes WHERE id = ?'
+        ).bind(createdScopeIds[0]).first<{ title: string; description: string }>();
+
+        if (firstScope) {
+          await c.env.DB.prepare(
+            `INSERT INTO system_architecture_records (id, project_id, title, description, type, status, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, 'COMPONENT', 'DRAFT', ?, ?, ?)`
+          ).bind(
+            crypto.randomUUID(), projectId,
+            `${firstScope.title} Architecture`,
+            `Auto-generated from blueprint scope: ${firstScope.description || firstScope.title}`,
+            userId, now, now
+          ).run();
+        }
+
+        // Create basic fitness functions
+        const fitnessDefaults = [
+          { name: 'Page Load Time', target: '< 3 seconds', metric: 'seconds', threshold: 3 },
+          { name: 'Accessibility Score', target: '>= 80', metric: 'score', threshold: 80 },
+        ];
+        for (const ff of fitnessDefaults) {
+          await c.env.DB.prepare(
+            `INSERT INTO fitness_functions (id, project_id, name, description, target_value, metric_type, threshold, status, created_by, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`
+          ).bind(
+            crypto.randomUUID(), projectId, ff.name,
+            `Auto-generated: ${ff.name} should be ${ff.target}`,
+            ff.target, ff.metric, ff.threshold,
+            userId, now, now
+          ).run();
+        }
+        engineeringGenerated = true;
+      }
+    } catch (err) {
+      log.warn('engineering_skeleton_failed', { project_id: projectId, error: err instanceof Error ? err.message : String(err) });
+    }
+
     return c.json({
       success: true,
       imported: {
@@ -1083,6 +1132,8 @@ blueprint.post('/:projectId/blueprint/import', async (c) => {
       },
       scope_ids: createdScopeIds,
       deliverable_ids: createdDeliverableIds,
+      scaffold_generated: scaffoldGenerated,
+      engineering_generated: engineeringGenerated,
       wu: wuInitialized ? {
         total_wu: total_wu,
         wu_per_scope: Math.round((total_wu / createdScopeIds.length) * 100) / 100,
@@ -1091,7 +1142,7 @@ blueprint.post('/:projectId/blueprint/import', async (c) => {
     }, 201);
 
   } catch (err) {
-    console.error('Blueprint import failed:', err);
+    log.error('blueprint_import_failed');
     return c.json({
       error: 'Failed to import blueprint from plan artifact',
       details: err instanceof Error ? err.message : 'Unknown error',
