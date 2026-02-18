@@ -250,7 +250,7 @@ app.get('/v1/router/health', async (c) => {
     await c.env.DB.prepare('SELECT 1').first();
     checks.d1 = { status: 'ok', latency_ms: Date.now() - d1Start };
   } catch (e) {
-    checks.d1 = { status: 'error', latency_ms: Date.now() - d1Start, detail: (e as Error).message };
+    checks.d1 = { status: 'error', latency_ms: Date.now() - d1Start };
   }
 
   // R2 Bucket check (list with limit 1)
@@ -259,7 +259,7 @@ app.get('/v1/router/health', async (c) => {
     await c.env.IMAGES.list({ limit: 1 });
     checks.r2 = { status: 'ok', latency_ms: Date.now() - r2Start };
   } catch (e) {
-    checks.r2 = { status: 'error', latency_ms: Date.now() - r2Start, detail: (e as Error).message };
+    checks.r2 = { status: 'error', latency_ms: Date.now() - r2Start };
   }
 
   // Provider key availability (checks if keys are configured, not validity)
@@ -1298,7 +1298,7 @@ app.post('/v1/router/quote', async (c) => {
 
   } catch (error) {
     if (error instanceof RouterError) {
-      return c.json({ error: `${error.code}: ${error.message}` }, error.statusCode as 400 | 401 | 403 | 404 | 429 | 500);
+      return c.json({ error: error.code }, error.statusCode as 400 | 401 | 403 | 404 | 429 | 500);
     }
     return c.json({ error: 'INTERNAL_ERROR' }, 500);
   }
@@ -1359,9 +1359,8 @@ app.post('/v1/billing/checkout', requireAuth, async (c) => {
 
     return c.json(session);
   } catch (error) {
-    log.error('checkout_session_failed', { note: 'checkout creation error' });
-    const message = error instanceof Error ? error.message : 'Failed to create checkout session';
-    return c.json({ error: message }, 500);
+    log.error('checkout_session_failed', { error: error instanceof Error ? error.message : String(error) });
+    return c.json({ error: 'Failed to create checkout session' }, 500);
   }
 });
 
@@ -1386,9 +1385,8 @@ app.post('/v1/billing/portal', requireAuth, async (c) => {
 
     return c.json(session);
   } catch (error) {
-    log.error('portal_session_failed', { note: 'portal creation error' });
-    const message = error instanceof Error ? error.message : 'Failed to create portal session';
-    return c.json({ error: message }, 500);
+    log.error('portal_session_failed', { error: error instanceof Error ? error.message : String(error) });
+    return c.json({ error: 'Failed to create portal session' }, 500);
   }
 });
 

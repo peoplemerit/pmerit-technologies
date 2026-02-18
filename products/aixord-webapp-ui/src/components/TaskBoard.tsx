@@ -160,7 +160,7 @@ export function TaskBoard({
   taskBoard,
   assignments,
   isLoading,
-  projectId,
+  projectId: _projectId,
   phase,
   deliverableCount,
   onStart,

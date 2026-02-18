@@ -414,9 +414,8 @@ state.put('/:projectId/gates/:gateId', async (c) => {
 
   return c.json({ success: true, gates, updated_at: now });
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    log.error('gate_toggle_error', { project_id: projectId, gate_id: gateId });
-    return c.json({ error: `Gate toggle failed: ${errMsg}` }, 500);
+    log.error('gate_toggle_error', { project_id: projectId, gate_id: gateId, error: err instanceof Error ? err.message : String(err) });
+    return c.json({ error: 'Gate toggle failed' }, 500);
   }
 });
 
@@ -1190,7 +1189,7 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
     ).bind(
       projectId, 'PHASE_FINALIZE', currentPhase, nextPhase || currentPhase,
       userId, 'DIRECTOR',
-      JSON.stringify(gateChecks.map((g: { check: string; passed: boolean }) => ({ gate: g.check, passed: g.passed }))),
+      JSON.stringify({ missing: missingGates, warnings: warnChecks.length }),
       'APPROVED',
       `Finalized ${currentPhase} → ${nextPhase || 'COMPLETE'}`,
       now

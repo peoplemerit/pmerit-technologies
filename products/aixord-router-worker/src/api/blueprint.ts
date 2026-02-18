@@ -1142,10 +1142,9 @@ blueprint.post('/:projectId/blueprint/import', async (c) => {
     }, 201);
 
   } catch (err) {
-    log.error('blueprint_import_failed');
+    log.error('blueprint_import_failed', { error: err instanceof Error ? err.message : String(err) });
     return c.json({
       error: 'Failed to import blueprint from plan artifact',
-      details: err instanceof Error ? err.message : 'Unknown error',
     }, 500);
   }
 });

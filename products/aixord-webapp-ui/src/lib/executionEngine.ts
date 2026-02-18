@@ -13,6 +13,7 @@
 
 import { fileSystemStorage, createFile, createDirectory } from './fileSystem';
 import { api } from './api';
+import { WORKER_BASE } from './api/config';
 
 // ============================================================================
 // Types
@@ -321,7 +322,7 @@ export class ExecutionEngine {
 
       // Fetch scaffold template from backend
       const response = await fetch(
-        `${api.getBaseUrl()}/api/v1/projects/${projectId}/scaffold`,
+        `${WORKER_BASE}/api/v1/projects/${projectId}/scaffold`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
@@ -392,7 +393,7 @@ export class ExecutionEngine {
       }));
 
       await fetch(
-        `${api.getBaseUrl()}/api/v1/projects/${projectId}/workspace/artifacts`,
+        `${WORKER_BASE}/api/v1/projects/${projectId}/workspace/artifacts`,
         {
           method: 'POST',
           headers: {

@@ -381,7 +381,7 @@ export async function evaluateAllGates(
   ).bind(projectId).first<{ gates: string; phase: string }>();
 
   if (!current) {
-    return { evaluated: [], changed: [], gates: {}, phase: 'BRAINSTORM' };
+    return { evaluated: [], changed: [], gates: {}, phase: 'BRAINSTORM', gate_details: {} };
   }
 
   const gates: Record<string, boolean> = JSON.parse(current.gates || '{}');
