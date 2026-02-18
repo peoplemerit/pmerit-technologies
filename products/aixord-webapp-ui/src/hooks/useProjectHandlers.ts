@@ -159,6 +159,10 @@ export function useProjectHandlers({
     github_connected: boolean;
     github_repo: string | null;
     binding_confirmed: boolean;
+    // ENV-SYNC-01: Push metadata
+    github_push_count?: number;
+    github_push_sha?: string;
+    github_push_branch?: string;
   }) => {
     if (!projectId || !token) return;
     try {
@@ -171,6 +175,10 @@ export function useProjectHandlers({
         github_connected: binding.github_connected,
         github_repo: binding.github_repo ?? undefined,
         binding_confirmed: binding.binding_confirmed,
+        // ENV-SYNC-01: Include push metadata if scaffold was pushed to GitHub
+        github_push_count: binding.github_push_count,
+        github_push_sha: binding.github_push_sha,
+        github_push_branch: binding.github_push_branch,
       }, token);
 
       // Toggle GA:ENV and GA:FLD gates

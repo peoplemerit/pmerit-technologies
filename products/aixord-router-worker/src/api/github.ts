@@ -636,6 +636,7 @@ github.post('/commit/:projectId', async (c) => {
       files: Array<{ path: string; content: string }>;
       message: string;
       branch?: string;
+      scope_name?: string;
     }>();
 
     if (!body.files?.length || !body.message) {
@@ -695,11 +696,11 @@ github.post('/commit/:projectId', async (c) => {
       body.message
     );
 
-    // Record commit in DB
+    // Record commit in DB (ENV-SYNC-01: includes scope_name)
     const now = new Date().toISOString();
     await c.env.DB.prepare(`
-      INSERT INTO github_commits (id, project_id, branch, commit_sha, tree_sha, message, files_count, committed_by, committed_at, pr_number, pr_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO github_commits (id, project_id, branch, commit_sha, tree_sha, message, files_count, committed_by, committed_at, pr_number, pr_url, scope_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       crypto.randomUUID(),
       projectId,
@@ -711,7 +712,8 @@ github.post('/commit/:projectId', async (c) => {
       userId,
       now,
       result.pr_number || null,
-      result.pr_url || null
+      result.pr_url || null,
+      body.scope_name || null
     ).run();
 
     return c.json(result);

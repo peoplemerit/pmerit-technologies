@@ -42,6 +42,20 @@ export interface GitHubSyncOptions {
   signal?: AbortSignal;
 }
 
+export interface GitHubPushResult {
+  success: boolean;
+  filesCommitted: number;
+  filesSkipped: number;
+  commitSha?: string;
+  treeSha?: string;
+  branch?: string;
+  commitUrl?: string;
+  prNumber?: number;
+  prUrl?: string;
+  error?: string;
+  durationMs: number;
+}
+
 // ---------------------------------------------------------------------------
 // Filter Configuration
 // ---------------------------------------------------------------------------
@@ -350,6 +364,202 @@ export async function syncGitHubToWorkspace(
       skipped,
       errors: errors + 1,
       errorDetails: [...errorDetails, msg],
+      durationMs: Date.now() - startTime,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Push Local → GitHub (ENV-SYNC-01 Phase 1)
+// ---------------------------------------------------------------------------
+
+/** Max files to push in one commit */
+const DEFAULT_MAX_PUSH_FILES = 150;
+
+/**
+ * Recursively read all text files from a local workspace directory.
+ * Reuses the same EXCLUDED_DIRS, EXCLUDED_EXTENSIONS, and MAX_FILE_SIZE
+ * filters used by syncGitHubToWorkspace to keep consistency.
+ */
+async function readLocalFiles(
+  dirHandle: FileSystemDirectoryHandle,
+  basePath: string = '',
+  signal?: AbortSignal
+): Promise<Array<{ path: string; content: string }>> {
+  const files: Array<{ path: string; content: string }> = [];
+
+  for await (const [name, entryHandle] of dirHandle.entries()) {
+    if (signal?.aborted) break;
+
+    if (entryHandle.kind === 'directory') {
+      // Skip excluded directories
+      if (shouldExcludeDir(name)) continue;
+
+      const subDir = entryHandle as FileSystemDirectoryHandle;
+      const subPath = basePath ? `${basePath}/${name}` : name;
+      const subFiles = await readLocalFiles(subDir, subPath, signal);
+      files.push(...subFiles);
+    } else if (entryHandle.kind === 'file') {
+      const filePath = basePath ? `${basePath}/${name}` : name;
+
+      // Skip excluded files by extension
+      if (shouldExcludeFile(filePath)) continue;
+
+      try {
+        const fileHandle = entryHandle as FileSystemFileHandle;
+        const file = await fileHandle.getFile();
+
+        // Skip files that exceed size limit
+        if (file.size > MAX_FILE_SIZE) continue;
+
+        const content = await file.text();
+        files.push({ path: filePath, content });
+      } catch {
+        // Skip files we can't read (permission errors, etc.)
+      }
+    }
+  }
+
+  return files;
+}
+
+/**
+ * Push local workspace files to GitHub.
+ *
+ * Reads all source files from the local workspace (File System Access API),
+ * filters out junk/binary/oversized files, and commits them to GitHub
+ * via POST /github/commit/:projectId.
+ *
+ * This is the REVERSE of syncGitHubToWorkspace — it pushes LOCAL → GITHUB
+ * for Greenfield projects where the scaffold exists locally first.
+ */
+export async function pushLocalToGitHub(
+  projectId: string,
+  token: string,
+  onProgress?: (p: GitHubSyncProgress) => void,
+  options?: { signal?: AbortSignal; commitMessage?: string; maxFiles?: number }
+): Promise<GitHubPushResult> {
+  const startTime = Date.now();
+  const maxFiles = options?.maxFiles ?? DEFAULT_MAX_PUSH_FILES;
+  const signal = options?.signal;
+  const commitMessage = options?.commitMessage ?? '[AIXORD] Initial scaffold — push local workspace to GitHub';
+
+  const report = (p: Partial<GitHubSyncProgress>) => {
+    onProgress?.({
+      phase: 'downloading', // reuse phase type
+      current: 0,
+      total: 0,
+      message: '',
+      ...p,
+    } as GitHubSyncProgress);
+  };
+
+  try {
+    // -----------------------------------------------------------------
+    // 1. Get workspace handle
+    // -----------------------------------------------------------------
+    const linkedFolder = await fileSystemStorage.getHandle(projectId);
+    if (!linkedFolder) {
+      throw new Error('No workspace folder linked. Please link a folder in Step 1 first.');
+    }
+
+    // Verify permission
+    const permStatus = await linkedFolder.handle.queryPermission({ mode: 'readwrite' });
+    if (permStatus !== 'granted') {
+      const reqStatus = await linkedFolder.handle.requestPermission({ mode: 'readwrite' });
+      if (reqStatus !== 'granted') {
+        throw new Error('Workspace folder permission denied. Please re-link the folder.');
+      }
+    }
+
+    // -----------------------------------------------------------------
+    // 2. Read all local files
+    // -----------------------------------------------------------------
+    if (signal?.aborted) throw new Error('Push cancelled');
+
+    report({
+      phase: 'fetching_tree',
+      message: 'Reading local workspace files...',
+    });
+
+    const allFiles = await readLocalFiles(linkedFolder.handle, '', signal);
+
+    if (signal?.aborted) throw new Error('Push cancelled');
+
+    // Priority sort: root-level files first, shallow depth first
+    allFiles.sort((a, b) => {
+      const depthA = a.path.split('/').length;
+      const depthB = b.path.split('/').length;
+      if (depthA !== depthB) return depthA - depthB;
+      return a.path.localeCompare(b.path);
+    });
+
+    // Cap at maxFiles
+    const filesToPush = allFiles.slice(0, maxFiles);
+    const skipped = allFiles.length - filesToPush.length;
+
+    if (filesToPush.length === 0) {
+      report({
+        phase: 'complete',
+        message: 'No source files found in local workspace to push.',
+      });
+      return {
+        success: true,
+        filesCommitted: 0,
+        filesSkipped: skipped,
+        durationMs: Date.now() - startTime,
+      };
+    }
+
+    report({
+      phase: 'downloading',
+      current: 0,
+      total: filesToPush.length,
+      message: `Pushing ${filesToPush.length} files to GitHub...`,
+    });
+
+    // -----------------------------------------------------------------
+    // 3. Commit to GitHub via backend endpoint
+    // -----------------------------------------------------------------
+    const result = await githubApi.commitFiles(
+      projectId,
+      filesToPush,
+      commitMessage,
+      token
+    );
+
+    report({
+      phase: 'complete',
+      current: filesToPush.length,
+      total: filesToPush.length,
+      message: `Pushed ${result.files_committed} files to ${result.branch} (${result.commit_sha.slice(0, 7)})`,
+    });
+
+    return {
+      success: true,
+      filesCommitted: result.files_committed,
+      filesSkipped: skipped,
+      commitSha: result.commit_sha,
+      treeSha: result.tree_sha,
+      branch: result.branch,
+      commitUrl: result.commit_url,
+      prNumber: result.pr_number,
+      prUrl: result.pr_url,
+      durationMs: Date.now() - startTime,
+    };
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown push error';
+
+    report({
+      phase: 'error',
+      message: msg,
+    });
+
+    return {
+      success: false,
+      filesCommitted: 0,
+      filesSkipped: 0,
+      error: msg,
       durationMs: Date.now() - startTime,
     };
   }

@@ -19,7 +19,13 @@ import {
   type LinkedFolder,
 } from '../lib/fileSystem';
 import type { GitHubConnection, GitHubMode } from '../lib/api';
-import { syncGitHubToWorkspace, type GitHubSyncProgress, type GitHubSyncResult } from '../lib/githubSync';
+import {
+  syncGitHubToWorkspace,
+  pushLocalToGitHub,
+  type GitHubSyncProgress,
+  type GitHubSyncResult,
+  type GitHubPushResult,
+} from '../lib/githubSync';
 
 interface WorkspaceSetupWizardProps {
   projectId: string;
@@ -49,6 +55,10 @@ export interface WorkspaceBindingData {
   scaffold_paths_written?: string[];
   // GitHub sync reporting (GITHUB-SYNC-01)
   github_sync_count?: number;
+  // GitHub push reporting (ENV-SYNC-01)
+  github_push_count?: number;
+  github_push_sha?: string;
+  github_push_branch?: string;
 }
 
 const STEPS = [
@@ -80,6 +90,12 @@ export function WorkspaceSetupWizard({
   const [syncResult, setSyncResult] = useState<GitHubSyncResult | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const syncAbortRef = useRef<AbortController | null>(null);
+
+  // GitHub push state (ENV-SYNC-01: Local→GitHub push)
+  const [pushProgress, setPushProgress] = useState<GitHubSyncProgress | null>(null);
+  const [pushResult, setPushResult] = useState<GitHubPushResult | null>(null);
+  const [isPushing, setIsPushing] = useState(false);
+  const pushAbortRef = useRef<AbortController | null>(null);
 
   // Step 1 handlers
   const handleFolderLinked = useCallback((folder: LinkedFolder) => {
@@ -149,6 +165,34 @@ export function WorkspaceSetupWizard({
     syncAbortRef.current?.abort();
   }, []);
 
+  // ENV-SYNC-01: Push local workspace files to GitHub (for Greenfield projects)
+  const handlePush = useCallback(async () => {
+    if (isPushing) return;
+    setIsPushing(true);
+    setPushResult(null);
+    setPushProgress(null);
+
+    const abort = new AbortController();
+    pushAbortRef.current = abort;
+
+    try {
+      const result = await pushLocalToGitHub(
+        projectId,
+        token,
+        setPushProgress,
+        { signal: abort.signal }
+      );
+      setPushResult(result);
+    } finally {
+      setIsPushing(false);
+      pushAbortRef.current = null;
+    }
+  }, [projectId, token, isPushing]);
+
+  const handleCancelPush = useCallback(() => {
+    pushAbortRef.current?.abort();
+  }, []);
+
   // Auto-trigger sync when conditions are met in WORKSPACE_SYNC mode:
   // GitHub connected + repo selected + workspace folder linked
   const autoSyncTriggered = useRef(false);
@@ -185,9 +229,13 @@ export function WorkspaceSetupWizard({
       scaffold_error_count: scaffoldResult?.errors.length ?? 0,
       // GitHub sync reporting (GITHUB-SYNC-01)
       github_sync_count: syncResult?.synced ?? 0,
+      // GitHub push reporting (ENV-SYNC-01)
+      github_push_count: pushResult?.filesCommitted ?? 0,
+      github_push_sha: pushResult?.commitSha,
+      github_push_branch: pushResult?.branch,
     };
     onComplete(binding);
-  }, [linkedFolder, selectedTemplate, scaffoldResult, githubConnection, syncResult, onComplete]);
+  }, [linkedFolder, selectedTemplate, scaffoldResult, githubConnection, syncResult, pushResult, onComplete]);
 
   const fsSupported = isFileSystemAccessSupported();
 
@@ -262,6 +310,13 @@ export function WorkspaceSetupWizard({
               syncResult={syncResult}
               onSync={handleSync}
               onCancelSync={handleCancelSync}
+              // GitHub push props (ENV-SYNC-01)
+              hasScaffold={!!scaffoldResult && scaffoldResult.errors.length === 0}
+              isPushing={isPushing}
+              pushProgress={pushProgress}
+              pushResult={pushResult}
+              onPush={handlePush}
+              onCancelPush={handleCancelPush}
             />
           )}
           {step === 3 && (
@@ -271,6 +326,7 @@ export function WorkspaceSetupWizard({
               scaffoldResult={scaffoldResult}
               githubConnection={githubConnection}
               syncResult={syncResult}
+              pushResult={pushResult}
             />
           )}
         </div>
@@ -507,6 +563,13 @@ function StepVersionControl({
   syncResult,
   onSync,
   onCancelSync,
+  // GitHub push props (ENV-SYNC-01)
+  hasScaffold,
+  isPushing,
+  pushProgress,
+  pushResult,
+  onPush,
+  onCancelPush,
 }: {
   projectId: string;
   githubConnection: GitHubConnection | null;
@@ -523,6 +586,13 @@ function StepVersionControl({
   syncResult?: GitHubSyncResult | null;
   onSync?: () => void;
   onCancelSync?: () => void;
+  // GitHub push props (ENV-SYNC-01)
+  hasScaffold?: boolean;
+  isPushing?: boolean;
+  pushProgress?: GitHubSyncProgress | null;
+  pushResult?: GitHubPushResult | null;
+  onPush?: () => void;
+  onCancelPush?: () => void;
 }) {
   const isWorkspaceSync = githubConnection?.github_mode === 'WORKSPACE_SYNC';
   const defaultMode: GitHubMode = projectType === 'software' ? 'WORKSPACE_SYNC' : 'READ_ONLY';
@@ -530,6 +600,9 @@ function StepVersionControl({
   // Show sync UI when: GitHub connected + repo selected + workspace folder linked
   const hasRepo = githubConnection?.connected && githubConnection?.repo_name && githubConnection.repo_name !== 'PENDING';
   const showSyncSection = hasRepo && hasLinkedFolder;
+
+  // Show push UI when: WORKSPACE_SYNC + scaffold generated locally (Greenfield project)
+  const showPushSection = hasRepo && isWorkspaceSync && hasScaffold;
 
   return (
     <div className="space-y-6">
@@ -657,6 +730,116 @@ function StepVersionControl({
           )}
         </div>
       )}
+
+      {/* Push to GitHub Section (ENV-SYNC-01: Local→GitHub for Greenfield) */}
+      {showPushSection && (
+        <div className="mt-4 p-4 bg-gray-800/40 border border-gray-700/50 rounded-xl">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-base">📤</span>
+            <h4 className="text-sm font-medium text-white">Push Scaffold to GitHub</h4>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">
+            Push your local workspace files to the <code className="text-green-400">aixord/</code> feature branch
+            on <code className="text-green-400">{githubConnection!.repo_owner}/{githubConnection!.repo_name}</code>.
+          </p>
+
+          {/* Ready state — show push button */}
+          {!isPushing && !pushResult && (
+            <button
+              onClick={onPush}
+              className="w-full px-4 py-2.5 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <span>📤</span>
+              Push to GitHub
+            </button>
+          )}
+
+          {/* Pushing state — progress */}
+          {isPushing && pushProgress && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-300">{pushProgress.message}</span>
+                {pushProgress.total > 0 && (
+                  <span className="text-gray-500">{pushProgress.current}/{pushProgress.total}</span>
+                )}
+              </div>
+              {pushProgress.total > 0 && (
+                <div className="w-full bg-gray-700 rounded-full h-1.5">
+                  <div
+                    className="bg-green-500 h-1.5 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.round((pushProgress.current / pushProgress.total) * 100)}%` }}
+                  />
+                </div>
+              )}
+              <button
+                onClick={onCancelPush}
+                className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+              >
+                Cancel push
+              </button>
+            </div>
+          )}
+
+          {/* Pushing state — reading files (no total yet) */}
+          {isPushing && !pushProgress && (
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <span className="animate-spin">⏳</span>
+              Reading workspace files...
+            </div>
+          )}
+
+          {/* Complete state — result card */}
+          {pushResult && !isPushing && (
+            <div className={`p-3 rounded-lg border ${
+              pushResult.success
+                ? 'bg-green-500/10 border-green-500/30'
+                : 'bg-red-500/10 border-red-500/30'
+            }`}>
+              <div className="flex items-center gap-2 mb-1">
+                <span>{pushResult.success ? '✅' : '❌'}</span>
+                <span className={`text-sm font-medium ${pushResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                  {pushResult.success ? 'Push Complete' : 'Push Failed'}
+                </span>
+              </div>
+              {pushResult.success ? (
+                <>
+                  <div className="flex gap-4 text-xs text-gray-400">
+                    <span><strong className="text-green-400">{pushResult.filesCommitted}</strong> files committed</span>
+                    {pushResult.filesSkipped > 0 && (
+                      <span><strong className="text-gray-300">{pushResult.filesSkipped}</strong> over limit</span>
+                    )}
+                    <span className="text-gray-600">{(pushResult.durationMs / 1000).toFixed(1)}s</span>
+                  </div>
+                  {pushResult.branch && pushResult.commitSha && (
+                    <p className="text-xs text-gray-500 mt-1.5">
+                      Branch: <code className="text-green-400">{pushResult.branch}</code> · Commit: <code className="text-green-400">{pushResult.commitSha.slice(0, 7)}</code>
+                    </p>
+                  )}
+                  {pushResult.prUrl && (
+                    <a
+                      href={pushResult.prUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mt-1.5 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+                    >
+                      View Pull Request #{pushResult.prNumber}
+                    </a>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-red-400 mt-1">{pushResult.error}</p>
+              )}
+              {/* Re-push button */}
+              <button
+                onClick={onPush}
+                className="mt-2 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+              >
+                Push again
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -671,12 +854,14 @@ function StepConfirmation({
   scaffoldResult,
   githubConnection,
   syncResult,
+  pushResult,
 }: {
   linkedFolder: LinkedFolder | null;
   selectedTemplate: string | null;
   scaffoldResult: ScaffoldResult | null;
   githubConnection: GitHubConnection | null;
   syncResult?: GitHubSyncResult | null;
+  pushResult?: GitHubPushResult | null;
 }) {
   const template = selectedTemplate ? getTemplateById(selectedTemplate) : null;
   const hasGitHub = githubConnection?.connected && githubConnection?.repo_name && githubConnection.repo_name !== 'PENDING';
@@ -747,6 +932,16 @@ function StepConfirmation({
             value={`${syncResult.synced} files synced`}
             status={syncResult.errors === 0 ? 'success' : 'warning'}
             detail="Repository files downloaded to local workspace — AI can analyze full codebase"
+          />
+        )}
+
+        {/* GitHub Push (ENV-SYNC-01) */}
+        {pushResult && pushResult.success && pushResult.filesCommitted > 0 && (
+          <SummaryRow
+            label="GitHub Push"
+            value={`${pushResult.filesCommitted} files committed`}
+            status="success"
+            detail={`Pushed to ${pushResult.branch} · ${pushResult.commitSha?.slice(0, 7)}`}
           />
         )}
 

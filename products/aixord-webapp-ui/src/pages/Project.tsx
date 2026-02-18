@@ -30,6 +30,7 @@ import { formatAttachmentsForContext, type AttachedFile } from '../components/Fi
 import { detectAndResolveFiles } from '../lib/fileDetection';
 import { fileSystemStorage, readDirectory, readFileContent, verifyPermission } from '../lib/fileSystem';
 import { ExecutionEngine } from '../lib/executionEngine';
+import { validateScopeImports, type ImportValidationResult } from '../lib/scopeValidator';
 import { CCSIncidentBanner } from '../components/CCSIncidentBanner';
 import { CCSIncidentPanel } from '../components/CCSIncidentPanel';
 import { CCSCreateIncidentModal } from '../components/CCSCreateIncidentModal';
@@ -908,6 +909,44 @@ export function Project() {
         escalations: 0,
         errors: fileResult.errors,
       };
+
+      // ENV-SYNC-01 Phase 2: Auto-commit scaffold files to GitHub
+      if (
+        token &&
+        fileResult.filesCreated.length > 0 &&
+        githubConnection?.connected &&
+        githubConnection?.github_mode === 'WORKSPACE_SYNC' &&
+        githubConnection?.repo_name &&
+        githubConnection.repo_name !== 'PENDING'
+      ) {
+        try {
+          const codeFenceRegex = /```(\w+):([^\n]+)\n([\s\S]*?)```/g;
+          const filesToCommit: Array<{ path: string; content: string }> = [];
+          let fenceMatch;
+          while ((fenceMatch = codeFenceRegex.exec(message.content)) !== null) {
+            const [, , path, code] = fenceMatch;
+            const trimmedPath = path.trim();
+            if (fileResult.filesCreated.includes(trimmedPath)) {
+              filesToCommit.push({ path: trimmedPath, content: code.trim() });
+            }
+          }
+          if (filesToCommit.length > 0) {
+            const commitResult = await ExecutionEngine.commitToGitHub(
+              id, filesToCommit, `[AIXORD] Scaffold approved — ${filesToCommit.length} file(s)`, token
+            );
+            if (commitResult.success) {
+              (updatedMetadata as Record<string, unknown>).githubCommit = {
+                commit_sha: commitResult.commit_sha,
+                branch: commitResult.branch,
+                commit_url: commitResult.commit_url,
+                files_committed: filesToCommit.length,
+              };
+            }
+          }
+        } catch {
+          // Non-blocking
+        }
+      }
     } catch (err) {
       updatedMetadata.executionResult = {
         filesCreated: [],
@@ -932,7 +971,7 @@ export function Project() {
       metadata: updatedMetadata as Record<string, unknown>,
       session_id: activeSession?.id,
     }, token);
-  }, [conversation, id, token, activeSession]);
+  }, [conversation, id, token, activeSession, githubConnection]);
 
   // D81: Scaffold Plan — Modify handler (sends feedback to AI for updated plan)
   // Note: handleSendMessage is used via ref pattern to avoid forward-declaration issue
@@ -1463,6 +1502,76 @@ export function Project() {
                   errors: fileResult.errors,
                 }
               };
+
+              // ENV-SYNC-01: Reconstruct file content array for commit + validation
+              const writtenFiles: Array<{ path: string; content: string }> = [];
+              if (fileResult.filesCreated.length > 0) {
+                const codeFenceRegex = /```(\w+):([^\n]+)\n([\s\S]*?)```/g;
+                let fenceMatch;
+                while ((fenceMatch = codeFenceRegex.exec(assistantContent)) !== null) {
+                  const [, , fPath, code] = fenceMatch;
+                  const trimmedPath = fPath.trim();
+                  if (fileResult.filesCreated.includes(trimmedPath)) {
+                    writtenFiles.push({ path: trimmedPath, content: code.trim() });
+                  }
+                }
+              }
+
+              // ENV-SYNC-01 Phase 2: Auto-commit written files to GitHub
+              if (
+                token &&
+                writtenFiles.length > 0 &&
+                githubConnection?.connected &&
+                githubConnection?.github_mode === 'WORKSPACE_SYNC' &&
+                githubConnection?.repo_name &&
+                githubConnection.repo_name !== 'PENDING'
+              ) {
+                try {
+                  // ENV-SYNC-01 Phase 3: Detect scope markers for scope-level commit messages
+                  const scopeCompleteMatch = assistantContent.match(/===\s*SCOPE COMPLETE:\s*(.+?)\s*===/);
+                  const scopeName = scopeCompleteMatch?.[1]?.trim();
+                  const commitMessage = scopeName
+                    ? `[AIXORD] SCOPE: ${scopeName} — ${writtenFiles.length} file(s)`
+                    : `[AIXORD] ${writtenFiles.length} file(s) written by AI`;
+                  const commitResult = await ExecutionEngine.commitToGitHub(
+                    id, writtenFiles, commitMessage, token, scopeName
+                  );
+
+                  if (commitResult.success) {
+                    (assistantMessage.metadata as Record<string, unknown>).githubCommit = {
+                      commit_sha: commitResult.commit_sha,
+                      branch: commitResult.branch,
+                      commit_url: commitResult.commit_url,
+                      files_committed: writtenFiles.length,
+                      scope_name: scopeName || undefined,
+                    };
+                  } else {
+                    console.warn('GitHub auto-commit failed:', commitResult.error);
+                  }
+                } catch (commitErr) {
+                  console.warn('GitHub auto-commit error:', commitErr);
+                }
+              }
+
+              // ENV-SYNC-01 Phase 4: Cross-file import validation after file writes
+              if (writtenFiles.length > 0) {
+                try {
+                  const validation = await validateScopeImports(id, writtenFiles);
+                  if (validation.totalImports > 0) {
+                    (assistantMessage.metadata as Record<string, unknown>).scopeValidation = {
+                      valid: validation.valid,
+                      totalImports: validation.totalImports,
+                      resolvedImports: validation.resolvedImports,
+                      unresolvedCount: validation.unresolvedImports.length,
+                      unresolvedImports: validation.unresolvedImports.slice(0, 10), // Limit to 10
+                      checkedFiles: validation.checkedFiles,
+                    };
+                  }
+                } catch {
+                  // Non-blocking — validation is best-effort
+                }
+              }
+
               // Re-save message with executionResult metadata
               await api.messages.create(id, {
                 role: 'assistant',

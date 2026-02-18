@@ -593,6 +593,17 @@ RULES:
 - Deliver files ONE AT A TIME: output one file, explain it, then the next
 - Do NOT dump all project files in a single response — work sequentially
 - After writing files, confirm what was created so the user can verify in "${folderName}"
+
+SCOPE-LEVEL COMMITS:
+During EXECUTE phase, work through SCOPEs one at a time. For each scope:
+1. Announce: === SCOPE START: [scope_name] ===
+2. Generate all files for that scope using code fences
+3. When scope is complete: === SCOPE COMPLETE: [scope_name] ===
+4. WAIT for the platform to confirm commit success before proceeding
+5. Only then start the next scope
+
+NEVER start a new scope before the previous one is confirmed.
+Each scope commit groups related files for atomic version control.
 === END FILE DELIVERABLES ===`;
     } else {
       systemPrompt += `

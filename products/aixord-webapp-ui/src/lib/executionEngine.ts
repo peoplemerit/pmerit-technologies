@@ -409,6 +409,46 @@ export class ExecutionEngine {
   }
 
   /**
+   * ENV-SYNC-01 Phase 2+3: Commit files to GitHub after local writes.
+   * Calls POST /api/v1/github/commit/:projectId with the written file contents.
+   * Non-blocking — errors are returned but don't halt execution.
+   * Accepts optional scopeName for scope-level commit tracking (Phase 3).
+   */
+  static async commitToGitHub(
+    projectId: string,
+    files: Array<{ path: string; content: string }>,
+    message: string,
+    token: string,
+    scopeName?: string
+  ): Promise<{ success: boolean; commit_sha?: string; branch?: string; commit_url?: string; error?: string }> {
+    if (files.length === 0) {
+      return { success: true };
+    }
+
+    try {
+      const result = await api.github.commitFiles(
+        projectId,
+        files,
+        message,
+        token,
+        undefined, // branch — let backend determine
+        scopeName
+      );
+      return {
+        success: result.success,
+        commit_sha: result.commit_sha,
+        branch: result.branch,
+        commit_url: result.commit_url,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'GitHub commit failed',
+      };
+    }
+  }
+
+  /**
    * Process ONLY file deliverables from AI response.
    * Use this in Project.tsx where TDL structured blocks are already
    * handled inline — avoids double-processing submissions/progress/escalations.

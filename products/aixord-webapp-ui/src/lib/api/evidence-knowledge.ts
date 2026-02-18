@@ -168,13 +168,15 @@ export const githubApi = {
 
   /**
    * Commit files to GitHub (WORKSPACE_SYNC only)
+   * ENV-SYNC-01: Accepts optional scope_name for scope-level commit tracking
    */
   async commitFiles(
     projectId: string,
     files: Array<{ path: string; content: string }>,
     message: string,
     token: string,
-    branch?: string
+    branch?: string,
+    scopeName?: string
   ): Promise<{
     success: boolean;
     commit_sha: string;
@@ -187,7 +189,7 @@ export const githubApi = {
   }> {
     return request(`/github/commit/${projectId}`, {
       method: 'POST',
-      body: JSON.stringify({ files, message, branch }),
+      body: JSON.stringify({ files, message, branch, scope_name: scopeName }),
     }, token);
   },
 
