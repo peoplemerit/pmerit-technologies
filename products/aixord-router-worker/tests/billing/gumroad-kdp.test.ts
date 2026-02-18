@@ -250,7 +250,7 @@ describe('verifyKdpCode', () => {
   it('rejects invalid code format', async () => {
     const db = createMockDB([]) as unknown as D1Database;
 
-    const result = await verifyKdpCode('INVALID-FORMAT', 'secret', db, 'user-123');
+    const result = await verifyKdpCode('INVALID-FORMAT', db, 'user-123');
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid code format');
@@ -259,7 +259,7 @@ describe('verifyKdpCode', () => {
   it('rejects code with wrong prefix', async () => {
     const db = createMockDB([]) as unknown as D1Database;
 
-    const result = await verifyKdpCode('WRONG-ABCD-EFGH-IJKL', 'secret', db, 'user-123');
+    const result = await verifyKdpCode('WRONG-ABCD-EFGH-IJKL', db, 'user-123');
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid code format');
@@ -279,7 +279,7 @@ describe('verifyKdpCode', () => {
       { pattern: 'INSERT INTO subscriptions', runResult: { success: true, changes: 1 } },
     ]) as unknown as D1Database;
 
-    const result = await verifyKdpCode('AIXORD-AB12-CD34-EF56', 'secret', db, 'user-123');
+    const result = await verifyKdpCode('AIXORD-AB12-CD34-EF56', db, 'user-123');
 
     expect(result.success).toBe(true);
   });
@@ -290,7 +290,7 @@ describe('verifyKdpCode', () => {
       { pattern: 'SELECT user_id FROM subscriptions WHERE kdp_code', result: { user_id: 'user-123' } },
     ]) as unknown as D1Database;
 
-    const result = await verifyKdpCode('AIXORD-AB12-CD34-EF56', 'secret', db, 'user-123');
+    const result = await verifyKdpCode('AIXORD-AB12-CD34-EF56', db, 'user-123');
 
     expect(result.success).toBe(true);
   });
@@ -301,7 +301,7 @@ describe('verifyKdpCode', () => {
       { pattern: 'SELECT user_id FROM subscriptions WHERE kdp_code', result: { user_id: 'other-user-456' } },
     ]) as unknown as D1Database;
 
-    const result = await verifyKdpCode('AIXORD-AB12-CD34-EF56', 'secret', db, 'user-123');
+    const result = await verifyKdpCode('AIXORD-AB12-CD34-EF56', db, 'user-123');
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('already been redeemed');
@@ -315,7 +315,7 @@ describe('verifyKdpCode', () => {
       { pattern: 'SELECT code FROM kdp_codes WHERE code', result: null },
     ]) as unknown as D1Database;
 
-    const result = await verifyKdpCode('AIXORD-XX99-YY88-ZZ77', 'secret', db, 'user-123');
+    const result = await verifyKdpCode('AIXORD-XX99-YY88-ZZ77', db, 'user-123');
 
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid or expired');
@@ -335,7 +335,7 @@ describe('verifyKdpCode', () => {
       { pattern: 'UPDATE subscriptions', runResult: { success: true, changes: 1 } },
     ]) as unknown as D1Database;
 
-    const result = await verifyKdpCode('AIXORD-AB12-CD34-EF56', 'secret', db, 'user-123');
+    const result = await verifyKdpCode('AIXORD-AB12-CD34-EF56', db, 'user-123');
 
     expect(result.success).toBe(true);
   });

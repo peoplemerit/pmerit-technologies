@@ -43,7 +43,7 @@ class ErrorBoundary extends Component<Props, State> {
           timestamp: new Date().toISOString(),
         };
         // Fire-and-forget error report to backend
-        fetch(`${apiBase}/v1/router/health`, {
+        fetch(`${apiBase}/v1/errors`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ errorReport: report }),

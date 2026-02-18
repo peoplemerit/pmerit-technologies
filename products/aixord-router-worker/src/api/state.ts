@@ -165,6 +165,16 @@ state.get('/:projectId', async (c) => {
     };
   }
 
+  // FIX-PLAN-SYNC: Ensure capsule.session.phase matches the authoritative
+  // project_state.phase. The capsule JSON can become stale when phase
+  // transitions happen (e.g., BRAINSTORM → PLAN) because the capsule
+  // is only updated on explicit PUT, not during phase finalization.
+  // Without this, the frontend sends stale phase to the router, which
+  // causes the AI to miss phase-specific context injection.
+  if (capsule.session && projectState.phase) {
+    capsule.session.phase = projectState.phase;
+  }
+
   return c.json({
     project_id: projectState.project_id,
     phase: projectState.phase,

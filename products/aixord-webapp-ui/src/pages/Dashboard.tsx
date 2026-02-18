@@ -62,20 +62,20 @@ function StatCard({ label, value, icon, color }: {
 }
 
 // Projects Overview Donut Chart
-function ProjectsOverviewChart({ inProgress, completed, notStarted }: {
-  inProgress: number;
-  completed: number;
-  notStarted: number;
+function ProjectsOverviewChart({ greenfield, brownfield, legacy }: {
+  greenfield: number;
+  brownfield: number;
+  legacy: number;
 }) {
-  const total = inProgress + completed + notStarted || 1; // Avoid division by zero
-  const inProgressPct = (inProgress / total) * 100;
-  const completedPct = (completed / total) * 100;
+  const total = greenfield + brownfield + legacy || 1; // Avoid division by zero
+  const greenfieldPct = (greenfield / total) * 100;
+  const brownfieldPct = (brownfield / total) * 100;
 
   // SVG donut chart
   const radius = 40;
   const circumference = 2 * Math.PI * radius;
-  const inProgressOffset = circumference - (inProgressPct / 100) * circumference;
-  const completedOffset = circumference - (completedPct / 100) * circumference;
+  const greenfieldOffset = circumference - (greenfieldPct / 100) * circumference;
+  const brownfieldOffset = circumference - (brownfieldPct / 100) * circumference;
 
   return (
     <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
@@ -98,24 +98,24 @@ function ProjectsOverviewChart({ inProgress, completed, notStarted }: {
               fill="none" stroke="#374151"
               strokeWidth="10"
             />
-            {/* Completed (Blue) */}
+            {/* Brownfield (Amber) */}
             <circle
               cx="50" cy="50" r={radius}
-              fill="none" stroke="#3B82F6"
+              fill="none" stroke="#F59E0B"
               strokeWidth="10"
               strokeDasharray={circumference}
-              strokeDashoffset={completedOffset}
+              strokeDashoffset={brownfieldOffset}
               strokeLinecap="round"
             />
-            {/* In Progress (Orange) */}
+            {/* Greenfield (Green) */}
             <circle
               cx="50" cy="50" r={radius}
-              fill="none" stroke="#F97316"
+              fill="none" stroke="#22C55E"
               strokeWidth="10"
               strokeDasharray={circumference}
-              strokeDashoffset={inProgressOffset}
+              strokeDashoffset={greenfieldOffset}
               strokeLinecap="round"
-              style={{ transform: `rotate(${completedPct * 3.6}deg)`, transformOrigin: '50% 50%' }}
+              style={{ transform: `rotate(${brownfieldPct * 3.6}deg)`, transformOrigin: '50% 50%' }}
             />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
@@ -126,16 +126,16 @@ function ProjectsOverviewChart({ inProgress, completed, notStarted }: {
         {/* Legend */}
         <div className="space-y-2 text-sm">
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 bg-orange-500 rounded-full" />
-            <span className="text-gray-400">In Progress: {inProgress}</span>
+            <span className="w-3 h-3 bg-green-500 rounded-full" />
+            <span className="text-gray-400">Greenfield: {greenfield}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 bg-blue-500 rounded-full" />
-            <span className="text-gray-400">Completed: {completed}</span>
+            <span className="w-3 h-3 bg-amber-500 rounded-full" />
+            <span className="text-gray-400">Brownfield: {brownfield}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 bg-gray-600 rounded-full" />
-            <span className="text-gray-400">Not Started: {notStarted}</span>
+            <span className="text-gray-400">Legacy: {legacy}</span>
           </div>
         </div>
       </div>
@@ -144,90 +144,20 @@ function ProjectsOverviewChart({ inProgress, completed, notStarted }: {
 }
 
 // My Tasks Panel
-function MyTasksPanel({ projects }: { projects: Project[] }) {
-  const [filter, setFilter] = useState<'today' | 'tomorrow'>('today');
-
-  // Generate mock tasks from projects
-  const tasks = useMemo(() => {
-    return projects.slice(0, 5).map((p, i) => ({
-      id: p.id,
-      name: p.name,
-      description: p.objective.slice(0, 50) + '...',
-      status: i % 3 === 0 ? 'done' : 'pending',
-      projectId: p.id
-    }));
-  }, [projects]);
-
+function MyTasksPanel() {
   return (
     <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-white">My Tasks</h3>
-        <button className="text-violet-400 hover:text-violet-300 text-xs">+ Add</button>
       </div>
-
-      {/* Filter tabs */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setFilter('today')}
-          className={`px-3 py-1 text-xs rounded-full transition-colors ${
-            filter === 'today'
-              ? 'bg-gray-700 text-white'
-              : 'text-gray-500 hover:text-gray-300'
-          }`}
-        >
-          Today
-        </button>
-        <button
-          onClick={() => setFilter('tomorrow')}
-          className={`px-3 py-1 text-xs rounded-full transition-colors ${
-            filter === 'tomorrow'
-              ? 'bg-gray-700 text-white'
-              : 'text-gray-500 hover:text-gray-300'
-          }`}
-        >
-          Tomorrow
-        </button>
-      </div>
-
-      {/* Task count */}
-      <div className="flex items-center gap-2 mb-3">
-        <span className="bg-gray-700 text-white text-xs px-2 py-0.5 rounded-full">
-          {tasks.length}
-        </span>
-        <span className="text-xs text-gray-500">On Going Tasks</span>
-      </div>
-
-      {/* Tasks list */}
-      <div className="space-y-2">
-        {tasks.length === 0 ? (
-          <p className="text-gray-500 text-sm text-center py-4">No tasks for {filter}</p>
-        ) : (
-          tasks.slice(0, 3).map((task) => (
-            <Link
-              key={task.id}
-              to={`/project/${task.projectId}`}
-              className="flex items-center gap-3 p-2 hover:bg-gray-700/30 rounded-lg transition-colors"
-            >
-              <button
-                className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
-                  task.status === 'done'
-                    ? 'bg-green-500/20 border-green-500 text-green-400'
-                    : 'border-gray-600 hover:border-gray-500'
-                }`}
-              >
-                {task.status === 'done' && (
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </button>
-              <div className="min-w-0">
-                <p className="text-sm text-white font-medium truncate">{task.name}</p>
-                <p className="text-xs text-gray-500 truncate">{task.description}</p>
-              </div>
-            </Link>
-          ))
-        )}
+      <div className="text-center py-6">
+        <div className="text-2xl mb-2">
+          <svg className="w-8 h-8 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+          </svg>
+        </div>
+        <p className="text-gray-500 text-sm">Tasks will appear here.</p>
+        <p className="text-gray-600 text-xs mt-1">Open a project to view assignments.</p>
       </div>
     </div>
   );
@@ -328,38 +258,13 @@ function UsageStatsPanel({ stats, isLoading }: { stats: UsageStats; isLoading: b
 }
 
 // Recent Activities Panel
-function RecentActivitiesPanel({ projects }: { projects: Project[] }) {
-  // Generate mock activities from projects
-  const activities = useMemo(() => {
-    return projects.slice(0, 4).map((p, i) => ({
-      id: `${p.id}-activity`,
-      type: i % 2 === 0 ? 'Reviewed' : 'Created',
-      description: `${i % 2 === 0 ? 'Reviewed' : 'Created'} project "${p.name}"`,
-      timestamp: p.updatedAt || p.createdAt,
-      icon: i % 2 === 0 ? '✅' : '🆕'
-    }));
-  }, [projects]);
-
+function RecentActivitiesPanel() {
   return (
     <div className="bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
       <h3 className="text-sm font-semibold text-white mb-4">Recent Activities</h3>
-      <div className="space-y-3">
-        {activities.length === 0 ? (
-          <p className="text-gray-500 text-sm text-center py-4">No recent activity</p>
-        ) : (
-          activities.map((activity) => (
-            <div key={activity.id} className="flex items-start gap-3">
-              <span className="text-lg">{activity.icon}</span>
-              <div className="min-w-0">
-                <p className="text-sm text-white">{activity.description}</p>
-                <p className="text-xs text-gray-500">
-                  {new Date(activity.timestamp).toLocaleDateString()}
-                </p>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+      <p className="text-gray-500 text-sm text-center py-4">
+        Activity will appear here as you work in projects.
+      </p>
     </div>
   );
 }
@@ -729,15 +634,15 @@ export function Dashboard() {
       <div className="grid lg:grid-cols-4 gap-6 mb-6">
         {/* Column 1: Tasks */}
         <div className="lg:col-span-1">
-          <MyTasksPanel projects={projects || []} />
+          <MyTasksPanel />
         </div>
 
         {/* Column 2: Projects Overview */}
         <div className="lg:col-span-1">
           <ProjectsOverviewChart
-            inProgress={stats.greenfield}
-            completed={stats.legacy}
-            notStarted={stats.brownfield}
+            greenfield={stats.greenfield}
+            brownfield={stats.brownfield}
+            legacy={stats.legacy}
           />
         </div>
 
@@ -748,7 +653,7 @@ export function Dashboard() {
 
         {/* Column 4: Recent Activities */}
         <div className="lg:col-span-1">
-          <RecentActivitiesPanel projects={projects || []} />
+          <RecentActivitiesPanel />
         </div>
       </div>
 

@@ -60,7 +60,8 @@ function parseJsonCol(val: unknown, fallback: unknown = []): unknown {
   try { return JSON.parse(val as string); } catch { return fallback; }
 }
 
-function formatAssignment(row: Record<string, unknown>) {
+function formatAssignment(row: Record<string, unknown> | null) {
+  if (!row) return null;
   return {
     ...row,
     authority_scope: parseJsonCol(row.authority_scope),

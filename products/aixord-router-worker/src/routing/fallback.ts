@@ -275,7 +275,7 @@ Your plan must contain:
 - TECH STACK: Use the project's declared technology stack when available in the workspace context. Do NOT suggest generic stacks (React Native, Node.js+Express, MongoDB) when the project already uses specific technologies (e.g., Cloudflare Workers, D1, Pages). Justify technology choices by project constraints.
 - RISKS: Derived from the kill conditions and unresolved assumptions in the brainstorm
 
-CRITICAL: When the user approves the plan, you MUST output a structured === PLAN ARTIFACT === block (see PLAN ARTIFACT FORMAT below). This is how the blueprint gets populated. Without it, the Director cannot finalize the PLAN phase.
+CRITICAL: You MUST output a structured === PLAN ARTIFACT === block (see PLAN ARTIFACT FORMAT below) in your FIRST response. This is how the blueprint gets populated. Without it, the Director cannot finalize the PLAN phase. Do NOT wait for the user to "approve" before outputting the artifact — the Director advanced to PLAN phase, which IS the approval to plan. Generate the artifact immediately, then ask if they want changes.
 
 If the brainstorm artifact is not available in context, tell the user:
 "I need the brainstorm artifact to create a project-specific plan. Please ensure brainstorming was finalized."`,
@@ -411,7 +411,7 @@ DECISION CRITERIA:
     systemPrompt += `
 
 === PLAN ARTIFACT FORMAT ===
-When the user approves the plan (or when you have enough detail to propose a complete blueprint), output a structured plan artifact wrapped in markers. The frontend will parse this automatically and populate the Blueprint panel.
+Output a structured plan artifact wrapped in markers in your FIRST response. The Director has already advanced to PLAN phase — this IS the approval. The frontend will parse this automatically and populate the Blueprint panel. Do NOT wait for further approval — generate the artifact immediately.
 
 Format:
 === PLAN ARTIFACT ===
@@ -458,7 +458,7 @@ PLAN ARTIFACT RULES:
 - Deliverable names must describe concrete outputs (not "Implement feature" but what the feature produces)
 - Tech stack MUST match the project's declared technology preferences when available
 - Dependencies (upstream_deps/downstream_deps) reference other deliverable names
-- Output the artifact ONLY when you have a complete, approved plan — not during discussion`;
+- Output the artifact in your FIRST response — the Director is blocked until the Blueprint is populated`;
 
     // PLAN QUALITY REQUIREMENTS — tells AI what the finalization validator checks
     systemPrompt += `
@@ -840,9 +840,10 @@ When the Director signals readiness (e.g., "I like option 2", "let's go with thi
           }).join('\n')
         : '  (none recorded)';
 
-      const selectedOption = ac.recommendation && ac.recommendation !== 'NO_SELECTION'
+      const hasSelection = ac.recommendation && ac.recommendation !== 'NO_SELECTION';
+      const selectedOption = hasSelection
         ? `Selected approach: ${ac.recommendation}`
-        : 'No approach selected yet';
+        : `No explicit selection was made. The Director advanced to PLAN phase, which means they are ready for planning. Select Option 1 ("${ac.options?.[0]?.title || 'first option'}") as the default and proceed.`;
 
       systemPrompt += `\n\n=== BRAINSTORM ARTIFACT (Reference) ===
 ${selectedOption}
@@ -857,6 +858,19 @@ Kill conditions:
 ${killLines}
 
 Use this artifact as your foundation. Do NOT invent new options or ignore the selected approach.`;
+
+      // FIX-PLAN-LOOP: When in PLAN phase with no selection, add strong directive
+      // to immediately generate the plan artifact instead of asking the user to pick
+      if (!hasSelection && phaseName === 'PLAN') {
+        systemPrompt += `
+
+=== IMMEDIATE ACTION REQUIRED ===
+The Director has already advanced from BRAINSTORM to PLAN. This means they want a plan NOW.
+Do NOT ask which option to pursue. Do NOT re-present the options for selection.
+Pick the most suitable option (default: Option 1) and IMMEDIATELY generate the === PLAN ARTIFACT === block.
+Your FIRST response in this conversation must contain the complete plan artifact.
+The Director is blocked until the blueprint is populated — produce the artifact without further discussion.`;
+      }
     }
 
     // FIX-4: Phase transition acknowledgment

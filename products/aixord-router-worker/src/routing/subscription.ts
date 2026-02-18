@@ -118,7 +118,7 @@ export async function incrementUsage(
   ).run();
 
   // If no rows updated, create new usage record
-  if ((result as unknown as { changes: number }).changes === 0) {
+  if ((result.meta as { changes: number }).changes === 0) {
     const id = crypto.randomUUID();
     await db.prepare(`
       INSERT INTO usage (id, user_id, period_start, period_end, requests_used, tokens_input, tokens_output, cost_usd)

@@ -25,7 +25,7 @@ import { hashPasswordPBKDF2, verifyPasswordPBKDF2, hashSHA256 } from '../utils/c
 import { log } from '../utils/logger';
 
 // Deadline after which plaintext token fallback is removed (matches requireAuth.ts)
-const LEGACY_TOKEN_DEADLINE = new Date('2026-03-15T00:00:00Z').getTime();
+const LEGACY_TOKEN_DEADLINE = new Date('2026-02-28T00:00:00Z').getTime();
 
 const auth = new Hono<{ Bindings: Env }>();
 
@@ -1000,7 +1000,7 @@ auth.delete('/account', async (c) => {
   // Check password with appropriate algorithm
   let passwordValid = false;
   if (user.hash_algorithm === 'pbkdf2') {
-    passwordValid = await verifyPasswordPBKDF2(password, user.password_hash, user.password_salt);
+    passwordValid = await verifyPasswordPBKDF2(password, user.password_salt, user.password_hash);
   } else {
     // Legacy SHA-256 hash — fail-closed if secret not configured
     if (!c.env.AUTH_SALT) {

@@ -5,10 +5,7 @@
  * - Welcome state with greeting
  * - Quick action cards/suggestions
  * - Recent conversations list
- * - Model selector preview
  * - Start new chat functionality
- *
- * Reference: Chat section mockups
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -165,45 +162,6 @@ function RecentChatItem({ chat }: { chat: RecentChat }) {
   );
 }
 
-// Model Selector Preview
-function ModelSelectorPreview() {
-  const models = [
-    { id: 'claude-4', name: 'Claude 4 Opus', badge: 'Most Capable' },
-    { id: 'claude-3.5', name: 'Claude 3.5 Sonnet', badge: 'Balanced' },
-    { id: 'gpt-4', name: 'GPT-4 Turbo', badge: 'Fast' },
-  ];
-
-  return (
-    <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/30">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-medium text-white">Select Model</h3>
-        <Link to="/settings" className="text-xs text-violet-400 hover:text-violet-300">
-          Configure
-        </Link>
-      </div>
-      <div className="space-y-2">
-        {models.map((model, i) => (
-          <button
-            key={model.id}
-            className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
-              i === 0
-                ? 'bg-violet-500/20 border border-violet-500/30 text-white'
-                : 'bg-gray-800/50 text-gray-400 hover:bg-gray-800 hover:text-white'
-            }`}
-          >
-            <span className="text-sm">{model.name}</span>
-            <span className={`text-xs px-2 py-0.5 rounded ${
-              i === 0 ? 'bg-violet-500/30 text-violet-300' : 'bg-gray-700 text-gray-400'
-            }`}>
-              {model.badge}
-            </span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // Chat Input Component
 function ChatInput({
   value,
@@ -282,15 +240,8 @@ export function Chat() {
     }
   }, [authLoading, isAuthenticated, navigate]);
 
-  // Generate mock recent chats from projects
-  const recentChats: RecentChat[] = projects?.slice(0, 5).map((p, i) => ({
-    id: `chat-${p.id}`,
-    title: `Conversation about ${p.name}`,
-    projectName: p.name,
-    projectId: p.id,
-    lastMessage: `Working on ${p.objective.slice(0, 50)}...`,
-    timestamp: i === 0 ? 'Just now' : `${i}h ago`,
-  })) || [];
+  // Recent chats — populated from real conversation data when available
+  const recentChats: RecentChat[] = [];
 
   const handleQuickAction = (prompt: string) => {
     setChatInput(prompt + ' ');
@@ -415,9 +366,6 @@ export function Chat() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Model Selector */}
-          <ModelSelectorPreview />
-
           {/* Recent Conversations */}
           {recentChats.length > 0 && (
             <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/30">

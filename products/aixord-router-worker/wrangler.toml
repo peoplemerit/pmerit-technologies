@@ -1,6 +1,6 @@
 name = "aixord-router-worker"
 main = "src/index.ts"
-compatibility_date = "2025-01-01"
+compatibility_date = "2025-07-01"
 
 [vars]
 ENVIRONMENT = "production"
@@ -18,7 +18,6 @@ FRONTEND_URL = "https://aixord.pmerit.com"
 # STRIPE_SECRET_KEY
 # STRIPE_WEBHOOK_SECRET
 # GUMROAD_PRODUCT_ID
-# KDP_CODE_SECRET
 # GITHUB_CLIENT_ID
 # GITHUB_CLIENT_SECRET
 # GITHUB_TOKEN_ENCRYPTION_KEY

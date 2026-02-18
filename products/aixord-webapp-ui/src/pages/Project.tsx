@@ -1277,7 +1277,11 @@ export function Project() {
         );
         if (artifactMatch) {
           try {
-            const artifactData = JSON.parse(artifactMatch[1]);
+            // FIX-PLAN-RESILIENT: Strip markdown code fences and trailing commas
+            let rawBsJson = artifactMatch[1].trim();
+            rawBsJson = rawBsJson.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+            rawBsJson = rawBsJson.replace(/,\s*([\]}])/g, '$1');
+            const artifactData = JSON.parse(rawBsJson);
             await brainstormApi.createArtifact(id, {
               options: artifactData.options || [],
               assumptions: artifactData.assumptions || [],
@@ -1310,7 +1314,11 @@ export function Project() {
         );
         if (planArtifactMatch) {
           try {
-            const planData = JSON.parse(planArtifactMatch[1]);
+            // FIX-PLAN-RESILIENT: Strip markdown code fences and trailing commas
+            let rawJson = planArtifactMatch[1].trim();
+            rawJson = rawJson.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+            rawJson = rawJson.replace(/,\s*([\]}])/g, '$1');
+            const planData = JSON.parse(rawJson);
             await blueprintApi.importFromPlanArtifact(id, {
               scopes: planData.scopes || [],
               selected_option: planData.selected_option || undefined,

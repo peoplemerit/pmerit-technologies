@@ -49,7 +49,7 @@ const PHI_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
  */
 const MINOR_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
   // Age references for potential minors (age 0-17)
-  { pattern: /\b(?:age|aged|years?\s*old)[:\s]*(?:[0-9]|1[0-7])\b/gi, label: 'MINOR_AGE' },
+  { pattern: /\b(?:age|aged)[:\s]*(?:[0-9]|1[0-7])\b|\b(?:[0-9]|1[0-7])\s+years?\s*old\b/gi, label: 'MINOR_AGE' },
   // Grade/school references
   { pattern: /\b(?:grade|class)\s*(?:[1-9]|1[0-2]|K|kindergarten)\b/gi, label: 'SCHOOL_GRADE' },
   // Student ID

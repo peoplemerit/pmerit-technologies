@@ -241,6 +241,21 @@ app.use('/api/v1/api-keys/*/reveal', rateLimit({ windowMs: 60000, maxRequests: 5
 // Billing endpoints: 20 requests per minute (prevent payment fraud attempts)
 app.use('/api/v1/billing/*', rateLimit({ windowMs: 60000, maxRequests: 20 }));
 
+// Client-side error ingestion — no auth required (crashes happen before auth state is known)
+app.post('/v1/errors', async (c) => {
+  try {
+    const body = await c.req.json();
+    log.error('client_error_report', {
+      message: body.errorReport?.message,
+      error_name: body.errorReport?.error,
+      url: body.errorReport?.url,
+      timestamp: body.errorReport?.timestamp,
+      user_agent: c.req.header('user-agent'),
+    });
+  } catch { /* never fail — this endpoint must be unconditionally safe */ }
+  return c.json({ received: true });
+});
+
 // Health check — Phase 5.2: Enhanced with D1, R2, and provider checks
 app.get('/v1/router/health', async (c) => {
   const checks: Record<string, { status: 'ok' | 'error'; latency_ms?: number; detail?: string }> = {};
@@ -724,7 +739,28 @@ app.post('/v1/router/execute', requireAuth, async (c) => {
       // Only computed during BRAINSTORM phase when an artifact exists.
       // Gives AI per-dimension quality feedback to guide improvements.
       // ═══════════════════════════════════════════════════════════════
-      const capsulePhase = (request.capsule?.phase || '').toUpperCase();
+      // FIX-PLAN-SYNC: Use authoritative phase from project_state table, not stale capsule.
+      // The capsule JSON can lag behind when phase transitions happen (BRAINSTORM → PLAN)
+      // because the capsule is only fully rebuilt on explicit PUT operations.
+      let capsulePhase = (request.capsule?.phase || '').toUpperCase();
+      try {
+        const authPhase = await c.env.DB.prepare(
+          'SELECT phase FROM project_state WHERE project_id = ?'
+        ).bind(projectId).first<{ phase: string }>();
+        if (authPhase?.phase) {
+          const normalizedAuth = authPhase.phase.toUpperCase();
+          if (normalizedAuth !== capsulePhase) {
+            log.info('phase_sync_correction', { capsule: capsulePhase, authoritative: normalizedAuth });
+            capsulePhase = normalizedAuth;
+            // Also patch the request capsule so fallback.ts gets the correct phase
+            if (request.capsule) {
+              request.capsule.phase = authPhase.phase as 'B' | 'P' | 'E' | 'R';
+            }
+          }
+        }
+      } catch {
+        // Non-fatal — fall back to capsule phase
+      }
       if (ctx.brainstorm_artifact_saved && (capsulePhase === 'BRAINSTORM' || capsulePhase === 'B')) {
         try {
           const artifactRow = await c.env.DB.prepare(
@@ -1430,14 +1466,8 @@ app.post('/v1/billing/activate/kdp', requireAuth, async (c) => {
       code: string;
     };
 
-    const kdpSecret = c.env.KDP_CODE_SECRET;
-    if (!kdpSecret) {
-      return c.json({ error: 'KDP codes not configured' }, 500);
-    }
-
     const result = await verifyKdpCode(
       body.code,
-      kdpSecret,
       c.env.DB,
       userId
     );

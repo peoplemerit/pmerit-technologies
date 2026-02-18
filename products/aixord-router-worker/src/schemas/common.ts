@@ -72,3 +72,43 @@ export const activateSchema = makeSchema((data: unknown) => {
   if (typeof d?.product !== 'string') fail('product', 'Product required');
   return d as { licenseKey: string; product: string };
 });
+
+// Conversation schemas
+export const createConversationSchema = makeSchema((data: unknown) => {
+  const d = data as Record<string, unknown>;
+  if (typeof d?.projectId !== 'string' || d.projectId.length === 0) fail('projectId', 'Project ID required');
+  return d as { projectId: string; title?: string };
+});
+
+export const updateConversationSchema = makeSchema((data: unknown) => {
+  const d = data as Record<string, unknown>;
+  return d as { title?: string; metadata?: Record<string, unknown> };
+});
+
+// Blueprint schemas
+export const createScopeSchema = makeSchema((data: unknown) => {
+  const d = data as Record<string, unknown>;
+  if (typeof d?.name !== 'string' || d.name.length === 0) fail('name', 'Name required');
+  return d as { name: string; description?: string; priority?: string };
+});
+
+export const createDeliverableSchema = makeSchema((data: unknown) => {
+  const d = data as Record<string, unknown>;
+  if (typeof d?.name !== 'string' || d.name.length === 0) fail('name', 'Name required');
+  if (typeof d?.scopeId !== 'string' || d.scopeId.length === 0) fail('scopeId', 'Scope ID required');
+  return d as { name: string; scopeId: string; description?: string; dod?: string };
+});
+
+// Assignment schemas
+export const createAssignmentSchema = makeSchema((data: unknown) => {
+  const d = data as Record<string, unknown>;
+  if (typeof d?.title !== 'string' || d.title.length === 0) fail('title', 'Title required');
+  return d as { title: string; description?: string; deliverableId?: string; priority?: string };
+});
+
+// KDP code schema
+export const kdpCodeSchema = makeSchema((data: unknown) => {
+  const d = data as Record<string, unknown>;
+  if (typeof d?.code !== 'string' || d.code.length === 0) fail('code', 'Code required');
+  return d as { code: string };
+});

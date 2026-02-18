@@ -17,18 +17,15 @@ import { UsageMeter } from '../components/UsageMeter';
 import { TrialBanner } from '../components/TrialBanner';
 import { ProviderStatus } from '../components/ProviderStatus';
 
-// Price IDs for Stripe checkout (Production)
-// AIXORD Standard (BYOK): $9.99/month
-// AIXORD Standard: $19.99/month
-// AIXORD Pro: $49.99/month
+// Price IDs for Stripe checkout — loaded from environment variables
 const STRIPE_PRICES: Record<SubscriptionTier, string | null> = {
-  NONE: null, // No plan selected
-  TRIAL: null, // Free
-  MANUSCRIPT_BYOK: null, // One-time via Gumroad/KDP
-  BYOK_STANDARD: 'price_1SwVtL1Uy2Gsjci2w3a8b5hX',
-  PLATFORM_STANDARD: 'price_1SwVsN1Uy2Gsjci2CHVecrv9',
-  PLATFORM_PRO: 'price_1SwVq61Uy2Gsjci2Wd6gxdAe',
-  ENTERPRISE: null, // Contact sales
+  NONE: null,
+  TRIAL: null,
+  MANUSCRIPT_BYOK: null,
+  BYOK_STANDARD: import.meta.env.VITE_STRIPE_PRICE_BYOK_STANDARD || null,
+  PLATFORM_STANDARD: import.meta.env.VITE_STRIPE_PRICE_PLATFORM_STANDARD || null,
+  PLATFORM_PRO: import.meta.env.VITE_STRIPE_PRICE_PLATFORM_PRO || null,
+  ENTERPRISE: null,
 };
 
 const TIER_INFO: Record<SubscriptionTier, { name: string; price: string; features: string[] }> = {

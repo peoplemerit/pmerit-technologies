@@ -17,6 +17,8 @@
 import { Hono } from 'hono';
 import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
+import { validateBody } from '../middleware/validateBody';
+import { createConversationSchema, updateConversationSchema, sendMessageSchema } from '../schemas/common';
 import { verifyProjectOwnership } from '../utils/projectOwnership';
 
 const conversations = new Hono<{ Bindings: Env }>();

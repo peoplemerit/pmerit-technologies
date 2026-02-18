@@ -173,7 +173,6 @@ export async function activateGumroadLicense(
  */
 export async function verifyKdpCode(
   code: string,
-  secret: string,
   db: D1Database,
   userId: string
 ): Promise<{

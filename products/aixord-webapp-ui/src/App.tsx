@@ -14,6 +14,7 @@ import { Layout } from './components/Layout';
 import { DisclaimerGate } from './components/DisclaimerGate';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
+import { LoadingScreen } from './components/LoadingScreen';
 
 // Lazy-loaded pages
 const Landing = lazy(() => import('./pages/Landing').then(m => ({ default: m.Landing })));
@@ -45,7 +46,7 @@ function App() {
           <UserSettingsProvider>
             <BrowserRouter>
               <DisclaimerGate>
-                <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-gray-950"><div className="text-violet-400 text-lg">Loading...</div></div>}>
+                <Suspense fallback={<LoadingScreen />}>
                   <Routes>
                     <Route element={<Layout />}>
                       <Route path="/" element={<Landing />} />
@@ -55,13 +56,13 @@ function App() {
                       <Route path="/forgot-password" element={<ForgotPassword />} />
                       <Route path="/reset-password" element={<ResetPassword />} />
                       <Route path="/pricing" element={<Pricing />} />
-                      {/* Protected routes */}
-                      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                      <Route path="/project/:id" element={<ProtectedRoute><Project /></ProtectedRoute>} />
-                      <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
-                      <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-                      <Route path="/activity" element={<ProtectedRoute><Activity /></ProtectedRoute>} />
-                      <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+                      {/* Protected routes — per-route error boundaries */}
+                      <Route path="/dashboard" element={<ProtectedRoute><ErrorBoundary><Dashboard /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/project/:id" element={<ProtectedRoute><ErrorBoundary><Project /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/chat" element={<ProtectedRoute><ErrorBoundary><Chat /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/settings" element={<ProtectedRoute><ErrorBoundary><Settings /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/activity" element={<ProtectedRoute><ErrorBoundary><Activity /></ErrorBoundary></ProtectedRoute>} />
+                      <Route path="/analytics" element={<ProtectedRoute><ErrorBoundary><Analytics /></ErrorBoundary></ProtectedRoute>} />
                       {/* 404 catch-all */}
                       <Route path="*" element={<NotFound />} />
                     </Route>
