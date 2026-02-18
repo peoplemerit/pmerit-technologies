@@ -640,22 +640,46 @@ RULES: Reference the objective. Stay in phase scope. Be specific to THIS project
   }
 
   // ═══════════════════════════════════════════════════════════════════
-  // FIX-WSC: Workspace File Context — inject actual file tree + key file
-  // contents so the AI can reference the project's real codebase.
-  // Without this, the AI has zero knowledge of the actual project files.
+  // FIX-GITHUB-READ-01: Codebase Context — inject file tree + key file
+  // contents with clear AI instructions about capabilities and source.
+  // Replaces FIX-WSC with richer context and behavioral guidance.
   // ═══════════════════════════════════════════════════════════════════
   const wsc = request.delta.workspace_context;
   if (wsc) {
+    systemPrompt += `\n\n=== CODEBASE CONTEXT ===`;
+
     if (wsc.file_tree) {
-      systemPrompt += `\n\n=== PROJECT FILE STRUCTURE ===
-${wsc.file_tree}`;
+      systemPrompt += `\n\n--- FILE STRUCTURE ---\n${wsc.file_tree}`;
     }
+
     if (wsc.key_files && wsc.key_files.length > 0) {
-      systemPrompt += `\n\n=== KEY PROJECT FILES ===`;
+      systemPrompt += `\n\n--- KEY FILES (${wsc.key_files.length} files loaded) ---`;
       for (const file of wsc.key_files) {
-        systemPrompt += `\n--- ${file.path} ---\n${file.content}\n`;
+        systemPrompt += `\n\n=== ${file.path} ===\n${file.content}`;
       }
-      systemPrompt += `\nUse these files to understand the project's technology stack, dependencies, and structure. Reference specific files and their content when making recommendations.`;
+    }
+
+    // AI instruction block — tells the model exactly what it knows and doesn't know
+    const fileCount = wsc.key_files?.length || 0;
+    systemPrompt += `\n\n--- FILE ACCESS INSTRUCTIONS ---
+You have access to the project's file structure and the contents of ${fileCount} key files shown above.
+
+WHAT YOU CAN DO:
+- Reference any file path shown in the file structure
+- Analyze the contents of the key files provided above
+- Infer project architecture, dependencies, and patterns from these files
+- Suggest specific code changes with file paths and line-level guidance
+
+WHEN ASKED ABOUT A FILE NOT LOADED ABOVE:
+- If it appears in the file structure, say: "I can see that file exists in the project but I don't have its contents loaded. You can paste the relevant code here and I'll analyze it."
+- If it does not appear in the file structure, say: "I don't see that file in the project structure. It may be in a deeper directory not shown here."
+
+Use the file structure and key files to give specific, file-aware recommendations.`;
+  } else {
+    // No workspace context at all — check if GitHub is connected but context failed
+    const ws = request.capsule?.workspace;
+    if (ws?.github_connected) {
+      systemPrompt += `\n\nNote: A GitHub repository is connected but no file context was loaded for this message. The file structure should appear in subsequent messages.`;
     }
   }
 

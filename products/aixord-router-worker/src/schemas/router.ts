@@ -183,7 +183,7 @@ export function validateRequest(body: unknown): RouterRequest {
       workspace_context: (delta.workspace_context && typeof delta.workspace_context === 'object')
         ? {
             file_tree: typeof (delta.workspace_context as Record<string, unknown>).file_tree === 'string'
-              ? ((delta.workspace_context as Record<string, unknown>).file_tree as string).slice(0, 4000)  // Cap tree at ~1000 tokens
+              ? ((delta.workspace_context as Record<string, unknown>).file_tree as string).slice(0, 6000)  // Cap tree at ~1500 tokens (FIX-GITHUB-READ-01: accommodate merged local+GitHub trees)
               : undefined,
             key_files: Array.isArray((delta.workspace_context as Record<string, unknown>).key_files)
               ? ((delta.workspace_context as Record<string, unknown>).key_files as Array<{ path: string; content: string }>)
@@ -191,7 +191,7 @@ export function validateRequest(body: unknown): RouterRequest {
                   .slice(0, 10)  // Max 10 key files
                   .map((f: { path: string; content: string }) => ({
                     path: f.path.slice(0, 200),
-                    content: f.content.slice(0, 3000),  // Cap each file at ~750 tokens
+                    content: f.content.slice(0, 4000),  // Cap each file at ~1000 tokens (FIX-GITHUB-READ-01: source files need more room)
                   }))
               : undefined,
           }

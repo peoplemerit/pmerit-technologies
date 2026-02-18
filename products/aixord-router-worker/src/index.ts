@@ -858,107 +858,172 @@ app.post('/v1/router/execute', requireAuth, async (c) => {
       }
 
       // ═══════════════════════════════════════════════════════════════
-      // Tier 7: GitHub Repository Context (FIX-WSC)
-      // Fetches the repo file tree and key files (README, package.json)
-      // via the GitHub API using the stored encrypted token.
-      // This gives the AI actual knowledge of the codebase structure.
-      // Only fetches when GitHub is connected and no workspace_context
-      // was provided by the frontend (to avoid duplicate data).
+      // Tier 7: GitHub Repository Context (FIX-GITHUB-READ-01)
+      // Always fetches when GitHub is connected — merges with local
+      // workspace context instead of skipping. Uses recursive tree
+      // with depth cap and smart key file selection for maximum AI
+      // awareness of the project's actual codebase.
       // ═══════════════════════════════════════════════════════════════
-      if (!request.delta.workspace_context?.file_tree) {
-        try {
-          const ghConn = await c.env.DB.prepare(
-            `SELECT repo_owner, repo_name, access_token_encrypted
-             FROM github_connections WHERE project_id = ?`
-          ).bind(projectId).first<{
-            repo_owner: string; repo_name: string; access_token_encrypted: string;
-          }>();
+      try {
+        const ghConn = await c.env.DB.prepare(
+          `SELECT repo_owner, repo_name, access_token_encrypted
+           FROM github_connections WHERE project_id = ?`
+        ).bind(projectId).first<{
+          repo_owner: string; repo_name: string; access_token_encrypted: string;
+        }>();
 
-          if (ghConn?.repo_owner && ghConn?.repo_name && ghConn?.access_token_encrypted) {
-            const encKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY;
-            if (!encKey) throw new Error('GITHUB_TOKEN_ENCRYPTION_KEY not configured');
-            // Decrypt token using shared crypto utility (HANDOFF-COPILOT-AUDIT-01)
-            const ghToken = await decryptAESGCM(ghConn.access_token_encrypted, encKey);
+        if (ghConn?.repo_owner && ghConn?.repo_name
+            && ghConn.repo_owner !== 'PENDING' && ghConn.repo_name !== 'PENDING'
+            && ghConn?.access_token_encrypted) {
+          const encKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY;
+          if (!encKey) throw new Error('GITHUB_TOKEN_ENCRYPTION_KEY not configured');
+          const ghToken = await decryptAESGCM(ghConn.access_token_encrypted, encKey);
 
-            const repoPath = `${ghConn.repo_owner}/${ghConn.repo_name}`;
+          const repoPath = `${ghConn.repo_owner}/${ghConn.repo_name}`;
 
-            // Fetch repo tree (top-level only to save tokens)
-            const treeResp = await fetch(
-              `https://api.github.com/repos/${repoPath}/git/trees/HEAD?recursive=false`,
-              {
-                headers: {
-                  'Accept': 'application/vnd.github.v3+json',
-                  'Authorization': `Bearer ${ghToken}`,
-                  'User-Agent': 'AIXORD-Platform',
-                },
-              }
+          // Fetch repo tree — recursive for full project visibility
+          const treeResp = await fetch(
+            `https://api.github.com/repos/${repoPath}/git/trees/HEAD?recursive=true`,
+            {
+              headers: {
+                'Accept': 'application/vnd.github.v3+json',
+                'Authorization': `Bearer ${ghToken}`,
+                'User-Agent': 'AIXORD-Platform',
+              },
+            }
+          );
+
+          if (treeResp.ok) {
+            const treeData = await treeResp.json() as {
+              tree: Array<{ path: string; type: string; size?: number }>;
+              truncated: boolean;
+            };
+
+            // Depth-aware filtering: cap at 4 levels deep, 200 entries max
+            const MAX_TREE_ENTRIES = 200;
+            const MAX_TREE_DEPTH = 4;
+
+            const filteredTree = treeData.tree
+              .filter(t => t.path.split('/').length <= MAX_TREE_DEPTH)
+              .slice(0, MAX_TREE_ENTRIES);
+
+            const treeTruncated = filteredTree.length < treeData.tree.filter(
+              t => t.path.split('/').length <= MAX_TREE_DEPTH
+            ).length || treeData.truncated;
+
+            // Build GitHub file tree string
+            const treeLines = filteredTree
+              .map(t => `${t.type === 'tree' ? '[DIR]' : '[FILE]'} ${t.path}${t.size ? ` (${t.size}b)` : ''}`)
+              .join('\n');
+
+            const treeHeader = `GitHub: ${repoPath}`;
+            const truncNote = treeTruncated
+              ? `\n... (${treeData.tree.length - filteredTree.length} more entries beyond depth ${MAX_TREE_DEPTH} or cap ${MAX_TREE_ENTRIES})`
+              : '';
+            const githubTree = `${treeHeader}\n${treeLines}${truncNote}`;
+
+            // Initialize workspace_context if not present
+            if (!request.delta.workspace_context) {
+              request.delta.workspace_context = {};
+            }
+
+            // MERGE: If local tree exists, combine both — don't skip GitHub
+            if (request.delta.workspace_context.file_tree) {
+              const localTree = request.delta.workspace_context.file_tree;
+              const combined = `=== LOCAL WORKSPACE ===\n${localTree}\n\n=== GITHUB REPOSITORY ===\n${githubTree}`;
+              request.delta.workspace_context.file_tree = combined.slice(0, 6000);
+            } else {
+              request.delta.workspace_context.file_tree = githubTree.slice(0, 6000);
+            }
+
+            // ─── Smart key file selection (FIX-GITHUB-READ-01) ───
+            // Select up to 8 high-value files based on what exists in the tree,
+            // prioritizing: config → entry points → types/schema
+            const fileSet = new Set(
+              treeData.tree.filter(t => t.type === 'blob').map(t => t.path)
+            );
+            const fileSizeMap = new Map(
+              treeData.tree.filter(t => t.type === 'blob').map(t => [t.path, t.size || 0])
             );
 
-            if (treeResp.ok) {
-              const treeData = await treeResp.json() as {
-                tree: Array<{ path: string; type: string; size?: number }>;
-              };
+            const selectedFiles: string[] = [];
 
-              // FIX: Cap tree entries to prevent token explosion on large monorepos
-              // 100 entries ≈ 3k chars ≈ 750 tokens — safe for context budgets
-              const MAX_TREE_ENTRIES = 100;
-              const truncatedTree = treeData.tree.slice(0, MAX_TREE_ENTRIES);
-              const treeTruncated = treeData.tree.length > MAX_TREE_ENTRIES;
+            // Tier 1: Config files — project identity (up to 5)
+            const CONFIG_FILES = [
+              'README.md', 'readme.md', 'package.json', 'Cargo.toml',
+              'pyproject.toml', 'go.mod', 'requirements.txt',
+              'tsconfig.json', 'wrangler.toml', 'wrangler.json',
+              '.env.example', 'docker-compose.yml', 'Dockerfile',
+            ];
+            for (const cf of CONFIG_FILES) {
+              if (fileSet.has(cf) && selectedFiles.length < 5) selectedFiles.push(cf);
+            }
 
-              // Build file tree string
-              const treeLines = truncatedTree
-                .map(t => `${t.type === 'tree' ? '[DIR]' : '[FILE]'} ${t.path}${t.size ? ` (${t.size}b)` : ''}`)
-                .join('\n');
-
-              // Initialize workspace_context if not present
-              if (!request.delta.workspace_context) {
-                request.delta.workspace_context = {};
-              }
-              const treeHeader = `GitHub: ${repoPath}`;
-              const truncNote = treeTruncated ? `\n... (${treeData.tree.length - MAX_TREE_ENTRIES} more entries truncated)` : '';
-              // Hard cap the entire file_tree string to 4000 chars (~1000 tokens)
-              const fullTree = `${treeHeader}\n${treeLines}${truncNote}`;
-              request.delta.workspace_context.file_tree = fullTree.slice(0, 4000);
-
-              // Fetch key files (README, package.json) — small, high-value context
-              const KEY_FILES = ['README.md', 'package.json', 'wrangler.toml', 'wrangler.json', 'tsconfig.json'];
-              const keyFiles: Array<{ path: string; content: string }> = [];
-
-              for (const fname of KEY_FILES) {
-                const exists = truncatedTree.find(t => t.path === fname);
-                if (exists && exists.type === 'blob' && (exists.size || 0) < 5000) {
-                  try {
-                    const fileResp = await fetch(
-                      `https://api.github.com/repos/${repoPath}/contents/${fname}`,
-                      {
-                        headers: {
-                          'Accept': 'application/vnd.github.v3.raw',
-                          'Authorization': `Bearer ${ghToken}`,
-                          'User-Agent': 'AIXORD-Platform',
-                        },
-                      }
-                    );
-                    if (fileResp.ok) {
-                      const content = await fileResp.text();
-                      keyFiles.push({ path: fname, content: content.slice(0, 3000) });
-                    }
-                  } catch {
-                    // Individual file fetch failed — skip silently
-                  }
-                }
-              }
-
-              if (keyFiles.length > 0) {
-                request.delta.workspace_context.key_files = [
-                  ...(request.delta.workspace_context.key_files || []),
-                  ...keyFiles,
-                ];
+            // Tier 2: Entry points — main source files (up to 7 total)
+            const ENTRY_POINTS = [
+              'src/index.ts', 'src/index.tsx', 'src/main.ts', 'src/main.tsx',
+              'src/App.tsx', 'src/App.ts', 'src/app.ts',
+              'src/index.js', 'src/main.js', 'src/App.js',
+              'main.py', 'app.py', 'src/main.py',
+              'main.go', 'cmd/main.go', 'src/main.rs', 'src/lib.rs',
+            ];
+            for (const ep of ENTRY_POINTS) {
+              if (fileSet.has(ep) && !selectedFiles.includes(ep) && selectedFiles.length < 7) {
+                selectedFiles.push(ep);
               }
             }
+
+            // Tier 3: Types/schema definitions (up to 8 total)
+            const TYPE_FILES = [
+              'src/types.ts', 'src/types/index.ts', 'src/schema.ts',
+              'prisma/schema.prisma', 'drizzle/schema.ts',
+            ];
+            for (const tf of TYPE_FILES) {
+              if (fileSet.has(tf) && !selectedFiles.includes(tf) && selectedFiles.length < 8) {
+                selectedFiles.push(tf);
+              }
+            }
+
+            // Fetch selected key files
+            const keyFiles: Array<{ path: string; content: string }> = [];
+            for (const fname of selectedFiles) {
+              const fsize = fileSizeMap.get(fname) || 0;
+              if (fsize > 8000) continue; // Skip files larger than 8KB
+              try {
+                const fileResp = await fetch(
+                  `https://api.github.com/repos/${repoPath}/contents/${encodeURIComponent(fname)}`,
+                  {
+                    headers: {
+                      'Accept': 'application/vnd.github.v3.raw',
+                      'Authorization': `Bearer ${ghToken}`,
+                      'User-Agent': 'AIXORD-Platform',
+                    },
+                  }
+                );
+                if (fileResp.ok) {
+                  const content = await fileResp.text();
+                  keyFiles.push({ path: fname, content: content.slice(0, 4000) });
+                }
+              } catch {
+                // Individual file fetch failed — skip silently
+              }
+            }
+
+            if (keyFiles.length > 0) {
+              // Deduplicate: local files take precedence over GitHub
+              const existingPaths = new Set(
+                (request.delta.workspace_context.key_files || []).map(f => f.path)
+              );
+              const newFiles = keyFiles.filter(f => !existingPaths.has(f.path));
+              request.delta.workspace_context.key_files = [
+                ...(request.delta.workspace_context.key_files || []),
+                ...newFiles,
+              ].slice(0, 10); // Hard cap at 10 files total
+            }
           }
-        } catch (err) {
-          log.error('tier_7_github_context_failed', { note: 'non-fatal' });
         }
+      } catch (err) {
+        log.error('tier_7_github_context_failed', { note: 'non-fatal' });
       }
 
       request._context_awareness = ctx;

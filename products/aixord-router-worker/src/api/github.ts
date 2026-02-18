@@ -860,4 +860,214 @@ github.post('/create-repo/:projectId', async (c) => {
   }
 });
 
+// =============================================================================
+// ON-DEMAND FILE READING (FIX-GITHUB-READ-01)
+// Enables frontend/AI to read specific files from the connected GitHub repo.
+// =============================================================================
+
+/**
+ * GET /api/v1/github/file/:projectId
+ *
+ * Read a specific file from the connected GitHub repository.
+ * Used for on-demand file viewing in the UI and AI context enrichment.
+ *
+ * Query: path (required) - File path relative to repo root (e.g., "src/App.tsx")
+ *        ref (optional)  - Git ref (branch/tag/sha). Default: HEAD
+ */
+github.get('/file/:projectId', async (c) => {
+  try {
+    const userId = c.get('userId');
+    const projectId = c.req.param('projectId');
+    const filePath = c.req.query('path');
+    const ref = c.req.query('ref') || 'HEAD';
+
+    if (!filePath) {
+      return c.json({ error: 'path query parameter required' }, 400);
+    }
+
+    // Sanitize path: no directory traversal
+    if (filePath.includes('..') || filePath.startsWith('/')) {
+      return c.json({ error: 'Invalid file path' }, 400);
+    }
+
+    // Verify project ownership
+    const project = await c.env.DB.prepare(
+      'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
+    ).bind(projectId, userId).first();
+
+    if (!project) {
+      return c.json({ error: 'Project not found' }, 404);
+    }
+
+    // Get connection with token
+    const connection = await c.env.DB.prepare(`
+      SELECT repo_owner, repo_name, access_token_encrypted
+      FROM github_connections
+      WHERE project_id = ? AND user_id = ?
+    `).bind(projectId, userId).first<{
+      repo_owner: string;
+      repo_name: string;
+      access_token_encrypted: string;
+    }>();
+
+    if (!connection) {
+      return c.json({ error: 'GitHub not connected for this project' }, 404);
+    }
+
+    if (connection.repo_owner === 'PENDING' || connection.repo_name === 'PENDING') {
+      return c.json({ error: 'No repository selected' }, 400);
+    }
+
+    // Decrypt token
+    const encryptionKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      return c.json({ error: 'Server configuration error' }, 500);
+    }
+    const accessToken = await decryptToken(connection.access_token_encrypted, encryptionKey);
+
+    const repoPath = `${connection.repo_owner}/${connection.repo_name}`;
+
+    // Fetch file content from GitHub
+    const fileResp = await fetch(
+      `https://api.github.com/repos/${repoPath}/contents/${encodeURIComponent(filePath)}?ref=${encodeURIComponent(ref)}`,
+      {
+        headers: {
+          'Accept': 'application/vnd.github.v3.raw',
+          'Authorization': `Bearer ${accessToken}`,
+          'User-Agent': 'AIXORD-Platform',
+        },
+      }
+    );
+
+    if (!fileResp.ok) {
+      if (fileResp.status === 404) {
+        return c.json({ error: 'File not found', path: filePath }, 404);
+      }
+      return c.json({ error: 'Failed to fetch file from GitHub' }, 502);
+    }
+
+    const content = await fileResp.text();
+
+    // Cap at 50KB for safety (binary file protection)
+    const MAX_FILE_SIZE = 50_000;
+    const truncated = content.length > MAX_FILE_SIZE;
+
+    return c.json({
+      path: filePath,
+      repo: repoPath,
+      ref,
+      content: content.slice(0, MAX_FILE_SIZE),
+      size: content.length,
+      truncated,
+    });
+
+  } catch (error) {
+    log.error('github_file_read_failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return c.json({
+      error: 'Failed to read file from GitHub',
+      error_code: 'FILE_READ_FAILED',
+    }, 500);
+  }
+});
+
+/**
+ * GET /api/v1/github/tree/:projectId
+ *
+ * Fetch the full recursive file tree for the connected repository.
+ * Used by the frontend file browser component.
+ *
+ * Query: ref (optional)   - Git ref. Default: HEAD
+ *        depth (optional)  - Max directory depth. Default: 5
+ */
+github.get('/tree/:projectId', async (c) => {
+  try {
+    const userId = c.get('userId');
+    const projectId = c.req.param('projectId');
+    const ref = c.req.query('ref') || 'HEAD';
+    const maxDepth = Math.min(parseInt(c.req.query('depth') || '5', 10) || 5, 8);
+
+    // Verify project ownership
+    const project = await c.env.DB.prepare(
+      'SELECT id FROM projects WHERE id = ? AND owner_id = ?'
+    ).bind(projectId, userId).first();
+
+    if (!project) {
+      return c.json({ error: 'Project not found' }, 404);
+    }
+
+    // Get connection
+    const connection = await c.env.DB.prepare(`
+      SELECT repo_owner, repo_name, access_token_encrypted
+      FROM github_connections
+      WHERE project_id = ? AND user_id = ?
+    `).bind(projectId, userId).first<{
+      repo_owner: string;
+      repo_name: string;
+      access_token_encrypted: string;
+    }>();
+
+    if (!connection) {
+      return c.json({ error: 'GitHub not connected' }, 404);
+    }
+
+    if (connection.repo_owner === 'PENDING' || connection.repo_name === 'PENDING') {
+      return c.json({ error: 'No repository selected' }, 400);
+    }
+
+    const encryptionKey = c.env.GITHUB_TOKEN_ENCRYPTION_KEY;
+    if (!encryptionKey) {
+      return c.json({ error: 'Server configuration error' }, 500);
+    }
+    const accessToken = await decryptToken(connection.access_token_encrypted, encryptionKey);
+
+    const repoPath = `${connection.repo_owner}/${connection.repo_name}`;
+
+    const treeResp = await fetch(
+      `https://api.github.com/repos/${repoPath}/git/trees/${encodeURIComponent(ref)}?recursive=true`,
+      {
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'Authorization': `Bearer ${accessToken}`,
+          'User-Agent': 'AIXORD-Platform',
+        },
+      }
+    );
+
+    if (!treeResp.ok) {
+      return c.json({ error: 'Failed to fetch tree from GitHub' }, 502);
+    }
+
+    const treeData = await treeResp.json() as {
+      sha: string;
+      tree: Array<{ path: string; type: string; size?: number; sha: string }>;
+      truncated: boolean;
+    };
+
+    // Filter by depth
+    const filtered = treeData.tree.filter(t => t.path.split('/').length <= maxDepth);
+
+    return c.json({
+      repo: repoPath,
+      ref,
+      sha: treeData.sha,
+      entries: filtered.map(t => ({
+        path: t.path,
+        type: t.type === 'tree' ? 'dir' : 'file',
+        size: t.size,
+      })),
+      total: treeData.tree.length,
+      shown: filtered.length,
+      truncated_by_github: treeData.truncated,
+    });
+
+  } catch (error) {
+    log.error('github_tree_fetch_failed', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return c.json({ error: 'Failed to fetch tree', error_code: 'TREE_FETCH_FAILED' }, 500);
+  }
+});
+
 export default github;
