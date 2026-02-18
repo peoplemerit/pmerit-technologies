@@ -65,7 +65,7 @@ import { decryptAESGCM } from './utils/crypto';
 import { trackError } from './utils/errorTracker';
 import { log } from './utils/logger';
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<{ Bindings: Env; Variables: { requestId: string; userId: string; userEmail: string } }>();
 
 // M-6: Environment variable validation — warns on first request if critical secrets are missing
 let envValidated = false;
@@ -106,6 +106,7 @@ app.use('*', async (c, next) => {
 // Request correlation ID middleware (HANDOFF-COPILOT-AUDIT-01)
 app.use('*', async (c, next) => {
   const requestId = c.req.header('X-Request-ID') || crypto.randomUUID();
+  c.set('requestId', requestId);
   c.header('X-Request-ID', requestId);
   await next();
 });
@@ -160,7 +161,7 @@ app.use('*', async (c, next) => {
       path: c.req.path,
       status: c.res.status,
       latency_ms: latency,
-      request_id: c.res.headers.get('X-Request-ID') || undefined,
+      request_id: c.get('requestId') || undefined,
       user_id: c.get('userId') || undefined,
     });
   }
@@ -168,7 +169,7 @@ app.use('*', async (c, next) => {
 
 // Global error tracking middleware — captures unhandled errors with structured logging
 app.onError((err, c) => {
-  const requestId = c.res.headers.get('X-Request-ID') || 'unknown';
+  const requestId = c.get('requestId') || 'unknown';
   trackError(err, {
     requestId,
     userId: c.get('userId'),

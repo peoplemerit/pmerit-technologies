@@ -52,6 +52,31 @@ function generateToken(): string {
 }
 
 /**
+ * Verify a password against a user's stored hash (handles both PBKDF2 and legacy SHA-256).
+ * Returns { valid, legacyMatch } — callers can use legacyMatch to trigger transparent upgrade.
+ */
+async function verifyPassword(
+  password: string,
+  user: { password_hash: string; password_salt: string | null; hash_algorithm: string | null },
+  authSalt: string | undefined
+): Promise<{ valid: boolean; legacyMatch: boolean }> {
+  const algorithm = user.hash_algorithm || 'sha256';
+
+  if (algorithm === 'pbkdf2' && user.password_salt) {
+    const valid = await verifyPasswordPBKDF2(password, user.password_salt, user.password_hash);
+    return { valid, legacyMatch: false };
+  }
+
+  // Legacy SHA-256 — fail-closed if secret not configured
+  if (!authSalt) {
+    return { valid: false, legacyMatch: false };
+  }
+  const legacyHash = await hashPasswordLegacy(password, authSalt);
+  const valid = legacyHash === user.password_hash;
+  return { valid, legacyMatch: valid };
+}
+
+/**
  * Send email via Resend API
  * Uses noreply@pmerit.com as the sender address
  * Requires RESEND_API_KEY environment variable
@@ -260,33 +285,22 @@ auth.post('/login', validateBody(loginSchema), async (c) => {
     return c.json({ error: 'Invalid credentials' }, 401);
   }
 
-  // Verify password based on stored algorithm
-  let passwordValid = false;
-  const algorithm = user.hash_algorithm || 'sha256';
-
-  if (algorithm === 'pbkdf2' && user.password_salt) {
-    // Modern: PBKDF2 verification
-    passwordValid = await verifyPasswordPBKDF2(password, user.password_salt, user.password_hash);
-  } else {
-    // Legacy: SHA-256 with global salt — fail-closed if secret not configured
-    if (!c.env.AUTH_SALT) {
-      return c.json({ error: 'Server configuration error' }, 500);
-    }
-    const legacyHash = await hashPasswordLegacy(password, c.env.AUTH_SALT);
-    passwordValid = legacyHash === user.password_hash;
-
-    // Transparent upgrade: re-hash with PBKDF2 on successful legacy login
-    if (passwordValid) {
-      const pbkdf2Result = await hashPasswordPBKDF2(password);
-      await c.env.DB.prepare(
-        'UPDATE users SET password_hash = ?, password_salt = ?, hash_algorithm = ?, updated_at = ? WHERE id = ?'
-      ).bind(pbkdf2Result.hash, pbkdf2Result.salt, 'pbkdf2', new Date().toISOString(), user.id).run();
-      log.info('auth_pbkdf2_upgrade', { userId: user.id.substring(0, 8) });
-    }
-  }
+  // Verify password (handles both PBKDF2 and legacy SHA-256)
+  const { valid: passwordValid, legacyMatch } = await verifyPassword(
+    password, user, c.env.AUTH_SALT
+  );
 
   if (!passwordValid) {
     return c.json({ error: 'Invalid credentials' }, 401);
+  }
+
+  // Transparent upgrade: re-hash legacy SHA-256 with PBKDF2
+  if (legacyMatch) {
+    const pbkdf2Result = await hashPasswordPBKDF2(password);
+    await c.env.DB.prepare(
+      'UPDATE users SET password_hash = ?, password_salt = ?, hash_algorithm = ?, updated_at = ? WHERE id = ?'
+    ).bind(pbkdf2Result.hash, pbkdf2Result.salt, 'pbkdf2', new Date().toISOString(), user.id).run();
+    log.info('auth_pbkdf2_upgrade', { userId: user.id.substring(0, 8) });
   }
 
   // Auto-verify email on successful login (successful auth = valid email ownership)
@@ -805,20 +819,10 @@ auth.post('/change-password', async (c) => {
     return c.json({ error: 'User not found' }, 404);
   }
 
-  // Verify current password
-  let passwordValid = false;
-  const algorithm = user.hash_algorithm || 'sha256';
-
-  if (algorithm === 'pbkdf2' && user.password_salt) {
-    passwordValid = await verifyPasswordPBKDF2(current_password, user.password_salt, user.password_hash);
-  } else {
-    // Legacy SHA-256 — fail-closed if secret not configured
-    if (!c.env.AUTH_SALT) {
-      return c.json({ error: 'Server configuration error' }, 500);
-    }
-    const legacyHash = await hashPasswordLegacy(current_password, c.env.AUTH_SALT);
-    passwordValid = legacyHash === user.password_hash;
-  }
+  // Verify current password (handles both PBKDF2 and legacy SHA-256)
+  const { valid: passwordValid } = await verifyPassword(
+    current_password, user, c.env.AUTH_SALT
+  );
 
   if (!passwordValid) {
     return c.json({ error: 'Current password is incorrect' }, 401);
