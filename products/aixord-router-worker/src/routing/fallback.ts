@@ -633,7 +633,7 @@ RULES: Reference the objective. Stay in phase scope. Be specific to THIS project
 - Template: ${ws.template || 'unknown'}
 - Permission: ${ws.permission_level || 'readwrite'}
 - Scaffold: ${ws.scaffold_generated ? 'generated' : 'not generated'}
-- GitHub: ${ws.github_connected ? (ws.github_repo || 'connected') : 'not connected'}`;
+- GitHub: ${ws.github_connected ? (ws.github_repo || 'connected') + ' — repository file tree and key files are loaded below in CODEBASE CONTEXT' : 'not connected'}`;
     } else {
       systemPrompt += `\n\nWorkspace: not bound (no local folder linked)`;
     }
@@ -659,22 +659,23 @@ RULES: Reference the objective. Stay in phase scope. Be specific to THIS project
       }
     }
 
-    // AI instruction block — tells the model exactly what it knows and doesn't know
+    // AI instruction block — tells the model exactly what it has and how to use it
     const fileCount = wsc.key_files?.length || 0;
-    systemPrompt += `\n\n--- FILE ACCESS INSTRUCTIONS ---
-You have access to the project's file structure and the contents of ${fileCount} key files shown above.
+    const hasGitHubTree = wsc.file_tree?.includes('GITHUB REPOSITORY') || wsc.file_tree?.includes('GitHub:');
+    systemPrompt += `\n\n--- YOUR CODEBASE ACCESS ---
+${hasGitHubTree ? 'The file structure and key files above were loaded FROM the connected GitHub repository. You have REAL access to the project codebase.' : 'The file structure above was loaded from the local workspace.'}
+You can see ${fileCount > 0 ? `the full contents of ${fileCount} key project files` : 'the project file structure'} and the directory tree.
 
-WHAT YOU CAN DO:
-- Reference any file path shown in the file structure
-- Analyze the contents of the key files provided above
-- Infer project architecture, dependencies, and patterns from these files
-- Suggest specific code changes with file paths and line-level guidance
+USE THIS DATA TO:
+- Answer questions about the codebase with specific file paths and code references
+- Analyze architecture, dependencies, tech stack, and patterns from the loaded files
+- Suggest code changes referencing exact files and locations
+- Describe what each file/directory does based on names, structure, and loaded contents
 
-WHEN ASKED ABOUT A FILE NOT LOADED ABOVE:
-- If it appears in the file structure, say: "I can see that file exists in the project but I don't have its contents loaded. You can paste the relevant code here and I'll analyze it."
-- If it does not appear in the file structure, say: "I don't see that file in the project structure. It may be in a deeper directory not shown here."
+WHEN ASKED ABOUT A FILE YOU CAN SEE IN THE TREE BUT DON'T HAVE LOADED:
+- Say: "I can see [filename] in the project structure. I don't have its contents loaded right now — paste the relevant code here and I'll analyze it."
 
-Use the file structure and key files to give specific, file-aware recommendations.`;
+IMPORTANT: Do NOT say you "cannot access GitHub" or "cannot view repository files." You already have the repository's file tree and key file contents loaded above. Use them.`;
   } else {
     // No workspace context at all — check if GitHub is connected but context failed
     const ws = request.capsule?.workspace;
