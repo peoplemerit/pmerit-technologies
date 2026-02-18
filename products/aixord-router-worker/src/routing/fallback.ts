@@ -683,10 +683,25 @@ USE THIS DATA TO:
 - Suggest code changes referencing exact files and locations
 - Describe what each file/directory does based on names, structure, and loaded contents
 
-WHEN ASKED ABOUT A FILE YOU CAN SEE IN THE TREE BUT DON'T HAVE LOADED:
-- Say: "I can see [filename] in the project structure. I don't have its contents loaded right now — paste the relevant code here and I'll analyze it."
+WHEN YOU NEED TO READ A FILE NOT ALREADY LOADED:
+If you need the contents of a file visible in the file tree but NOT loaded above, you can REQUEST it.
+Output a structured block and the platform will read the file from the user's workspace and provide it:
 
-IMPORTANT: Do NOT say you "cannot access GitHub" or "cannot view repository files." You already have the repository's file tree and key file contents loaded above. Use them.`;
+=== READ_FILE_REQUEST ===
+paths:
+- path/to/file.ext
+- another/file.md
+reason: Brief explanation of why you need these files
+=== END READ_FILE_REQUEST ===
+
+RULES FOR FILE REQUESTS:
+- Only request files you can SEE in the file tree above
+- Maximum 5 files per request
+- The platform will automatically read and inject the contents in a follow-up message
+- After requesting files, STOP and wait for the file contents — do NOT guess at what they contain
+- You may include other analysis or commentary before the request block
+
+IMPORTANT: Do NOT say you "cannot access" files or "cannot view repository files." You already have the repository's file tree and key file contents loaded above. For any other file in the tree, use READ_FILE_REQUEST to fetch its contents.`;
   } else {
     // No workspace context at all — check if GitHub is connected but context failed
     const ws = request.capsule?.workspace;

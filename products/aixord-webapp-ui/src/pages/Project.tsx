@@ -28,6 +28,7 @@ import { QuickActions } from '../components/chat/QuickActions';
 import { ImageUpload, type PendingImage } from '../components/chat/ImageUpload';
 import { formatAttachmentsForContext, type AttachedFile } from '../components/FileAttachment';
 import { detectAndResolveFiles } from '../lib/fileDetection';
+import { processReadFileRequests } from '../lib/readFileRequest';
 import { fileSystemStorage, readDirectory, readFileContent, verifyPermission } from '../lib/fileSystem';
 import { ExecutionEngine } from '../lib/executionEngine';
 import { validateScopeImports, type ImportValidationResult } from '../lib/scopeValidator';
@@ -1192,17 +1193,27 @@ export function Project() {
               };
               const fileTree = buildTree(entries);
 
-              // Read key files (README, package.json, config files)
-              const KEY_FILE_NAMES = ['README.md', 'readme.md', 'package.json', 'tsconfig.json',
+              // Read key files: explicit names + any .md files in root
+              const KEY_FILE_NAMES = new Set(['README.md', 'readme.md', 'package.json', 'tsconfig.json',
                 'wrangler.toml', 'wrangler.json', '.env.example', 'Cargo.toml', 'requirements.txt',
-                'pyproject.toml', 'go.mod'];
+                'pyproject.toml', 'go.mod', 'CHANGELOG.md', 'CONTRIBUTING.md', 'LICENSE',
+                'vite.config.ts', 'vite.config.js', 'next.config.js', 'next.config.mjs',
+                'tailwind.config.ts', 'tailwind.config.js']);
+              // Also auto-include any .md/.txt files in root (catches brainstorm.md, notes.md, etc.)
+              const KEY_FILE_EXTENSIONS = new Set(['md', 'txt']);
+              const MAX_KEY_FILES = 15; // Budget: up to 15 key files
+              const MAX_KEY_FILE_SIZE = 5000; // 5KB per file (up from 3KB)
               const keyFiles: Array<{ path: string; content: string }> = [];
 
               for (const entry of entries) {
-                if (entry.type === 'file' && KEY_FILE_NAMES.includes(entry.name)) {
-                  try {
+                if (keyFiles.length >= MAX_KEY_FILES) break;
+                if (entry.type !== 'file') continue;
+                const ext = entry.name.split('.').pop()?.toLowerCase() || '';
+                const isKeyFile = KEY_FILE_NAMES.has(entry.name) || KEY_FILE_EXTENSIONS.has(ext);
+                if (!isKeyFile) continue;
+                try {
                     const fileData = await readFileContent((entry as { handle: FileSystemFileHandle }).handle);
-                    if (fileData.content.length < 3000) {
+                    if (fileData.content.length < MAX_KEY_FILE_SIZE) {
                       keyFiles.push({ path: entry.name, content: fileData.content });
                     }
                   } catch {
@@ -1212,7 +1223,7 @@ export function Project() {
               }
 
               workspaceContextRef.current = {
-                file_tree: fileTree.slice(0, 4000),
+                file_tree: fileTree.slice(0, 8000),
                 key_files: keyFiles.length > 0 ? keyFiles : undefined,
               };
             }
@@ -1307,7 +1318,128 @@ export function Project() {
 
       // Update session metrics
       setSessionCost(prev => prev + sdkResponse.usage.costUsd);
-      setSessionTokens(prev => prev + sdkResponse.usage.inputTokens + sdkResponse.usage.outputTokens);
+      setSessionTokens(prev => prev + sdkResponse.usage.outputTokens + sdkResponse.usage.inputTokens);
+
+      // READ_FILE_REQUEST: Check if AI requested file contents from workspace
+      // If found, auto-read files via FSAPI and send a follow-up message with contents
+      if (sdkResponse.status === 'SUCCESS' && workspaceStatus?.bound) {
+        try {
+          const fileReadResult = await processReadFileRequests(assistantContent, id);
+          if (fileReadResult.hasRequests && fileReadResult.filesRead > 0) {
+            // Add a system-style message showing the file contents being injected
+            const fileReadMessage: Message = {
+              id: generateId(),
+              role: 'user',
+              content: fileReadResult.contextMessage,
+              timestamp: new Date(),
+              metadata: {
+                autoFileRead: true,
+                filesRead: fileReadResult.filesRead,
+                requestedPaths: fileReadResult.results.map(r => r.path),
+              },
+            };
+
+            // Save to backend
+            await api.messages.create(id, {
+              role: 'user',
+              content: fileReadResult.contextMessage,
+              metadata: { autoFileRead: true, filesRead: fileReadResult.filesRead },
+              session_id: activeSession?.id,
+            }, token);
+
+            // Add to UI
+            setConversation((prev) => prev ? {
+              ...prev,
+              messages: [...prev.messages, fileReadMessage],
+              updatedAt: new Date()
+            } : prev);
+
+            // Auto-send follow-up AI call with file contents in context
+            // The conversation history will now include the file contents
+            const followUpHistory = [
+              ...conversationHistory,
+              { role: 'assistant' as const, content: assistantContent },
+              { role: 'user' as const, content: fileReadResult.contextMessage },
+            ].slice(-MAX_HISTORY_MESSAGES);
+
+            const followUpResponse = await sdkSend({
+              message: fileReadResult.contextMessage,
+              mode,
+              objective: project.objective || '',
+              phase: state?.session.phase,
+              constraints: state?.reality.constraints || [],
+              decisions: decisions.map(d => d.summary),
+              sessionId: activeSession?.id || `session_${state?.session.number || 1}`,
+              maxOutputTokens: 4096,
+              conversationHistory: followUpHistory,
+              workspaceContext: workspaceContextRef.current || undefined,
+              sessionGraph,
+              workspace: workspaceStatus ? {
+                bound: workspaceStatus.bound,
+                folder_name: workspaceStatus.folder_name,
+                template: workspaceStatus.folder_template,
+                permission_level: workspaceStatus.permission_level,
+                scaffold_generated: workspaceStatus.scaffold_generated,
+                github_connected: workspaceStatus.github_connected || false,
+                github_repo: workspaceStatus.github_repo || undefined,
+              } : { bound: false },
+              gates: state?.gates || undefined,
+              blueprintSummary: blueprint.summary ? {
+                scopes: blueprint.summary.scopes,
+                deliverables: blueprint.summary.deliverables,
+                deliverables_with_dod: blueprint.summary.deliverables_with_dod,
+                integrity_passed: blueprint.summary.integrity?.passed ?? null,
+              } : undefined,
+            });
+
+            // Create follow-up assistant message
+            const followUpContent = followUpResponse.status === 'SUCCESS'
+              ? followUpResponse.content
+              : `Error: ${followUpResponse.error || 'Unknown error'}`;
+
+            const followUpAssistantMessage: Message = {
+              id: generateId(),
+              role: 'assistant',
+              content: followUpContent,
+              timestamp: new Date(),
+              metadata: {
+                model: followUpResponse.model,
+                usage: {
+                  inputTokens: followUpResponse.usage.inputTokens,
+                  outputTokens: followUpResponse.usage.outputTokens,
+                  costUsd: followUpResponse.usage.costUsd,
+                  latencyMs: followUpResponse.usage.latencyMs,
+                },
+                phase: phaseToShort(state?.session.phase),
+                fileReadFollowUp: true,
+              },
+            };
+
+            await api.messages.create(id, {
+              role: 'assistant',
+              content: followUpContent,
+              metadata: followUpAssistantMessage.metadata as Record<string, unknown>,
+              session_id: activeSession?.id,
+            }, token);
+
+            setConversation((prev) => prev ? {
+              ...prev,
+              messages: [...prev.messages, followUpAssistantMessage],
+              updatedAt: new Date()
+            } : prev);
+
+            // Update metrics for follow-up call
+            setSessionCost(prev => prev + followUpResponse.usage.costUsd);
+            setSessionTokens(prev => prev + followUpResponse.usage.inputTokens + followUpResponse.usage.outputTokens);
+
+            // Use the follow-up content for subsequent artifact extraction
+            // (The original assistantContent is kept for the first pass)
+          }
+        } catch (fileReadErr) {
+          // Non-blocking — file read auto-resolution is best-effort
+          console.warn('[READ_FILE_REQUEST] Auto-resolution failed:', fileReadErr);
+        }
+      }
 
       // HANDOFF-VD-CI-01 A1: Extract brainstorm artifact from AI response
       if (state?.session.phase === 'BRAINSTORM' || state?.session.phase === 'B') {
