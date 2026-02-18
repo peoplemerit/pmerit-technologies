@@ -218,6 +218,50 @@ export const githubApi = {
       body: JSON.stringify({ name, description, private: isPrivate }),
     }, token);
   },
+
+  /**
+   * Fetch recursive file tree from GitHub repository (GITHUB-SYNC-01)
+   * Uses GET /github/tree/:projectId endpoint added in FIX-GITHUB-READ-01
+   */
+  async getTree(
+    projectId: string,
+    token: string,
+    depth = 6
+  ): Promise<{
+    repo: string;
+    ref: string;
+    sha: string;
+    entries: Array<{ path: string; type: 'file' | 'dir'; size?: number }>;
+    total: number;
+    shown: number;
+    truncated_by_github: boolean;
+  }> {
+    return request(`/github/tree/${projectId}?ref=HEAD&depth=${depth}`, {}, token);
+  },
+
+  /**
+   * Fetch a single file's content from GitHub repository (GITHUB-SYNC-01)
+   * Uses GET /github/file/:projectId endpoint added in FIX-GITHUB-READ-01
+   */
+  async getFile(
+    projectId: string,
+    path: string,
+    token: string,
+    ref = 'HEAD'
+  ): Promise<{
+    path: string;
+    repo: string;
+    ref: string;
+    content: string;
+    size: number;
+    truncated: boolean;
+  }> {
+    return request(
+      `/github/file/${projectId}?path=${encodeURIComponent(path)}&ref=${encodeURIComponent(ref)}`,
+      {},
+      token
+    );
+  },
 };
 
 // ============================================================================

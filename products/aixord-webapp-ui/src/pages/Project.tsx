@@ -2217,6 +2217,7 @@ export function Project() {
       {showWorkspaceWizard && id && token && (
         <WorkspaceSetupWizard
           projectId={id}
+          token={token}
           onComplete={handleWorkspaceComplete}
           onSkip={() => setShowWorkspaceWizard(false)}
           githubConnection={githubConnection}

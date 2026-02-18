@@ -8,7 +8,7 @@
  * Reuses FolderPicker.tsx and GitHubConnect.tsx components.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { FolderPicker } from './FolderPicker';
 import { GitHubConnect } from './GitHubConnect';
 import { FOLDER_TEMPLATES, getTemplateById, type FolderTemplate } from '../lib/workspaceTemplates';
@@ -19,9 +19,11 @@ import {
   type LinkedFolder,
 } from '../lib/fileSystem';
 import type { GitHubConnection, GitHubMode } from '../lib/api';
+import { syncGitHubToWorkspace, type GitHubSyncProgress, type GitHubSyncResult } from '../lib/githubSync';
 
 interface WorkspaceSetupWizardProps {
   projectId: string;
+  token: string;
   onComplete: (binding: WorkspaceBindingData) => void;
   onSkip: () => void;
   // GitHub integration props (from Project.tsx)
@@ -45,6 +47,8 @@ export interface WorkspaceBindingData {
   scaffold_skipped_count?: number;
   scaffold_error_count?: number;
   scaffold_paths_written?: string[];
+  // GitHub sync reporting (GITHUB-SYNC-01)
+  github_sync_count?: number;
 }
 
 const STEPS = [
@@ -55,6 +59,7 @@ const STEPS = [
 
 export function WorkspaceSetupWizard({
   projectId,
+  token,
   onComplete,
   onSkip,
   githubConnection,
@@ -69,6 +74,12 @@ export function WorkspaceSetupWizard({
   const [scaffoldResult, setScaffoldResult] = useState<ScaffoldResult | null>(null);
   const [isScaffolding, setIsScaffolding] = useState(false);
   const [scaffoldError, setScaffoldError] = useState<string | null>(null);
+
+  // GitHub sync state (GITHUB-SYNC-01)
+  const [syncProgress, setSyncProgress] = useState<GitHubSyncProgress | null>(null);
+  const [syncResult, setSyncResult] = useState<GitHubSyncResult | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const syncAbortRef = useRef<AbortController | null>(null);
 
   // Step 1 handlers
   const handleFolderLinked = useCallback((folder: LinkedFolder) => {
@@ -110,6 +121,53 @@ export function WorkspaceSetupWizard({
     }
   }, [linkedFolder, selectedTemplate, projectId]);
 
+  // GitHub sync handlers (GITHUB-SYNC-01)
+  const handleSync = useCallback(async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncResult(null);
+    setSyncProgress(null);
+
+    const abort = new AbortController();
+    syncAbortRef.current = abort;
+
+    try {
+      const result = await syncGitHubToWorkspace(
+        projectId,
+        token,
+        setSyncProgress,
+        { signal: abort.signal }
+      );
+      setSyncResult(result);
+    } finally {
+      setIsSyncing(false);
+      syncAbortRef.current = null;
+    }
+  }, [projectId, token, isSyncing]);
+
+  const handleCancelSync = useCallback(() => {
+    syncAbortRef.current?.abort();
+  }, []);
+
+  // Auto-trigger sync when conditions are met in WORKSPACE_SYNC mode:
+  // GitHub connected + repo selected + workspace folder linked
+  const autoSyncTriggered = useRef(false);
+  useEffect(() => {
+    if (autoSyncTriggered.current) return;
+    if (step !== 2) return;
+    if (!linkedFolder) return;
+    if (!githubConnection?.connected) return;
+    if (!githubConnection.repo_name || githubConnection.repo_name === 'PENDING') return;
+    if (githubConnection.github_mode !== 'WORKSPACE_SYNC') return;
+    if (isSyncing || syncResult) return;
+
+    autoSyncTriggered.current = true;
+    const timer = setTimeout(() => {
+      handleSync();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [step, linkedFolder, githubConnection, isSyncing, syncResult, handleSync]);
+
   const handleConfirm = useCallback(() => {
     const binding: WorkspaceBindingData = {
       folder_name: linkedFolder?.name ?? null,
@@ -125,9 +183,11 @@ export function WorkspaceSetupWizard({
       scaffold_item_count: scaffoldResult?.created ?? 0,
       scaffold_skipped_count: scaffoldResult?.skipped ?? 0,
       scaffold_error_count: scaffoldResult?.errors.length ?? 0,
+      // GitHub sync reporting (GITHUB-SYNC-01)
+      github_sync_count: syncResult?.synced ?? 0,
     };
     onComplete(binding);
-  }, [linkedFolder, selectedTemplate, scaffoldResult, githubConnection, onComplete]);
+  }, [linkedFolder, selectedTemplate, scaffoldResult, githubConnection, syncResult, onComplete]);
 
   const fsSupported = isFileSystemAccessSupported();
 
@@ -195,6 +255,13 @@ export function WorkspaceSetupWizard({
               onDisconnect={onGitHubDisconnect}
               onSelectRepo={onGitHubSelectRepo}
               repos={githubRepos}
+              // GitHub sync props (GITHUB-SYNC-01)
+              hasLinkedFolder={!!linkedFolder}
+              isSyncing={isSyncing}
+              syncProgress={syncProgress}
+              syncResult={syncResult}
+              onSync={handleSync}
+              onCancelSync={handleCancelSync}
             />
           )}
           {step === 3 && (
@@ -203,6 +270,7 @@ export function WorkspaceSetupWizard({
               selectedTemplate={selectedTemplate}
               scaffoldResult={scaffoldResult}
               githubConnection={githubConnection}
+              syncResult={syncResult}
             />
           )}
         </div>
@@ -432,6 +500,13 @@ function StepVersionControl({
   onUpgradeMode,
   repos,
   projectType,
+  // GitHub sync props (GITHUB-SYNC-01)
+  hasLinkedFolder,
+  isSyncing,
+  syncProgress,
+  syncResult,
+  onSync,
+  onCancelSync,
 }: {
   projectId: string;
   githubConnection: GitHubConnection | null;
@@ -441,9 +516,20 @@ function StepVersionControl({
   onUpgradeMode?: () => void;
   repos?: Array<{ owner: string; name: string; full_name: string; private: boolean }>;
   projectType?: string;
+  // GitHub sync props (GITHUB-SYNC-01)
+  hasLinkedFolder?: boolean;
+  isSyncing?: boolean;
+  syncProgress?: GitHubSyncProgress | null;
+  syncResult?: GitHubSyncResult | null;
+  onSync?: () => void;
+  onCancelSync?: () => void;
 }) {
   const isWorkspaceSync = githubConnection?.github_mode === 'WORKSPACE_SYNC';
   const defaultMode: GitHubMode = projectType === 'software' ? 'WORKSPACE_SYNC' : 'READ_ONLY';
+
+  // Show sync UI when: GitHub connected + repo selected + workspace folder linked
+  const hasRepo = githubConnection?.connected && githubConnection?.repo_name && githubConnection.repo_name !== 'PENDING';
+  const showSyncSection = hasRepo && hasLinkedFolder;
 
   return (
     <div className="space-y-6">
@@ -471,6 +557,106 @@ function StepVersionControl({
         repos={repos}
         defaultMode={defaultMode}
       />
+
+      {/* GitHub Sync Section (GITHUB-SYNC-01) */}
+      {showSyncSection && (
+        <div className="mt-4 p-4 bg-gray-800/40 border border-gray-700/50 rounded-xl">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-base">📥</span>
+            <h4 className="text-sm font-medium text-white">Sync Repository Files</h4>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">
+            Download source files from <code className="text-green-400">{githubConnection!.repo_owner}/{githubConnection!.repo_name}</code> to
+            your local workspace so the AI can analyze your full codebase.
+          </p>
+
+          {/* Ready state — show sync button */}
+          {!isSyncing && !syncResult && (
+            <button
+              onClick={onSync}
+              className="w-full px-4 py-2.5 bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <span>📥</span>
+              Sync Files from GitHub
+            </button>
+          )}
+
+          {/* Syncing state — progress bar */}
+          {isSyncing && syncProgress && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-300">{syncProgress.message}</span>
+                {syncProgress.total > 0 && (
+                  <span className="text-gray-500">{syncProgress.current}/{syncProgress.total}</span>
+                )}
+              </div>
+              {syncProgress.total > 0 && (
+                <div className="w-full bg-gray-700 rounded-full h-1.5">
+                  <div
+                    className="bg-violet-500 h-1.5 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.round((syncProgress.current / syncProgress.total) * 100)}%` }}
+                  />
+                </div>
+              )}
+              {syncProgress.currentFile && (
+                <p className="text-xs text-gray-500 truncate">{syncProgress.currentFile}</p>
+              )}
+              <button
+                onClick={onCancelSync}
+                className="text-xs text-gray-500 hover:text-red-400 transition-colors"
+              >
+                Cancel sync
+              </button>
+            </div>
+          )}
+
+          {/* Syncing state — fetching tree (no total yet) */}
+          {isSyncing && !syncProgress && (
+            <div className="flex items-center gap-2 text-xs text-gray-400">
+              <span className="animate-spin">⏳</span>
+              Starting sync...
+            </div>
+          )}
+
+          {/* Complete state — result card */}
+          {syncResult && !isSyncing && (
+            <div className={`p-3 rounded-lg border ${
+              syncResult.errors === 0
+                ? 'bg-green-500/10 border-green-500/30'
+                : 'bg-amber-500/10 border-amber-500/30'
+            }`}>
+              <div className="flex items-center gap-2 mb-1">
+                <span>{syncResult.errors === 0 ? '✅' : '⚠️'}</span>
+                <span className={`text-sm font-medium ${syncResult.errors === 0 ? 'text-green-400' : 'text-amber-400'}`}>
+                  Sync Complete
+                </span>
+              </div>
+              <div className="flex gap-4 text-xs text-gray-400">
+                <span><strong className="text-green-400">{syncResult.synced}</strong> synced</span>
+                {syncResult.skipped > 0 && (
+                  <span><strong className="text-gray-300">{syncResult.skipped}</strong> existing</span>
+                )}
+                {syncResult.errors > 0 && (
+                  <span><strong className="text-red-400">{syncResult.errors}</strong> errors</span>
+                )}
+                <span className="text-gray-600">{(syncResult.durationMs / 1000).toFixed(1)}s</span>
+              </div>
+              {syncResult.synced > 0 && (
+                <p className="text-xs text-gray-500 mt-1.5">
+                  Files are now in your local workspace. The AI will see them automatically.
+                </p>
+              )}
+              {/* Re-sync button */}
+              <button
+                onClick={onSync}
+                className="mt-2 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+              >
+                Re-sync (overwrite existing)
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -484,11 +670,13 @@ function StepConfirmation({
   selectedTemplate,
   scaffoldResult,
   githubConnection,
+  syncResult,
 }: {
   linkedFolder: LinkedFolder | null;
   selectedTemplate: string | null;
   scaffoldResult: ScaffoldResult | null;
   githubConnection: GitHubConnection | null;
+  syncResult?: GitHubSyncResult | null;
 }) {
   const template = selectedTemplate ? getTemplateById(selectedTemplate) : null;
   const hasGitHub = githubConnection?.connected && githubConnection?.repo_name && githubConnection.repo_name !== 'PENDING';
@@ -551,6 +739,16 @@ function StepConfirmation({
           status={hasGitHub ? 'success' : 'neutral'}
           detail={hasGitHub ? 'Read-only evidence tracking' : 'Can connect later from Evidence tab'}
         />
+
+        {/* GitHub Sync (GITHUB-SYNC-01) */}
+        {syncResult && syncResult.synced > 0 && (
+          <SummaryRow
+            label="File Sync"
+            value={`${syncResult.synced} files synced`}
+            status={syncResult.errors === 0 ? 'success' : 'warning'}
+            detail="Repository files downloaded to local workspace — AI can analyze full codebase"
+          />
+        )}
 
         {/* Gates */}
         <div className="mt-4 p-3 bg-gray-800/50 border border-gray-700/50 rounded-lg">
