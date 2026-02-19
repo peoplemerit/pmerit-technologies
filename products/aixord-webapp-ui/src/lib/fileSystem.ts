@@ -219,8 +219,13 @@ export async function requestFolderAccess(): Promise<FileSystemDirectoryHandle |
 }
 
 /**
- * Verify permission for an existing handle
- * Browser may prompt user to reconfirm access
+ * Verify permission for an existing handle.
+ * Browser may prompt user to reconfirm access.
+ *
+ * CRITICAL: After OAuth redirect (full page navigation), FSAPI handles stored
+ * in IndexedDB may become stale. Calling queryPermission/requestPermission on
+ * a stale handle can crash certain browsers (Opera). This function wraps all
+ * calls in try/catch to guarantee it never crashes — it returns false instead.
  */
 export async function verifyPermission(
   handle: FileSystemDirectoryHandle,
@@ -231,16 +236,43 @@ export async function verifyPermission(
   };
 
   // Check current permission state
-  if ((await handle.queryPermission(options)) === 'granted') {
-    return true;
+  try {
+    if ((await handle.queryPermission(options)) === 'granted') {
+      return true;
+    }
+  } catch (err) {
+    console.warn('[FSAPI] queryPermission failed (stale handle?):', err);
+    return false;
   }
 
   // Request permission (may show browser prompt)
-  if ((await handle.requestPermission(options)) === 'granted') {
-    return true;
+  try {
+    if ((await handle.requestPermission(options)) === 'granted') {
+      return true;
+    }
+  } catch (err) {
+    console.warn('[FSAPI] requestPermission failed:', err);
+    return false;
   }
 
   return false;
+}
+
+/**
+ * Check if a FileSystemDirectoryHandle is still usable.
+ * After page navigation (e.g., OAuth redirect), handles from IndexedDB
+ * may become stale. This function tests the handle non-destructively.
+ * Returns true if the handle can be used (granted or prompt), false if stale.
+ */
+export async function isHandleUsable(
+  handle: FileSystemDirectoryHandle
+): Promise<boolean> {
+  try {
+    const state = await handle.queryPermission({ mode: 'read' });
+    return state === 'granted' || state === 'prompt';
+  } catch {
+    return false;
+  }
 }
 
 /**

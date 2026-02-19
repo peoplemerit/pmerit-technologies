@@ -14,7 +14,7 @@
  */
 
 import { githubApi } from './api/evidence-knowledge';
-import { fileSystemStorage, createFile, createDirectory } from './fileSystem';
+import { fileSystemStorage, createFile, createDirectory, verifyPermission } from './fileSystem';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -246,13 +246,13 @@ export async function syncGitHubToWorkspace(
       throw new Error('No workspace folder linked. Please link a folder in Step 1 first.');
     }
 
-    // Verify permission is still granted
-    const permStatus = await linkedFolder.handle.queryPermission({ mode: 'readwrite' });
-    if (permStatus !== 'granted') {
-      const reqStatus = await linkedFolder.handle.requestPermission({ mode: 'readwrite' });
-      if (reqStatus !== 'granted') {
-        throw new Error('Workspace folder permission denied. Please re-link the folder.');
-      }
+    // Verify permission is still granted (hardened against stale handles — T2)
+    const hasPermission = await verifyPermission(linkedFolder.handle, true);
+    if (!hasPermission) {
+      throw new Error(
+        'Workspace folder permission lost. This can happen after a page redirect. ' +
+        'Please re-link your folder and try again.'
+      );
     }
 
     // -----------------------------------------------------------------------
@@ -463,13 +463,13 @@ export async function pushLocalToGitHub(
       throw new Error('No workspace folder linked. Please link a folder in Step 1 first.');
     }
 
-    // Verify permission
-    const permStatus = await linkedFolder.handle.queryPermission({ mode: 'readwrite' });
-    if (permStatus !== 'granted') {
-      const reqStatus = await linkedFolder.handle.requestPermission({ mode: 'readwrite' });
-      if (reqStatus !== 'granted') {
-        throw new Error('Workspace folder permission denied. Please re-link the folder.');
-      }
+    // Verify permission (hardened against stale handles — T2)
+    const hasPermission = await verifyPermission(linkedFolder.handle, true);
+    if (!hasPermission) {
+      throw new Error(
+        'Workspace folder permission lost. This can happen after a page redirect. ' +
+        'Please re-link your folder and try again.'
+      );
     }
 
     // -----------------------------------------------------------------

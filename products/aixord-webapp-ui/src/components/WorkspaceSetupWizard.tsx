@@ -16,6 +16,8 @@ import { generateScaffold, type ScaffoldResult } from '../lib/scaffoldGenerator'
 import {
   isFileSystemAccessSupported,
   fileSystemStorage,
+  verifyPermission,
+  isHandleUsable,
   type LinkedFolder,
 } from '../lib/fileSystem';
 import { api, type GitHubConnection, type GitHubMode } from '../lib/api';
@@ -121,6 +123,63 @@ export function WorkspaceSetupWizard({
   const [createRepoError, setCreateRepoError] = useState<string | null>(null);
   const [createdRepoName, setCreatedRepoName] = useState<string | null>(null);
   const autoCreateTriggered = useRef(false);
+
+  // T3: Folder permission state for post-OAuth-redirect verification
+  // null = not checked yet, true = usable, false = needs re-link
+  const [folderPermissionOk, setFolderPermissionOk] = useState<boolean | null>(null);
+
+  // T3: Verify folder handle is still usable after OAuth redirect
+  // After full page navigation, FSAPI handles from IndexedDB may become stale.
+  useEffect(() => {
+    async function checkFolderHandle() {
+      if (!linkedFolder) {
+        // Try to load from IndexedDB (handle may exist from Step 1)
+        try {
+          const stored = await fileSystemStorage.getHandle(projectId);
+          if (stored) {
+            const usable = await isHandleUsable(stored.handle);
+            if (usable) {
+              const granted = await verifyPermission(stored.handle, true);
+              if (granted) {
+                setLinkedFolder(stored);
+                setFolderPermissionOk(true);
+                return;
+              }
+            }
+            // Handle exists but is stale
+            setLinkedFolder(stored);
+            setFolderPermissionOk(false);
+            return;
+          }
+        } catch {
+          // IndexedDB error — treat as no folder
+        }
+        setFolderPermissionOk(false);
+        return;
+      }
+
+      try {
+        const usable = await isHandleUsable(linkedFolder.handle);
+        if (usable) {
+          const granted = await verifyPermission(linkedFolder.handle, true);
+          setFolderPermissionOk(granted);
+        } else {
+          setFolderPermissionOk(false);
+        }
+      } catch {
+        setFolderPermissionOk(false);
+      }
+    }
+    if (step === 2) {
+      checkFolderHandle();
+    }
+  }, [step, linkedFolder, projectId]);
+
+  // T3: Handler for folder re-link after stale handle
+  const handleFolderRelinked = useCallback((folder: LinkedFolder) => {
+    setLinkedFolder(folder);
+    setFolderPermissionOk(true);
+  }, []);
 
   // S1-T2: Restore wizard intent from sessionStorage after OAuth redirect
   useEffect(() => {
@@ -327,6 +386,7 @@ export function WorkspaceSetupWizard({
     if (autoSyncTriggered.current) return;
     if (step !== 2) return;
     if (!linkedFolder) return;
+    if (folderPermissionOk !== true) return; // T6: Gate on folder permission
     if (!githubConnection?.connected) return;
     if (!githubConnection.repo_name || githubConnection.repo_name === 'PENDING') return;
     if (githubConnection.github_mode !== 'WORKSPACE_SYNC') return;
@@ -350,7 +410,7 @@ export function WorkspaceSetupWizard({
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [step, linkedFolder, githubConnection, scaffoldResult, isSyncing, syncResult, isPushing, pushResult, handleSync, handlePush]);
+  }, [step, linkedFolder, folderPermissionOk, githubConnection, scaffoldResult, isSyncing, syncResult, isPushing, pushResult, handleSync, handlePush]);
 
   const handleConfirm = useCallback(() => {
     const binding: WorkspaceBindingData = {
@@ -466,6 +526,9 @@ export function WorkspaceSetupWizard({
                 autoCreateTriggered.current = false;
                 setCreateRepoError(null);
               }}
+              // T3: Folder re-link props
+              folderPermissionOk={folderPermissionOk}
+              onFolderRelinked={handleFolderRelinked}
             />
           )}
           {step === 3 && (
@@ -724,6 +787,9 @@ function StepVersionControl({
   createdRepoName,
   createRepoError,
   onRetryCreateRepo,
+  // T3: Folder re-link props
+  folderPermissionOk,
+  onFolderRelinked,
 }: {
   projectId: string;
   githubConnection: GitHubConnection | null;
@@ -752,6 +818,9 @@ function StepVersionControl({
   createdRepoName?: string | null;
   createRepoError?: string | null;
   onRetryCreateRepo?: () => void;
+  // T3: Folder re-link props
+  folderPermissionOk?: boolean | null;
+  onFolderRelinked?: (folder: LinkedFolder) => void;
 }) {
   const isWorkspaceSync = githubConnection?.github_mode === 'WORKSPACE_SYNC';
   const isSoftwareProject = projectType === 'software';
@@ -825,7 +894,7 @@ function StepVersionControl({
       )}
 
       {/* GitHub Sync Section (GITHUB-SYNC-01) */}
-      {showSyncSection && (
+      {showSyncSection && folderPermissionOk === true && (
         <div className="mt-4 p-4 bg-gray-800/40 border border-gray-700/50 rounded-xl">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-base">📥</span>
@@ -924,8 +993,37 @@ function StepVersionControl({
         </div>
       )}
 
+      {/* T3: Folder re-link section (when handle is stale after OAuth redirect) */}
+      {folderPermissionOk === false && hasRepo && (
+        <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-base">⚠️</span>
+            <h4 className="text-sm font-medium text-amber-300">Folder Access Expired</h4>
+          </div>
+          <p className="text-xs text-gray-400 mb-3">
+            Your local folder access was lost during the GitHub redirect.
+            Re-link your project folder to enable file sync.
+          </p>
+          <FolderPicker
+            projectId={projectId}
+            onFolderLinked={onFolderRelinked}
+            compact={false}
+          />
+        </div>
+      )}
+
+      {/* T3: Folder verification loading state */}
+      {folderPermissionOk === null && hasRepo && (
+        <div className="mt-4 p-4 bg-gray-800/40 border border-gray-700/50 rounded-xl">
+          <div className="flex items-center gap-2 text-xs text-gray-400">
+            <div className="w-4 h-4 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
+            Verifying folder access...
+          </div>
+        </div>
+      )}
+
       {/* Push to GitHub Section (ENV-SYNC-01: Local→GitHub for Greenfield) */}
-      {showPushSection && (
+      {showPushSection && folderPermissionOk === true && (
         <div className="mt-4 p-4 bg-gray-800/40 border border-gray-700/50 rounded-xl">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-base">📤</span>
@@ -1135,29 +1233,39 @@ function StepConfirmation({
                 </p>
               </div>
             </div>
-            {/* Sync Status */}
-            {pushResult?.success && scaffoldResult && (
+            {/* T7: Sync Status — enhanced with SYNCED/MISMATCH/NOT_SYNCED logic */}
+            {pushResult?.success && scaffoldResult ? (
               <div className={`flex items-center gap-2 p-2 rounded-lg ${
-                pushResult.filesCommitted > 0
+                scaffoldResult.created === pushResult.filesCommitted
                   ? 'bg-green-500/10 border border-green-500/20'
                   : 'bg-amber-500/10 border border-amber-500/20'
               }`}>
-                <span className="text-xs">{pushResult.filesCommitted > 0 ? '🔄' : '⚠️'}</span>
-                <span className={`text-xs font-medium ${pushResult.filesCommitted > 0 ? 'text-green-400' : 'text-amber-400'}`}>
-                  {pushResult.filesCommitted > 0 ? 'Mirrored' : 'Partial'}
+                <span className="text-xs">
+                  {scaffoldResult.created === pushResult.filesCommitted ? '✓' : '⚠️'}
+                </span>
+                <span className={`text-xs font-medium ${
+                  scaffoldResult.created === pushResult.filesCommitted ? 'text-green-400' : 'text-amber-400'
+                }`}>
+                  {scaffoldResult.created === pushResult.filesCommitted ? 'SYNCED' : 'MISMATCH'}
                 </span>
                 <span className="text-xs text-gray-500">
-                  {scaffoldResult.created} local · {pushResult.filesCommitted} committed
+                  {scaffoldResult.created === pushResult.filesCommitted
+                    ? `${pushResult.filesCommitted}/${scaffoldResult.created} items match`
+                    : `local ${scaffoldResult.created} / GitHub ${pushResult.filesCommitted}`}
                   {pushResult.branch && ` · ${pushResult.branch}`}
                   {pushResult.commitSha && ` · ${pushResult.commitSha.slice(0, 7)}`}
                 </span>
               </div>
-            )}
-            {syncResult && syncResult.synced > 0 && !pushResult && (
+            ) : syncResult && syncResult.synced > 0 && !pushResult ? (
               <div className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
                 <span className="text-xs">📥</span>
                 <span className="text-xs font-medium text-green-400">Synced from GitHub</span>
                 <span className="text-xs text-gray-500">{syncResult.synced} files downloaded</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-gray-800/50 border border-gray-700/30">
+                <span className="text-xs text-gray-500">○</span>
+                <span className="text-xs text-gray-500">Not synced — push scaffold first</span>
               </div>
             )}
           </div>

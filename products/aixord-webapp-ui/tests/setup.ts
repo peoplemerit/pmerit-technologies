@@ -1,1 +1,3 @@
-import '@testing-library/jest-dom';
+/**
+ * Vitest setup — configure jsdom environment
+ */
