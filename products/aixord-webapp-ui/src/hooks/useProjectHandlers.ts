@@ -159,6 +159,10 @@ export function useProjectHandlers({
     github_connected: boolean;
     github_repo: string | null;
     binding_confirmed: boolean;
+    // Scaffold count reporting (S1-T1)
+    scaffold_item_count?: number;
+    scaffold_skipped_count?: number;
+    scaffold_error_count?: number;
     // ENV-SYNC-01: Push metadata
     github_push_count?: number;
     github_push_sha?: string;
@@ -175,6 +179,10 @@ export function useProjectHandlers({
         github_connected: binding.github_connected,
         github_repo: binding.github_repo ?? undefined,
         binding_confirmed: binding.binding_confirmed,
+        // S1-T1: Forward scaffold counts to backend
+        scaffold_item_count: binding.scaffold_item_count,
+        scaffold_skipped_count: binding.scaffold_skipped_count,
+        scaffold_error_count: binding.scaffold_error_count,
         // ENV-SYNC-01: Include push metadata if scaffold was pushed to GitHub
         github_push_count: binding.github_push_count,
         github_push_sha: binding.github_push_sha,

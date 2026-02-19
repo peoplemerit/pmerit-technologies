@@ -30,6 +30,7 @@ import {
 interface WorkspaceSetupWizardProps {
   projectId: string;
   token: string;
+  projectType?: string;
   onComplete: (binding: WorkspaceBindingData) => void;
   onSkip: () => void;
   // GitHub integration props (from Project.tsx)
@@ -70,6 +71,7 @@ const STEPS = [
 export function WorkspaceSetupWizard({
   projectId,
   token,
+  projectType,
   onComplete,
   onSkip,
   githubConnection,
@@ -193,8 +195,9 @@ export function WorkspaceSetupWizard({
     pushAbortRef.current?.abort();
   }, []);
 
-  // Auto-trigger sync when conditions are met in WORKSPACE_SYNC mode:
-  // GitHub connected + repo selected + workspace folder linked
+  // Auto-trigger sync/push when conditions are met in WORKSPACE_SYNC mode:
+  // S1-T3: Greenfield (scaffold generated locally) → push to GitHub
+  //        Existing repo (no scaffold) → pull from GitHub
   const autoSyncTriggered = useRef(false);
   useEffect(() => {
     if (autoSyncTriggered.current) return;
@@ -203,14 +206,27 @@ export function WorkspaceSetupWizard({
     if (!githubConnection?.connected) return;
     if (!githubConnection.repo_name || githubConnection.repo_name === 'PENDING') return;
     if (githubConnection.github_mode !== 'WORKSPACE_SYNC') return;
-    if (isSyncing || syncResult) return;
 
-    autoSyncTriggered.current = true;
-    const timer = setTimeout(() => {
-      handleSync();
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [step, linkedFolder, githubConnection, isSyncing, syncResult, handleSync]);
+    const hasScaffoldLocally = !!scaffoldResult && scaffoldResult.errors.length === 0;
+
+    if (hasScaffoldLocally) {
+      // Greenfield: push scaffold to GitHub (not pull)
+      if (isPushing || pushResult) return;
+      autoSyncTriggered.current = true;
+      const timer = setTimeout(() => {
+        handlePush();
+      }, 2000);
+      return () => clearTimeout(timer);
+    } else {
+      // Existing repo: pull from GitHub to local
+      if (isSyncing || syncResult) return;
+      autoSyncTriggered.current = true;
+      const timer = setTimeout(() => {
+        handleSync();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [step, linkedFolder, githubConnection, scaffoldResult, isSyncing, syncResult, isPushing, pushResult, handleSync, handlePush]);
 
   const handleConfirm = useCallback(() => {
     const binding: WorkspaceBindingData = {
@@ -303,6 +319,7 @@ export function WorkspaceSetupWizard({
               onDisconnect={onGitHubDisconnect}
               onSelectRepo={onGitHubSelectRepo}
               repos={githubRepos}
+              projectType={projectType}
               // GitHub sync props (GITHUB-SYNC-01)
               hasLinkedFolder={!!linkedFolder}
               isSyncing={isSyncing}

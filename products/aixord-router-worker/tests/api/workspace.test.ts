@@ -1118,3 +1118,73 @@ describe('GET /api/v1/projects/:projectId/scaffold', () => {
     expect(res.status).toBe(401);
   });
 });
+
+// ============================================================================
+// S1 Vertical Slice — Full Chain Tests
+// ============================================================================
+describe('S1: Workspace binding stores all scaffold + push fields', () => {
+  it('stores scaffold_item_count, scaffold_skipped_count, scaffold_error_count on binding', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+      { pattern: 'SELECT id FROM workspace_bindings WHERE project_id', result: null },
+      { pattern: 'INSERT INTO workspace_bindings', runResult: { success: true, changes: 1 } },
+    ]);
+
+    const res = await req('/api/v1/projects/proj-1/workspace', {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        folder_name: 'PantryApp',
+        folder_template: 'web-app',
+        permission_level: 'readwrite',
+        scaffold_generated: true,
+        scaffold_item_count: 15,
+        scaffold_skipped_count: 3,
+        scaffold_error_count: 0,
+        binding_confirmed: true,
+        github_connected: true,
+        github_repo: 'user/pantry-app',
+        github_push_count: 15,
+        github_push_sha: 'abc123def456',
+        github_push_branch: 'aixord/pantry-app',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean; updated_at: string };
+    expect(body.success).toBe(true);
+    expect(body.updated_at).toBeDefined();
+  });
+
+  it('stores all fields on update to existing binding', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+      { pattern: 'SELECT id FROM workspace_bindings WHERE project_id', result: { id: 'ws-1' } },
+      { pattern: 'UPDATE workspace_bindings', runResult: { success: true, changes: 1 } },
+    ]);
+
+    const res = await req('/api/v1/projects/proj-1/workspace', {
+      method: 'PUT',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        scaffold_generated: true,
+        scaffold_item_count: 22,
+        scaffold_skipped_count: 0,
+        scaffold_error_count: 0,
+        github_push_count: 22,
+        github_push_sha: 'sha256abc',
+        github_push_branch: 'aixord/my-project',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean };
+    expect(body.success).toBe(true);
+  });
+});

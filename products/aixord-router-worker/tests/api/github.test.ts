@@ -34,6 +34,25 @@ vi.mock('../../src/utils/crypto', () => ({
   decryptAESGCM: vi.fn().mockResolvedValue('ghp_decrypted_token'),
 }));
 
+// Mock logger
+vi.mock('../../src/utils/logger', () => ({
+  log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+// Mock github-write (used by POST /commit/:projectId via dynamic import)
+vi.mock('../../src/services/github-write', () => ({
+  commitFilesToGitHub: vi.fn().mockResolvedValue({
+    success: true,
+    commit_sha: 'abc1234567890def',
+    tree_sha: 'tree123abc',
+    branch: 'aixord/test-project',
+    files_committed: 3,
+    commit_url: 'https://github.com/testuser/my-repo/commit/abc1234567890def',
+    pr_number: null,
+    pr_url: null,
+  }),
+}));
+
 let githubRouter: any;
 
 beforeEach(async () => {
@@ -304,6 +323,195 @@ describe('GET /api/v1/github/commits/:projectId', () => {
     const { req } = buildApp();
 
     const res = await req('/api/v1/github/commits/proj-1');
+
+    expect(res.status).toBe(401);
+  });
+});
+
+// ============================================================================
+// POST /commit/:projectId — Commit files to GitHub (S1-T4)
+// ============================================================================
+describe('POST /api/v1/github/commit/:projectId', () => {
+  function connectionQuery(mode = 'WORKSPACE_SYNC'): MockQueryResult {
+    return {
+      pattern: 'github_connections',
+      result: {
+        repo_owner: 'testuser',
+        repo_name: 'my-repo',
+        access_token_encrypted: 'encrypted-tok',
+        github_mode: mode,
+      },
+    };
+  }
+
+  function projectNameQuery(): MockQueryResult {
+    return { pattern: 'SELECT name FROM projects WHERE id', result: { name: 'Test Project' } };
+  }
+
+  function commitInsertQuery(): MockQueryResult {
+    return { pattern: 'INSERT INTO github_commits', runResult: { success: true, changes: 1 } };
+  }
+
+  it('commits scaffold files and returns SHA', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+      connectionQuery('WORKSPACE_SYNC'),
+      projectNameQuery(),
+      commitInsertQuery(),
+    ]);
+
+    const res = await req('/api/v1/github/commit/proj-1', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        files: [
+          { path: 'src/index.ts', content: '// entry point' },
+          { path: 'package.json', content: '{"name":"test"}' },
+          { path: 'README.md', content: '# Test Project' },
+        ],
+        message: '[AIXORD] Initial scaffold — push local workspace to GitHub',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      success: boolean;
+      commit_sha: string;
+      branch: string;
+      files_committed: number;
+      commit_url: string;
+    };
+    expect(body.success).toBe(true);
+    expect(body.commit_sha).toBe('abc1234567890def');
+    expect(body.branch).toBe('aixord/test-project');
+    expect(body.files_committed).toBe(3);
+    expect(body.commit_url).toContain('github.com');
+  });
+
+  it('returns 400 when files array is empty', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+    ]);
+
+    const res = await req('/api/v1/github/commit/proj-1', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        files: [],
+        message: 'Empty commit',
+      }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when message is missing', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+    ]);
+
+    const res = await req('/api/v1/github/commit/proj-1', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        files: [{ path: 'test.ts', content: 'code' }],
+      }),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 403 when mode is READ_ONLY', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+      connectionQuery('READ_ONLY'),
+    ]);
+
+    const res = await req('/api/v1/github/commit/proj-1', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        files: [{ path: 'test.ts', content: 'code' }],
+        message: 'Test commit',
+      }),
+    });
+
+    expect(res.status).toBe(403);
+    const body = await res.json() as { error: string; current_mode: string };
+    expect(body.error).toContain('WORKSPACE_SYNC');
+    expect(body.current_mode).toBe('READ_ONLY');
+  });
+
+  it('returns 404 when GitHub not connected', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+      { pattern: 'github_connections', result: null },
+    ]);
+
+    const res = await req('/api/v1/github/commit/proj-1', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        files: [{ path: 'test.ts', content: 'code' }],
+        message: 'Test commit',
+      }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('accepts scope_name for scope-level commits', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+      connectionQuery('WORKSPACE_SYNC'),
+      projectNameQuery(),
+      commitInsertQuery(),
+    ]);
+
+    const res = await req('/api/v1/github/commit/proj-1', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({
+        files: [{ path: 'src/components/App.tsx', content: 'export default App;' }],
+        message: '[AIXORD] SCOPE: Authentication — 3 files',
+        scope_name: 'Authentication',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean; commit_sha: string };
+    expect(body.success).toBe(true);
+    expect(body.commit_sha).toBeDefined();
+  });
+
+  it('returns 401 without auth', async () => {
+    const { req } = buildApp();
+
+    const res = await req('/api/v1/github/commit/proj-1', {
+      method: 'POST',
+      body: JSON.stringify({
+        files: [{ path: 'test.ts', content: 'code' }],
+        message: 'Test commit',
+      }),
+    });
 
     expect(res.status).toBe(401);
   });

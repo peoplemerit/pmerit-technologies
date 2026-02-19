@@ -670,6 +670,10 @@ export const workspaceApi = {
     github_connected?: boolean;
     github_repo?: string;
     binding_confirmed?: boolean;
+    // S1-T1: Scaffold count reporting
+    scaffold_item_count?: number;
+    scaffold_skipped_count?: number;
+    scaffold_error_count?: number;
     // ENV-SYNC-01: Push metadata
     github_push_count?: number;
     github_push_sha?: string;
