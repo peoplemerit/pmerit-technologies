@@ -101,7 +101,7 @@ const PHASE_PAYLOADS: Record<string, PhasePayload> = {
       'Make architectural decisions without user input',
       'Skip to planning or execution tasks',
     ],
-    exit_artifact: 'A structured brainstorm artifact with 2-5 options, each with assumptions and kill conditions, plus decision criteria. Output it inside === BRAINSTORM ARTIFACT === markers as JSON.',
+    exit_artifact: 'A structured brainstorm artifact with 3-5 options (≥3 required by L-BRN law), each with assumptions (plain strings) and kill conditions (measurable thresholds), plus decision criteria. Output it inside === BRAINSTORM ARTIFACT === markers as JSON.',
     review_prompt: 'Are the options distinct? Does each have assumptions and kill conditions? Are decision criteria defined?',
   },
   PLAN: {
@@ -253,10 +253,11 @@ When the user reports a problem, error, or unexpected behavior:
     BRAINSTORM: `
 === BRAINSTORM OUTPUT CONTRACT ===
 Your brainstorm artifact must contain:
-- 2-5 OPTIONS that are meaningfully distinct (different approaches, not variations)
+- 3-5 OPTIONS that are meaningfully distinct (different approaches, not variations) — L-BRN governance law requires ≥3
 - Each option: name, description (2-4 sentences specific to THIS project), expected outcome, scope boundaries
-- ASSUMPTIONS per option, tagged KNOWN/UNKNOWN/HIGH-RISK/EXTERNAL
+- ASSUMPTIONS per option as PLAIN STRINGS, tagged KNOWN/UNKNOWN/HIGH-RISK/EXTERNAL (e.g., "KNOWN: Users prefer mobile-first interfaces")
 - KILL CONDITIONS per option with measurable thresholds (dates, costs, metrics — not "if it doesn't work")
+- GLOBAL ASSUMPTIONS (at least 1) and GLOBAL KILL CONDITIONS (at least 1) in the top-level arrays
 - DECISION CRITERIA: what to optimize for, what constraints exist
 
 Everything must reference the user's stated objective and context.
@@ -353,8 +354,8 @@ Format:
       "id": "opt-1",
       "title": "Option Name",
       "description": "What this option entails",
-      "assumptions": ["assumption 1", "assumption 2"],
-      "kill_conditions": ["condition that would eliminate this option"],
+      "assumptions": ["KNOWN: assumption description", "HIGH-RISK: risky assumption with verification method"],
+      "kill_conditions": ["If metric < threshold in timeframe → kill this option"],
       "pros": ["advantage 1"],
       "cons": ["disadvantage 1"]
     }
@@ -369,7 +370,7 @@ Format:
 }
 === END BRAINSTORM ARTIFACT ===
 
-Rules: 2-5 options required. Each option needs assumptions and kill conditions. Include decision criteria with weights (1-5). You may also include pros/cons per option.`;
+Rules: 3-5 options required (governance law L-BRN mandates ≥3). Each option needs assumptions (as plain strings, tagged KNOWN/UNKNOWN/HIGH-RISK/EXTERNAL) and kill conditions (as plain strings with measurable thresholds). Include decision criteria with weights (1-5). You may also include pros/cons per option. Include at least 1 global assumption and 1 global kill condition.`;
 
     // HANDOFF-BQL-01 Layer 1: Quality-Aware Phase Payload
     // Tells the AI the exact quality bar the validator will check.
@@ -378,18 +379,23 @@ Rules: 2-5 options required. Each option needs assumptions and kill conditions. 
 === BRAINSTORM QUALITY REQUIREMENTS ===
 When generating brainstorm artifacts, every element must meet these standards. These are validated when the Director clicks Finalize Brainstorm — generate artifacts that pass these checks so the Director can advance without friction.
 
-OPTIONS (2–5 required):
+OPTIONS (3–5 required — governance law L-BRN mandates ≥3):
 - Each option must be meaningfully distinct (different approach, not cosmetic variation)
 - Each must include: title, description (2–4 sentences), assumptions, kill conditions
+- Always generate at least 3 options — 2 is NOT enough and will block finalization
 
-ASSUMPTIONS (per option + global):
-- Every assumption must be tagged: KNOWN, UNKNOWN, HIGH-RISK, or EXTERNAL
+ASSUMPTIONS (per option + global, MUST be plain strings):
+- Format: "KNOWN: Users prefer AI-driven suggestions" (tag prefix + description)
+- Valid tags: KNOWN, UNKNOWN, HIGH-RISK, EXTERNAL
+- Do NOT output assumptions as JSON objects — use plain tagged strings only
 - Each should include how it could be verified (evidence or test)
 - "We'll figure it out later" is not an acceptable assumption
+- Include at least 1 global assumption in the top-level "assumptions" array
 
-KILL CONDITIONS (per option + global, at least 1 each):
+KILL CONDITIONS (per option + global, at least 1 each, MUST be plain strings):
 - Must be binary (true/false) — not vague ("if it doesn't work")
 - Must include a measurable threshold: date, cost number, dependency availability, metric target
+- Include at least 1 global kill condition in the top-level "kill_conditions" array
 - Good: "If barcode scan accuracy < 95% in testing → kill this option"
 - Bad: "If the app isn't popular enough → reconsider"
 - Good: "If development cost exceeds $15,000 in Q1 → kill this option"

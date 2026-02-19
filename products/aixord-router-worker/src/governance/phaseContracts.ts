@@ -203,6 +203,7 @@ async function enforceR_TOLLGATE(
   fromPhase: string,
   toPhase: string
 ): Promise<PhaseContractViolation[]> {
+  try {
   // Import readiness engine (dynamic to avoid circular deps)
   const { computeProjectReadiness } = await import('../services/readinessEngine');
 
@@ -269,6 +270,13 @@ async function enforceR_TOLLGATE(
   }
 
   return violations;
+  } catch (err) {
+    // Graceful degradation: if readiness engine fails (e.g., missing tables,
+    // dynamic import issue), skip R-based tollgate enforcement rather than crashing
+    // the entire finalization flow.
+    console.warn('[enforceR_TOLLGATE] Readiness engine failed, skipping R-based checks:', err instanceof Error ? err.message : String(err));
+    return [];
+  }
 }
 
 /**

@@ -140,7 +140,7 @@ export async function request<T>(
 
     if (!response.ok) {
       // Include validation details in error message when available
-      let errorMessage = (data.error as string) || 'An unknown error occurred';
+      let errorMessage = (data.error as string) || (data.message as string) || 'An unknown error occurred';
       if (data.details && Array.isArray(data.details)) {
         const detailMessages = (data.details as Array<{ message?: string }>)
           .map(d => d.message)
@@ -149,6 +149,10 @@ export async function request<T>(
         if (detailMessages) {
           errorMessage = detailMessages;
         }
+      }
+      // Include detail field from server errors (e.g., finalization crash diagnostics)
+      if (data.detail && typeof data.detail === 'string') {
+        errorMessage = `${errorMessage}: ${data.detail}`;
       }
 
       const apiError = new APIError(

@@ -1083,14 +1083,16 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
 
   // If BLOCK-level checks fail, return hard rejection
   if (!canFinalize) {
+    const rejectionMessage = `Cannot finalize ${currentPhase}: ${missingGates.length > 0 ? `${missingGates.length} exit gate(s) unsatisfied` : ''}${missingGates.length > 0 && failedArtifacts.length > 0 ? ', ' : ''}${failedArtifacts.length > 0 ? `${failedArtifacts.length} artifact check(s) failed` : ''}`;
     return c.json({
       success: false,
       result: 'REJECTED',
+      error: rejectionMessage,
       phase: currentPhase,
       missing_gates: missingGates,
       artifact_checks: artifactChecks,
       warnings: warnChecks,
-      message: `Cannot finalize ${currentPhase}: ${missingGates.length > 0 ? `${missingGates.length} exit gate(s) unsatisfied` : ''}${missingGates.length > 0 && failedArtifacts.length > 0 ? ', ' : ''}${failedArtifacts.length > 0 ? `${failedArtifacts.length} artifact check(s) failed` : ''}`,
+      message: rejectionMessage,
     }, 422);
   }
 
@@ -1329,9 +1331,10 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
     // via app.onError with no way to diagnose the failure remotely.
     const errMsg = err instanceof Error ? err.message : String(err);
     const errStack = err instanceof Error ? err.stack?.split('\n').slice(0, 5).join(' | ') : undefined;
-    log.error('finalize_error', { project_id: projectId, phase: requestedPhase });
+    log.error('finalize_error', { project_id: projectId, phase: requestedPhase, error: errMsg, stack: errStack });
     return c.json({
       error: 'Phase finalization failed',
+      detail: errMsg,
       phase: requestedPhase,
       projectId,
     }, 500);

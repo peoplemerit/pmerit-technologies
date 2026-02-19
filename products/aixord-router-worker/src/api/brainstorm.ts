@@ -39,14 +39,14 @@ function validateBrainstormArtifact(
 
   // ── BLOCK checks (structural) ──
 
-  // B1: Must have 2-5 options
+  // B1: Must have 3-5 options (aligned with L-BRN governance law: ≥3 required)
   const optionCount = options.length;
   checks.push({
     check: 'option_count',
     level: 'BLOCK',
-    passed: optionCount >= 2 && optionCount <= 5,
-    detail: optionCount < 2
-      ? `Only ${optionCount} option(s) — minimum 2 required`
+    passed: optionCount >= 3 && optionCount <= 5,
+    detail: optionCount < 3
+      ? `Only ${optionCount} option(s) — minimum 3 required for L-BRN governance contract`
       : optionCount > 5
         ? `${optionCount} options — maximum 5 allowed`
         : `${optionCount} option(s) defined`,
@@ -116,7 +116,11 @@ function validateBrainstormArtifact(
     ...killConditions,
     ...options.flatMap(o => o.kill_conditions || []),
   ];
-  const unmeasurable = allKillConditions.filter(kc => !measurablePattern.test(kc));
+  // Normalize kill conditions: handle both string and structured {label, detail} formats
+  const normalizedKillConditions = allKillConditions.map(kc =>
+    typeof kc === 'string' ? kc : (typeof kc === 'object' && kc !== null ? ((kc as Record<string, unknown>).detail || (kc as Record<string, unknown>).description || JSON.stringify(kc)) as string : String(kc))
+  );
+  const unmeasurable = normalizedKillConditions.filter(kc => !measurablePattern.test(kc));
   checks.push({
     check: 'kill_conditions_measurable',
     level: 'WARN',
@@ -127,11 +131,15 @@ function validateBrainstormArtifact(
   });
 
   // W3: Assumptions should be verifiable (heuristic: non-trivial length)
+  // Handle both string[] and structured {label, detail}[] formats from AI output
   const allAssumptions = [
     ...assumptions,
     ...options.flatMap(o => o.assumptions || []),
   ];
-  const trivialAssumptions = allAssumptions.filter(a => a.trim().length < 15);
+  const normalizedAssumptions = allAssumptions.map(a =>
+    typeof a === 'string' ? a : (typeof a === 'object' && a !== null ? ((a as Record<string, unknown>).detail || (a as Record<string, unknown>).description || JSON.stringify(a)) as string : String(a))
+  );
+  const trivialAssumptions = normalizedAssumptions.filter(a => a.trim().length < 15);
   checks.push({
     check: 'assumptions_verifiable',
     level: 'WARN',

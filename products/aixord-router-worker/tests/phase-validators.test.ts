@@ -26,6 +26,11 @@ function validOptions(): BrainstormOption[] {
       assumptions: ['Technology stack is mature and stable enough'],
       kill_conditions: ['Performance exceeds 200ms response time limit'],
     },
+    {
+      id: 'opt_3', title: 'Option Gamma', description: 'A full description of the third serverless approach',
+      assumptions: ['Cloud provider offers required serverless primitives'],
+      kill_conditions: ['Cold start latency exceeds 3 seconds average'],
+    },
   ];
 }
 
@@ -56,7 +61,7 @@ describe('Brainstorm Validation — BLOCK Checks', () => {
     blocks.forEach(b => expect(b.passed).toBe(true));
   });
 
-  it('BLOCK: option_count — rejects fewer than 2 options', () => {
+  it('BLOCK: option_count — rejects fewer than 3 options (L-BRN)', () => {
     const oneOption = [validOptions()[0]];
     const result = validateBrainstormArtifact(
       oneOption, validAssumptions(), validCriteria(), validKillConditions()
@@ -65,7 +70,7 @@ describe('Brainstorm Validation — BLOCK Checks', () => {
     const check = result.checks.find(c => c.check === 'option_count');
     expect(check?.passed).toBe(false);
     expect(check?.level).toBe('BLOCK');
-    expect(check?.detail).toContain('minimum 2');
+    expect(check?.detail).toContain('minimum 3');
   });
 
   it('BLOCK: option_count — rejects more than 5 options', () => {

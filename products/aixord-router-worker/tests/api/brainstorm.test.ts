@@ -87,6 +87,13 @@ function validArtifactBody() {
         assumptions: ['Infrastructure budget is sufficient for services'],
         kill_conditions: ['Deployment frequency drops below 1/week'],
       },
+      {
+        id: 'opt-3',
+        title: 'Option Gamma',
+        description: 'Use a serverless architecture with event-driven design',
+        assumptions: ['Cloud provider offers required serverless primitives'],
+        kill_conditions: ['Cold start latency exceeds 3 seconds average'],
+      },
     ],
     assumptions: ['Market window is 6 months or less for launch'],
     decision_criteria: {
@@ -187,6 +194,7 @@ function duplicateTitlesBody() {
     options: [
       { id: 'opt-1', title: 'Same Name', description: 'First approach desc', assumptions: ['Market exists for this thing'], kill_conditions: ['Revenue below $1000'] },
       { id: 'opt-2', title: 'Same Name', description: 'Different description', assumptions: ['Technology is available now'], kill_conditions: ['Latency exceeds 200ms at p95'] },
+      { id: 'opt-3', title: 'Unique Option', description: 'Third approach with distinct name', assumptions: ['Team capacity is sufficient'], kill_conditions: ['Development time exceeds 6 months'] },
     ],
     assumptions: ['Global assumption about market timing'],
     decision_criteria: { criteria: [{ name: 'Feasibility', weight: 3 }] },
@@ -458,7 +466,7 @@ describe('POST /api/v1/projects/:projectId/brainstorm/validate', () => {
     expect(result.artifact_id).toBe('artifact-1');
   });
 
-  it('BLOCKS when artifact has fewer than 2 options (min-2-options rule)', async () => {
+  it('BLOCKS when artifact has fewer than 3 options (min-3-options rule, L-BRN)', async () => {
     const body = singleOptionBody();
     const artifact = storedArtifactRow({
       options: JSON.stringify(body.options),
@@ -492,7 +500,7 @@ describe('POST /api/v1/projects/:projectId/brainstorm/validate', () => {
     expect(optionCheck).toBeDefined();
     expect(optionCheck!.passed).toBe(false);
     expect(optionCheck!.level).toBe('BLOCK');
-    expect(optionCheck!.detail).toContain('minimum 2 required');
+    expect(optionCheck!.detail).toContain('minimum 3 required');
     expect(result.summary).toContain('BLOCKED');
   });
 
