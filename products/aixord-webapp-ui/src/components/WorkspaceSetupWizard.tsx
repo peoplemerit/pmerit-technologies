@@ -18,7 +18,7 @@ import {
   fileSystemStorage,
   type LinkedFolder,
 } from '../lib/fileSystem';
-import type { GitHubConnection, GitHubMode } from '../lib/api';
+import { api, type GitHubConnection, type GitHubMode } from '../lib/api';
 import {
   syncGitHubToWorkspace,
   pushLocalToGitHub,
@@ -31,13 +31,15 @@ interface WorkspaceSetupWizardProps {
   projectId: string;
   token: string;
   projectType?: string;
+  projectName?: string;
   onComplete: (binding: WorkspaceBindingData) => void;
   onSkip: () => void;
   // GitHub integration props (from Project.tsx)
   githubConnection: GitHubConnection | null;
-  onGitHubConnect: () => void;
+  onGitHubConnect: (mode?: GitHubMode) => void;
   onGitHubDisconnect: () => void;
   onGitHubSelectRepo?: (repoOwner: string, repoName: string) => void;
+  onRefreshGitHubConnection?: () => void;
   githubRepos?: Array<{ owner: string; name: string; full_name: string; private: boolean }>;
 }
 
@@ -68,16 +70,31 @@ const STEPS = [
   { id: 3, label: 'Confirm', icon: '✓' },
 ];
 
+/** Session key for persisting wizard intent across OAuth redirect */
+const WIZARD_INTENT_KEY = 'd4chat_wizard_intent';
+const WIZARD_INTENT_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
+
+interface WizardIntent {
+  projectId: string;
+  step: number;
+  folderName: string | null;
+  templateId: string | null;
+  scaffoldCreated: number;
+  timestamp: number;
+}
+
 export function WorkspaceSetupWizard({
   projectId,
   token,
   projectType,
+  projectName,
   onComplete,
   onSkip,
   githubConnection,
   onGitHubConnect,
   onGitHubDisconnect,
   onGitHubSelectRepo,
+  onRefreshGitHubConnection,
   githubRepos = [],
 }: WorkspaceSetupWizardProps) {
   const [step, setStep] = useState(1);
@@ -98,6 +115,105 @@ export function WorkspaceSetupWizard({
   const [pushResult, setPushResult] = useState<GitHubPushResult | null>(null);
   const [isPushing, setIsPushing] = useState(false);
   const pushAbortRef = useRef<AbortController | null>(null);
+
+  // S1-T1: Auto-create repo state
+  const [isCreatingRepo, setIsCreatingRepo] = useState(false);
+  const [createRepoError, setCreateRepoError] = useState<string | null>(null);
+  const [createdRepoName, setCreatedRepoName] = useState<string | null>(null);
+  const autoCreateTriggered = useRef(false);
+
+  // S1-T2: Restore wizard intent from sessionStorage after OAuth redirect
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(WIZARD_INTENT_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(WIZARD_INTENT_KEY);
+      const intent: WizardIntent = JSON.parse(raw);
+      // Validate: correct project, not expired
+      if (intent.projectId !== projectId) return;
+      if (Date.now() - intent.timestamp > WIZARD_INTENT_MAX_AGE_MS) return;
+      // Restore state and advance to Step 2
+      if (intent.step >= 2) setStep(2);
+      if (intent.templateId) setSelectedTemplate(intent.templateId);
+      if (intent.scaffoldCreated > 0) {
+        setScaffoldResult({ created: intent.scaffoldCreated, skipped: 0, errors: [] });
+      }
+      // Note: linkedFolder cannot be serialized (FSAPI handles persist separately via IndexedDB).
+      // The folder will be re-detected by FolderPicker's own persistence.
+    } catch {
+      // Corrupt intent — ignore
+    }
+  }, [projectId]);
+
+  // S1-T2: Save wizard intent to sessionStorage before OAuth redirect
+  const handleGitHubConnectWithPersist = useCallback((mode?: GitHubMode) => {
+    try {
+      const intent: WizardIntent = {
+        projectId,
+        step: 2,
+        folderName: linkedFolder?.name ?? null,
+        templateId: selectedTemplate,
+        scaffoldCreated: scaffoldResult?.created ?? 0,
+        timestamp: Date.now(),
+      };
+      sessionStorage.setItem(WIZARD_INTENT_KEY, JSON.stringify(intent));
+    } catch {
+      // sessionStorage unavailable — continue without persistence
+    }
+    onGitHubConnect(mode);
+  }, [projectId, linkedFolder, selectedTemplate, scaffoldResult, onGitHubConnect]);
+
+  // S1-T1: Auto-create GitHub repo after OAuth return for greenfield WORKSPACE_SYNC projects
+  useEffect(() => {
+    if (autoCreateTriggered.current) return;
+    if (step !== 2) return;
+    if (!githubConnection?.connected) return;
+    // Only when no repo selected yet (PENDING state after OAuth)
+    if (githubConnection.repo_name && githubConnection.repo_name !== 'PENDING') return;
+    // Only for WORKSPACE_SYNC mode
+    if (githubConnection.github_mode !== 'WORKSPACE_SYNC') return;
+    // Only for greenfield (scaffold was generated)
+    if (!scaffoldResult || scaffoldResult.created === 0) return;
+    // Need a project name for the repo
+    if (!projectName) return;
+
+    autoCreateTriggered.current = true;
+    setIsCreatingRepo(true);
+    setCreateRepoError(null);
+
+    const slug = projectName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 100) || 'project';
+
+    const tryCreate = async (name: string, attempt = 0): Promise<void> => {
+      try {
+        const result = await api.github.createRepo(
+          projectId,
+          name,
+          token,
+          `D4-CHAT workspace for ${projectName}`,
+          true
+        );
+        setCreatedRepoName(result.repo.full_name);
+        setIsCreatingRepo(false);
+        // Refresh connection so githubConnection updates with the new repo
+        onRefreshGitHubConnection?.();
+      } catch (err: unknown) {
+        // 422 = name collision → retry with suffix
+        const status = (err as { status?: number })?.status;
+        if (status === 422 && attempt < 3) {
+          await tryCreate(`${slug}-${attempt + 1}`, attempt + 1);
+        } else {
+          setCreateRepoError(err instanceof Error ? err.message : 'Failed to create repository');
+          setIsCreatingRepo(false);
+        }
+      }
+    };
+
+    tryCreate(slug);
+  }, [step, githubConnection, scaffoldResult, projectName, projectId, token, onRefreshGitHubConnection]);
 
   // Step 1 handlers
   const handleFolderLinked = useCallback((folder: LinkedFolder) => {
@@ -199,6 +315,14 @@ export function WorkspaceSetupWizard({
   // S1-T3: Greenfield (scaffold generated locally) → push to GitHub
   //        Existing repo (no scaffold) → pull from GitHub
   const autoSyncTriggered = useRef(false);
+
+  // S1-T1: Reset auto-sync trigger when a new repo is created
+  // (allows the push chain to fire after auto-create completes)
+  useEffect(() => {
+    if (createdRepoName) {
+      autoSyncTriggered.current = false;
+    }
+  }, [createdRepoName]);
   useEffect(() => {
     if (autoSyncTriggered.current) return;
     if (step !== 2) return;
@@ -315,7 +439,7 @@ export function WorkspaceSetupWizard({
             <StepVersionControl
               projectId={projectId}
               githubConnection={githubConnection}
-              onConnect={onGitHubConnect}
+              onConnect={handleGitHubConnectWithPersist}
               onDisconnect={onGitHubDisconnect}
               onSelectRepo={onGitHubSelectRepo}
               repos={githubRepos}
@@ -334,6 +458,14 @@ export function WorkspaceSetupWizard({
               pushResult={pushResult}
               onPush={handlePush}
               onCancelPush={handleCancelPush}
+              // S1-T1: Auto-create repo props
+              isCreatingRepo={isCreatingRepo}
+              createdRepoName={createdRepoName}
+              createRepoError={createRepoError}
+              onRetryCreateRepo={() => {
+                autoCreateTriggered.current = false;
+                setCreateRepoError(null);
+              }}
             />
           )}
           {step === 3 && (
@@ -587,6 +719,11 @@ function StepVersionControl({
   pushResult,
   onPush,
   onCancelPush,
+  // S1-T1: Auto-create repo props
+  isCreatingRepo,
+  createdRepoName,
+  createRepoError,
+  onRetryCreateRepo,
 }: {
   projectId: string;
   githubConnection: GitHubConnection | null;
@@ -610,13 +747,20 @@ function StepVersionControl({
   pushResult?: GitHubPushResult | null;
   onPush?: () => void;
   onCancelPush?: () => void;
+  // S1-T1: Auto-create repo props
+  isCreatingRepo?: boolean;
+  createdRepoName?: string | null;
+  createRepoError?: string | null;
+  onRetryCreateRepo?: () => void;
 }) {
   const isWorkspaceSync = githubConnection?.github_mode === 'WORKSPACE_SYNC';
-  const defaultMode: GitHubMode = projectType === 'software' ? 'WORKSPACE_SYNC' : 'READ_ONLY';
+  const isSoftwareProject = projectType === 'software';
+  const defaultMode: GitHubMode = isSoftwareProject ? 'WORKSPACE_SYNC' : 'READ_ONLY';
 
   // Show sync UI when: GitHub connected + repo selected + workspace folder linked
+  // S1-T4: Hide pull section for greenfield projects (scaffold exists)
   const hasRepo = githubConnection?.connected && githubConnection?.repo_name && githubConnection.repo_name !== 'PENDING';
-  const showSyncSection = hasRepo && hasLinkedFolder;
+  const showSyncSection = hasRepo && hasLinkedFolder && !hasScaffold;
 
   // Show push UI when: WORKSPACE_SYNC + scaffold generated locally (Greenfield project)
   const showPushSection = hasRepo && isWorkspaceSync && hasScaffold;
@@ -646,7 +790,39 @@ function StepVersionControl({
         onUpgradeMode={onUpgradeMode}
         repos={repos}
         defaultMode={defaultMode}
+        lockedMode={isSoftwareProject ? 'WORKSPACE_SYNC' : undefined}
+        autoCreatePending={isCreatingRepo}
       />
+
+      {/* S1-T1: Repo creation status */}
+      {createdRepoName && (
+        <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+          <div className="flex items-center gap-2">
+            <span className="text-green-400">✓</span>
+            <span className="text-sm font-medium text-green-400">Repository Created</span>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            <code className="text-green-400">{createdRepoName}</code> — private repository ready for scaffold push.
+          </p>
+        </div>
+      )}
+      {createRepoError && (
+        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+          <div className="flex items-center gap-2">
+            <span className="text-red-400">✕</span>
+            <span className="text-sm font-medium text-red-400">Repo Creation Failed</span>
+          </div>
+          <p className="text-xs text-red-300/70 mt-1">{createRepoError}</p>
+          {onRetryCreateRepo && (
+            <button
+              onClick={onRetryCreateRepo}
+              className="mt-2 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
 
       {/* GitHub Sync Section (GITHUB-SYNC-01) */}
       {showSyncSection && (
@@ -882,6 +1058,7 @@ function StepConfirmation({
 }) {
   const template = selectedTemplate ? getTemplateById(selectedTemplate) : null;
   const hasGitHub = githubConnection?.connected && githubConnection?.repo_name && githubConnection.repo_name !== 'PENDING';
+  const isWorkspaceSync = githubConnection?.github_mode === 'WORKSPACE_SYNC';
 
   return (
     <div className="space-y-6">
@@ -930,36 +1107,82 @@ function StepConfirmation({
           }
         />
 
-        {/* GitHub */}
-        <SummaryRow
-          label="Repository"
-          value={
-            hasGitHub
-              ? `${githubConnection!.repo_owner}/${githubConnection!.repo_name}`
-              : 'Not connected'
-          }
-          status={hasGitHub ? 'success' : 'neutral'}
-          detail={hasGitHub ? 'Read-only evidence tracking' : 'Can connect later from Evidence tab'}
-        />
-
-        {/* GitHub Sync (GITHUB-SYNC-01) */}
-        {syncResult && syncResult.synced > 0 && (
-          <SummaryRow
-            label="File Sync"
-            value={`${syncResult.synced} files synced`}
-            status={syncResult.errors === 0 ? 'success' : 'warning'}
-            detail="Repository files downloaded to local workspace — AI can analyze full codebase"
-          />
-        )}
-
-        {/* GitHub Push (ENV-SYNC-01) */}
-        {pushResult && pushResult.success && pushResult.filesCommitted > 0 && (
-          <SummaryRow
-            label="GitHub Push"
-            value={`${pushResult.filesCommitted} files committed`}
-            status="success"
-            detail={`Pushed to ${pushResult.branch} · ${pushResult.commitSha?.slice(0, 7)}`}
-          />
+        {/* S1-T5: Dual-environment display for WORKSPACE_SYNC, single-row for READ_ONLY */}
+        {hasGitHub && isWorkspaceSync ? (
+          <div className="mt-2 p-4 bg-gray-800/40 border border-gray-700/50 rounded-xl space-y-3">
+            <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Dual Environment</h4>
+            <div className="grid grid-cols-2 gap-3">
+              {/* Local Environment */}
+              <div className="p-3 bg-gray-900/50 rounded-lg border border-gray-700/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">📁</span>
+                  <span className="text-xs font-medium text-white">Local</span>
+                </div>
+                <p className="text-xs text-gray-400 truncate">{linkedFolder?.name ?? 'Not linked'}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {scaffoldResult ? `${scaffoldResult.created} items` : '0 items'} · <span className="text-green-400">R/W</span>
+                </p>
+              </div>
+              {/* GitHub Environment */}
+              <div className="p-3 bg-gray-900/50 rounded-lg border border-gray-700/30">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm">🐙</span>
+                  <span className="text-xs font-medium text-white">GitHub</span>
+                </div>
+                <p className="text-xs text-gray-400 truncate">{githubConnection!.repo_owner}/{githubConnection!.repo_name}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {pushResult?.success ? `${pushResult.filesCommitted} files` : syncResult ? `${syncResult.synced} files` : '0 files'} · <span className="text-green-400">R/W</span>
+                </p>
+              </div>
+            </div>
+            {/* Sync Status */}
+            {pushResult?.success && scaffoldResult && (
+              <div className={`flex items-center gap-2 p-2 rounded-lg ${
+                pushResult.filesCommitted > 0
+                  ? 'bg-green-500/10 border border-green-500/20'
+                  : 'bg-amber-500/10 border border-amber-500/20'
+              }`}>
+                <span className="text-xs">{pushResult.filesCommitted > 0 ? '🔄' : '⚠️'}</span>
+                <span className={`text-xs font-medium ${pushResult.filesCommitted > 0 ? 'text-green-400' : 'text-amber-400'}`}>
+                  {pushResult.filesCommitted > 0 ? 'Mirrored' : 'Partial'}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {scaffoldResult.created} local · {pushResult.filesCommitted} committed
+                  {pushResult.branch && ` · ${pushResult.branch}`}
+                  {pushResult.commitSha && ` · ${pushResult.commitSha.slice(0, 7)}`}
+                </span>
+              </div>
+            )}
+            {syncResult && syncResult.synced > 0 && !pushResult && (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
+                <span className="text-xs">📥</span>
+                <span className="text-xs font-medium text-green-400">Synced from GitHub</span>
+                <span className="text-xs text-gray-500">{syncResult.synced} files downloaded</span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <SummaryRow
+              label="Repository"
+              value={
+                hasGitHub
+                  ? `${githubConnection!.repo_owner}/${githubConnection!.repo_name}`
+                  : 'Not connected'
+              }
+              status={hasGitHub ? 'success' : 'neutral'}
+              detail={hasGitHub ? 'Read-only evidence tracking' : 'Can connect later from Evidence tab'}
+            />
+            {/* GitHub Sync for READ_ONLY (GITHUB-SYNC-01) */}
+            {syncResult && syncResult.synced > 0 && (
+              <SummaryRow
+                label="File Sync"
+                value={`${syncResult.synced} files synced`}
+                status={syncResult.errors === 0 ? 'success' : 'warning'}
+                detail="Repository files downloaded to local workspace"
+              />
+            )}
+          </>
         )}
 
         {/* Gates */}

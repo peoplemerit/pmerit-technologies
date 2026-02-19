@@ -24,6 +24,10 @@ interface GitHubConnectProps {
   repos?: Array<{ owner: string; name: string; full_name: string; private: boolean }>;
   /** Default mode suggestion based on project type */
   defaultMode?: GitHubMode;
+  /** S1-T2: Lock mode (hides mode picker, forces this mode for software projects) */
+  lockedMode?: GitHubMode;
+  /** S1-T1: Auto-create repo is pending — hides repo selector, shows status message */
+  autoCreatePending?: boolean;
 }
 
 export function GitHubConnect({
@@ -35,10 +39,12 @@ export function GitHubConnect({
   isLoading = false,
   repos = [],
   defaultMode = 'READ_ONLY',
+  lockedMode,
+  autoCreatePending = false,
 }: GitHubConnectProps) {
   const [showRepoSelect, setShowRepoSelect] = useState(false);
   const [selectedRepo, setSelectedRepo] = useState('');
-  const [selectedMode, setSelectedMode] = useState<GitHubMode>(defaultMode);
+  const [selectedMode, setSelectedMode] = useState<GitHubMode>(lockedMode || defaultMode);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
@@ -87,36 +93,48 @@ export function GitHubConnect({
           Connect a GitHub repository to track evidence and optionally sync your workspace.
         </p>
 
-        {/* DUAL-MODE-01: Mode selection */}
-        <div className="space-y-2 mb-4">
-          <label className="text-xs text-gray-400 font-medium">Access Mode</label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedMode('READ_ONLY')}
-              className={`p-3 rounded-lg border text-left transition-all ${
-                selectedMode === 'READ_ONLY'
-                  ? 'border-violet-500 bg-violet-500/10'
-                  : 'border-gray-700/50 hover:border-gray-600'
-              }`}
-            >
-              <div className="text-xs font-medium text-white mb-0.5">Evidence Only</div>
-              <div className="text-[10px] text-gray-500">Read-only. Track commits, PRs, releases.</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedMode('WORKSPACE_SYNC')}
-              className={`p-3 rounded-lg border text-left transition-all ${
-                selectedMode === 'WORKSPACE_SYNC'
-                  ? 'border-green-500 bg-green-500/10'
-                  : 'border-gray-700/50 hover:border-gray-600'
-              }`}
-            >
-              <div className="text-xs font-medium text-white mb-0.5">Full Workspace</div>
-              <div className="text-[10px] text-gray-500">Read + write. Commit scaffold & code.</div>
-            </button>
+        {/* DUAL-MODE-01: Mode selection (hidden when lockedMode is set) */}
+        {lockedMode ? (
+          <div className="mb-4 p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+            <div className="flex items-center gap-2">
+              <span className="text-green-400 text-sm">🔒</span>
+              <span className="text-xs font-medium text-green-400">Full Workspace Mode</span>
+            </div>
+            <p className="text-[10px] text-green-300/70 mt-1">
+              Read + write access. D4-Chat will create a repo and commit scaffold files.
+            </p>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-2 mb-4">
+            <label className="text-xs text-gray-400 font-medium">Access Mode</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedMode('READ_ONLY')}
+                className={`p-3 rounded-lg border text-left transition-all ${
+                  selectedMode === 'READ_ONLY'
+                    ? 'border-violet-500 bg-violet-500/10'
+                    : 'border-gray-700/50 hover:border-gray-600'
+                }`}
+              >
+                <div className="text-xs font-medium text-white mb-0.5">Evidence Only</div>
+                <div className="text-[10px] text-gray-500">Read-only. Track commits, PRs, releases.</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedMode('WORKSPACE_SYNC')}
+                className={`p-3 rounded-lg border text-left transition-all ${
+                  selectedMode === 'WORKSPACE_SYNC'
+                    ? 'border-green-500 bg-green-500/10'
+                    : 'border-gray-700/50 hover:border-gray-600'
+                }`}
+              >
+                <div className="text-xs font-medium text-white mb-0.5">Full Workspace</div>
+                <div className="text-[10px] text-gray-500">Read + write. Commit scaffold & code.</div>
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className={`flex items-center gap-2 p-3 rounded-lg mb-4 ${
           selectedMode === 'WORKSPACE_SYNC'
@@ -170,11 +188,19 @@ export function GitHubConnect({
           </div>
           <div>
             <h3 className="text-white font-medium">GitHub Connected</h3>
-            <p className="text-xs text-green-400">Select a repository</p>
+            <p className="text-xs text-green-400">
+              {autoCreatePending ? 'Creating repository...' : 'Select a repository'}
+            </p>
           </div>
         </div>
 
-        {showRepoSelect ? (
+        {/* S1-T1: Auto-create pending — show spinner instead of repo selector */}
+        {autoCreatePending ? (
+          <div className="flex items-center gap-3 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+            <div className="w-4 h-4 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin" />
+            <p className="text-xs text-green-300">D4-Chat is creating a private repository for this project...</p>
+          </div>
+        ) : showRepoSelect ? (
           <div className="space-y-3">
             <select
               value={selectedRepo}

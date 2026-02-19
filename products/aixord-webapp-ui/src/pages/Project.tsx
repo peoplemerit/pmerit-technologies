@@ -20,7 +20,7 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext';
 import { useUserSettings } from '../contexts/UserSettingsContext';
 import { useProjectState } from '../hooks/useApi';
-import { api, APIError, phaseToShort, brainstormApi, blueprintApi, type Project as ProjectType, type Decision, type CCSGateStatus, type SessionType, type EdgeType, type BrainstormReadinessData } from '../lib/api';
+import { api, APIError, phaseToShort, brainstormApi, blueprintApi, type Project as ProjectType, type Decision, type CCSGateStatus, type SessionType, type EdgeType, type BrainstormReadinessData, type GitHubMode } from '../lib/api';
 import { useAIXORDSDK, GateBlockedError, AIExposureBlockedError, GovernanceBlockError } from '../lib/sdk';
 import { useSessions } from '../hooks/useSessions';
 import { MessageBubble } from '../components/chat/MessageBubble';
@@ -293,17 +293,22 @@ export function Project() {
   const fetchEvidence = useCallback(async () => {
     if (!id || !token) return;
     try {
-      const data = await api.evidence.getTriad(id, token);
-      if (data.connection) {
-        setGithubConnection({
-          connected: true,
-          repo_owner: data.connection.repo_owner,
-          repo_name: data.connection.repo_name,
-          last_sync: data.connection.last_sync,
-        });
-      }
+      await api.evidence.getTriad(id, token);
+      // Note: GitHub connection state is now managed by refreshGitHubConnection()
+      // which provides full GitHubConnection data including github_mode.
     } catch {
       // Evidence fetch is non-critical
+    }
+  }, [id, token]);
+
+  // S1-T1: Refresh GitHub connection status (includes github_mode, repo details)
+  const refreshGitHubConnection = useCallback(async () => {
+    if (!id || !token) return;
+    try {
+      const status = await api.github.getStatus(id, token);
+      setGithubConnection(status);
+    } catch {
+      // Non-critical — connection state may be stale but wizard can retry
     }
   }, [id, token]);
 
@@ -467,8 +472,9 @@ export function Project() {
     fetchEvidence();
     fetchImages();
     fetchGithubRepos();
+    refreshGitHubConnection();
     api.router.models().then(data => setAvailableModels(data.classes)).catch(console.error);
-  }, [fetchProject, fetchDecisions, fetchCCSStatus, fetchEvidence, fetchImages, fetchGithubRepos]);
+  }, [fetchProject, fetchDecisions, fetchCCSStatus, fetchEvidence, fetchImages, fetchGithubRepos, refreshGitHubConnection]);
 
   // Fetch workspace status for capsule enrichment + auto-detect wizard
   useEffect(() => {
@@ -839,10 +845,10 @@ export function Project() {
     } : prev);
   }, []);
 
-  const handleGitHubConnect = useCallback(async () => {
+  const handleGitHubConnect = useCallback(async (mode?: GitHubMode) => {
     if (!id || !token) return;
     try {
-      const result = await api.github.connect(id, token);
+      const result = await api.github.connect(id, token, undefined, undefined, mode);
       if (result.authorization_url) window.location.href = result.authorization_url;
     } catch (err) {
       console.error('GitHub connect failed:', err);
@@ -882,11 +888,11 @@ export function Project() {
     try {
       await api.github.selectRepo(id, repoOwner, repoName, token);
       setGithubConnection({ connected: true, repo_owner: repoOwner, repo_name: repoName });
-      await fetchEvidence();
+      await refreshGitHubConnection();
     } catch (err) {
       console.error('Failed to select repo:', err);
     }
-  }, [id, token, fetchEvidence]);
+  }, [id, token, refreshGitHubConnection]);
 
   // D81: Scaffold Plan — Approve handler (writes files after user approval)
   const handleApproveScaffoldPlan = useCallback(async (messageId: string) => {
@@ -2475,12 +2481,14 @@ export function Project() {
           projectId={id}
           token={token}
           projectType={project?.projectType}
+          projectName={project?.name}
           onComplete={handleWorkspaceComplete}
           onSkip={() => setShowWorkspaceWizard(false)}
           githubConnection={githubConnection}
           onGitHubConnect={handleGitHubConnect}
           onGitHubDisconnect={handleGitHubDisconnect}
           onGitHubSelectRepo={handleGitHubSelectRepo}
+          onRefreshGitHubConnection={refreshGitHubConnection}
           githubRepos={githubRepos}
         />
       )}

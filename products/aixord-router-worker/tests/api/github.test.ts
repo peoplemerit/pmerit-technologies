@@ -39,7 +39,7 @@ vi.mock('../../src/utils/logger', () => ({
   log: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-// Mock github-write (used by POST /commit/:projectId via dynamic import)
+// Mock github-write (used by POST /commit/:projectId and POST /create-repo/:projectId via dynamic import)
 vi.mock('../../src/services/github-write', () => ({
   commitFilesToGitHub: vi.fn().mockResolvedValue({
     success: true,
@@ -50,6 +50,12 @@ vi.mock('../../src/services/github-write', () => ({
     commit_url: 'https://github.com/testuser/my-repo/commit/abc1234567890def',
     pr_number: null,
     pr_url: null,
+  }),
+  createGitHubRepo: vi.fn().mockResolvedValue({
+    owner: 'testuser',
+    name: 'my-new-project',
+    full_name: 'testuser/my-new-project',
+    html_url: 'https://github.com/testuser/my-new-project',
   }),
 }));
 
@@ -511,6 +517,157 @@ describe('POST /api/v1/github/commit/:projectId', () => {
         files: [{ path: 'test.ts', content: 'code' }],
         message: 'Test commit',
       }),
+    });
+
+    expect(res.status).toBe(401);
+  });
+});
+
+// ============================================================================
+// S1: Connect with mode forwarding
+// ============================================================================
+describe('POST /api/v1/github/connect — mode forwarding (S1-T2)', () => {
+  it('accepts WORKSPACE_SYNC mode in request body', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+      { pattern: 'oauth_states', runResult: { success: true, changes: 1 } },
+      { pattern: 'github_connections', runResult: { success: true, changes: 1 } },
+    ]);
+
+    const res = await req('/api/v1/github/connect', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ project_id: 'proj-1', mode: 'WORKSPACE_SYNC' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { authorization_url: string };
+    expect(body.authorization_url).toContain('github.com/login/oauth/authorize');
+  });
+
+  it('defaults to READ_ONLY when mode not specified', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+      { pattern: 'oauth_states', runResult: { success: true, changes: 1 } },
+      { pattern: 'github_connections', runResult: { success: true, changes: 1 } },
+    ]);
+
+    const res = await req('/api/v1/github/connect', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ project_id: 'proj-1' }),
+    });
+
+    expect(res.status).toBe(200);
+  });
+});
+
+// ============================================================================
+// S1: Create Repository
+// ============================================================================
+describe('POST /api/v1/github/create-repo/:projectId (S1-T1)', () => {
+  function connectionQuery(mode = 'WORKSPACE_SYNC'): MockQueryResult {
+    return {
+      pattern: 'SELECT access_token_encrypted, github_mode',
+      result: { access_token_encrypted: 'encrypted-tok', github_mode: mode },
+    };
+  }
+
+  it('creates repo and auto-selects it', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+      connectionQuery('WORKSPACE_SYNC'),
+      // UPDATE github_connections SET repo_owner, repo_name
+      { pattern: 'UPDATE github_connections', runResult: { success: true, changes: 1 } },
+      // DELETE old evidence
+      { pattern: 'DELETE FROM github_evidence', runResult: { success: true, changes: 0 } },
+    ]);
+
+    const res = await req('/api/v1/github/create-repo/proj-1', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ name: 'my-new-project', description: 'Test project', private: true }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { success: boolean; repo: { owner: string; name: string; full_name: string }; message: string };
+    expect(body.success).toBe(true);
+    expect(body.repo.owner).toBe('testuser');
+    expect(body.repo.name).toBe('my-new-project');
+    expect(body.repo.full_name).toBe('testuser/my-new-project');
+    expect(body.message).toContain('testuser/my-new-project');
+  });
+
+  it('returns 400 when name is missing', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+    ]);
+
+    const res = await req('/api/v1/github/create-repo/proj-1', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 403 when mode is READ_ONLY', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+      connectionQuery('READ_ONLY'),
+    ]);
+
+    const res = await req('/api/v1/github/create-repo/proj-1', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ name: 'my-project' }),
+    });
+
+    expect(res.status).toBe(403);
+    const body = await res.json() as { error: string; current_mode: string };
+    expect(body.current_mode).toBe('READ_ONLY');
+  });
+
+  it('returns 404 when no connection exists', async () => {
+    const { token } = await createTestSession();
+
+    const { req } = buildApp([
+      sessionQuery(),
+      ownerQuery(),
+      { pattern: 'SELECT access_token_encrypted, github_mode', result: null },
+    ]);
+
+    const res = await req('/api/v1/github/create-repo/proj-1', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ name: 'my-project' }),
+    });
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 401 without auth', async () => {
+    const { req } = buildApp();
+
+    const res = await req('/api/v1/github/create-repo/proj-1', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'my-project' }),
     });
 
     expect(res.status).toBe(401);
