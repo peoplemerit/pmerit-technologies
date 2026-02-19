@@ -261,11 +261,13 @@ export function WorkspaceSetupWizard({
         onRefreshGitHubConnection?.();
       } catch (err: unknown) {
         // 422 = name collision → retry with suffix
-        const status = (err as { status?: number })?.status;
+        const status = (err as { statusCode?: number })?.statusCode ?? (err as { status?: number })?.status;
         if (status === 422 && attempt < 3) {
           await tryCreate(`${slug}-${attempt + 1}`, attempt + 1);
         } else {
-          setCreateRepoError(err instanceof Error ? err.message : 'Failed to create repository');
+          const msg = err instanceof Error ? err.message : 'Failed to create repository';
+          console.error('[S1] createRepo failed:', { status, message: msg, err });
+          setCreateRepoError(msg);
           setIsCreatingRepo(false);
         }
       }

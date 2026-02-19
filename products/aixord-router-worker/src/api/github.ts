@@ -853,9 +853,21 @@ github.post('/create-repo/:projectId', async (c) => {
 
   } catch (error) {
     log.error('github_create_repo_failed', { error: error instanceof Error ? error.message : String(error) });
+
+    // Pass through GitHub API status codes (e.g., 422 for name collision)
+    // so the frontend can detect and retry with a suffix
+    const ghStatus = (error as { status?: number })?.status;
+    if (ghStatus === 422) {
+      return c.json({
+        error: 'Repository name already exists',
+        error_code: 'REPO_NAME_TAKEN'
+      }, 422);
+    }
+
     return c.json({
       error: 'Failed to create repository',
-      error_code: 'CREATE_REPO_FAILED'
+      error_code: 'CREATE_REPO_FAILED',
+      detail: error instanceof Error ? error.message : undefined
     }, 500);
   }
 });
