@@ -64,7 +64,7 @@ export interface FileDetectionResult {
 // Constants
 // ============================================================================
 
-const MAX_FILE_SIZE = 100 * 1024; // 100KB
+const MAX_FILE_SIZE = 150 * 1024; // 150KB (matches readFileRequest.ts limit)
 const MAX_FILES_PER_MESSAGE = 3;
 
 // Common non-file words that look like filenames but aren't
