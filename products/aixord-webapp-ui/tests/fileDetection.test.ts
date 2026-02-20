@@ -51,6 +51,16 @@ describe('detectFileReferences', () => {
     expect(pkgRef!.extension).toBe('json');
   });
 
+  it('detects quoted filenames with spaces like "Pantry Restock App v2.md"', () => {
+    const result = detectFileReferences('Verify "Pantry Restock App v2.md"');
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    const pantryRef = result.find(r => r.filename === 'Pantry Restock App v2.md');
+    expect(pantryRef).toBeDefined();
+    expect(pantryRef!.extension).toBe('md');
+    expect(pantryRef!.matchType).toBe('quoted_file');
+    expect(pantryRef!.confidence).toBe('high');
+  });
+
   it('detects backtick filenames like `utils.ts`', () => {
     const result = detectFileReferences('open the file `utils.ts` and review it');
     expect(result.length).toBeGreaterThanOrEqual(1);
@@ -74,6 +84,14 @@ describe('detectFileReferences', () => {
     const result = detectFileReferences('For example e.g. something, i.e. another thing');
     const falsePositives = result.filter(r => ['e.g.', 'i.e.'].includes(r.raw));
     expect(falsePositives.length).toBe(0);
+  });
+
+  it('detects long filenames with underscores', () => {
+    const result = detectFileReferences('review AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md');
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    const ref = result.find(r => r.filename === 'AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md');
+    expect(ref).toBeDefined();
+    expect(ref!.extension).toBe('md');
   });
 });
 
@@ -131,5 +149,41 @@ describe('detectAndResolveFiles', () => {
     expect(result.injectedCount).toBeGreaterThanOrEqual(1);
     expect(result.contextString).toContain('WORKSPACE FILES');
     expect(result.contextString).toContain('README.md');
+  });
+
+  it('detects quoted filenames with spaces when workspace bound', async () => {
+    // Mock workspace handle that has the file in root
+    const mockDirHandle = {
+      kind: 'directory',
+      name: 'project',
+      getFileHandle: vi.fn().mockResolvedValue({
+        kind: 'file',
+        name: 'Pantry Restock App v2.md',
+        getFile: vi.fn().mockResolvedValue({
+          text: vi.fn().mockResolvedValue('# Pantry Restock App v2'),
+          size: 24,
+          lastModified: Date.now(),
+        }),
+      }),
+    };
+    (fileSystemStorage.getHandle as ReturnType<typeof vi.fn>).mockResolvedValue({
+      handle: mockDirHandle,
+    });
+
+    (readFileContent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      content: '# Pantry Restock App v2',
+      name: 'Pantry Restock App v2.md',
+      size: 24,
+      lastModified: Date.now(),
+      type: 'text/markdown',
+    });
+
+    const result = await detectAndResolveFiles(
+      'Verify "Pantry Restock App v2.md"',
+      'project-1'
+    );
+    expect(result.detected.length).toBeGreaterThanOrEqual(1);
+    expect(result.injectedCount).toBeGreaterThanOrEqual(1);
+    expect(result.contextString).toContain('Pantry Restock App v2.md');
   });
 });

@@ -126,12 +126,12 @@ export function detectFileReferences(message: string): DetectedFile[] {
     }
   }
 
-  // Pattern 2: Quoted filenames — "file.ext" or 'file.ext'
-  const quotedPattern = /["']([a-zA-Z0-9_.-]+\.[a-zA-Z]{1,10})["']/g;
+  // Pattern 2: Quoted filenames — "file.ext" or 'file.ext' (supports spaces in filenames)
+  const quotedPattern = /["']([a-zA-Z0-9_ .\-/\\]+\.[a-zA-Z]{1,10})["']/g;
   while ((match = quotedPattern.exec(message)) !== null) {
     const raw = match[1];
     const normalized = normalizePath(raw);
-    if (!seenPaths.has(normalized) && isValidFileRef(normalized)) {
+    if (!seenPaths.has(normalized) && isValidFileRef(normalized, true)) {
       seenPaths.add(normalized);
       detected.push(makeDetected(raw, normalized, 'quoted_file', 'high'));
     }
@@ -279,9 +279,9 @@ async function resolveOneFile(
       return { detected: det, found: false, skipReason: 'not_found' };
     }
 
-    // For paths that didn't resolve, try just the filename in root
+    // Fallback A: Try just the filename in root
+    const fileName = segments[segments.length - 1];
     try {
-      const fileName = segments[segments.length - 1];
       const fileHandle = await rootHandle.getFileHandle(fileName);
       const file = await fileHandle.getFile();
 
@@ -295,8 +295,19 @@ async function resolveOneFile(
       const fileContent = await readFileContent(fileHandle);
       return { detected: det, found: true, content: fileContent.content, size: file.size, lastModified: file.lastModified };
     } catch {
-      return { detected: det, found: false, skipReason: 'not_found' };
+      // Fallback A failed — filename not in root
     }
+
+    // Fallback B: Search depth-1 subdirectories for the filename
+    // Handles cases like "AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md" living in "docs/"
+    try {
+      const result = await searchSubdirectories(rootHandle, fileName, det);
+      if (result) return result;
+    } catch {
+      // Search failed — non-fatal
+    }
+
+    return { detected: det, found: false, skipReason: 'not_found' };
   }
 }
 
@@ -410,6 +421,46 @@ export async function detectAndResolveFiles(
 // Helpers
 // ============================================================================
 
+/**
+ * Search depth-1 subdirectories for a file by name.
+ * Returns the first match found, or null if not found.
+ * Limits to 20 directories to avoid scanning huge trees.
+ */
+async function searchSubdirectories(
+  rootHandle: FileSystemDirectoryHandle,
+  fileName: string,
+  det: DetectedFile
+): Promise<ResolvedFile | null> {
+  const MAX_DIRS_TO_SCAN = 20;
+  let scanned = 0;
+
+  for await (const entry of rootHandle.values()) {
+    if (scanned >= MAX_DIRS_TO_SCAN) break;
+    if (entry.kind !== 'directory') continue;
+    scanned++;
+
+    try {
+      const subDir = await rootHandle.getDirectoryHandle(entry.name);
+      const fileHandle = await subDir.getFileHandle(fileName);
+      const file = await fileHandle.getFile();
+
+      if (file.size > MAX_FILE_SIZE) {
+        return { detected: det, found: true, size: file.size, lastModified: file.lastModified, skipReason: 'too_large' };
+      }
+      if (!isTextFile(det.extension)) {
+        return { detected: det, found: true, size: file.size, lastModified: file.lastModified, skipReason: 'binary' };
+      }
+
+      const fileContent = await readFileContent(fileHandle);
+      return { detected: det, found: true, content: fileContent.content, size: file.size, lastModified: file.lastModified };
+    } catch {
+      // File not in this subdirectory — continue
+    }
+  }
+
+  return null;
+}
+
 function normalizePath(raw: string): string {
   return raw
     .replace(/\\/g, '/') // Backslash to forward slash
@@ -435,7 +486,7 @@ function makeDetected(
   return { raw, path: normalized, filename, extension, confidence, matchType };
 }
 
-function isValidFileRef(path: string): boolean {
+function isValidFileRef(path: string, allowSpaces = false): boolean {
   const lower = path.toLowerCase();
 
   // Filter false positives
@@ -445,8 +496,8 @@ function isValidFileRef(path: string): boolean {
   const ext = getExtension(path);
   if (!ext || ext.length > 10) return false;
 
-  // No spaces in path segments
-  if (path.includes(' ')) return false;
+  // No spaces in path segments (unless quoted — allowSpaces=true)
+  if (!allowSpaces && path.includes(' ')) return false;
 
   // Must have at least one character before the extension
   const filename = path.split('/').pop() || '';
