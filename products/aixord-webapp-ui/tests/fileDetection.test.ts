@@ -1,0 +1,135 @@
+/**
+ * File Detection Tests — S2-T6
+ *
+ * Tests the file reference detection pipeline (fileDetection.ts).
+ * These tests verify NLP-based detection patterns and the full
+ * detectAndResolveFiles pipeline.
+ */
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { detectFileReferences, detectAndResolveFiles } from '../src/lib/fileDetection';
+import { fileSystemStorage, readFileContent } from '../src/lib/fileSystem';
+
+// Mock fileSystem module (FSAPI is not available in test env)
+vi.mock('../src/lib/fileSystem', () => ({
+  fileSystemStorage: {
+    getHandle: vi.fn(),
+  },
+  readFileContent: vi.fn(),
+  isTextFile: vi.fn().mockReturnValue(true),
+  verifyPermission: vi.fn().mockResolvedValue(true),
+}));
+
+describe('detectFileReferences', () => {
+  it('detects "read README.md" → high confidence natural_reference', () => {
+    const result = detectFileReferences('please read README.md and tell me about it');
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    const readmeRef = result.find(r => r.filename === 'README.md');
+    expect(readmeRef).toBeDefined();
+    expect(readmeRef!.path).toBe('README.md');
+    expect(readmeRef!.extension).toBe('md');
+    // Natural language "read" prefix should yield high or medium confidence
+    expect(['high', 'medium']).toContain(readmeRef!.confidence);
+  });
+
+  it('detects explicit path "check src/index.ts" → explicit_path', () => {
+    const result = detectFileReferences('can you check src/index.ts for errors');
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    const indexRef = result.find(r => r.path === 'src/index.ts');
+    expect(indexRef).toBeDefined();
+    expect(indexRef!.filename).toBe('index.ts');
+    expect(indexRef!.extension).toBe('ts');
+    expect(indexRef!.matchType).toBe('explicit_path');
+    expect(indexRef!.confidence).toBe('high');
+  });
+
+  it('detects quoted filenames like "package.json"', () => {
+    const result = detectFileReferences('look at "package.json" for dependencies');
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    const pkgRef = result.find(r => r.filename === 'package.json');
+    expect(pkgRef).toBeDefined();
+    expect(pkgRef!.extension).toBe('json');
+  });
+
+  it('detects backtick filenames like `utils.ts`', () => {
+    const result = detectFileReferences('open the file `utils.ts` and review it');
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    const utilsRef = result.find(r => r.filename === 'utils.ts');
+    expect(utilsRef).toBeDefined();
+    expect(utilsRef!.extension).toBe('ts');
+  });
+
+  it('returns empty array for messages with no file references', () => {
+    const result = detectFileReferences('help me brainstorm ideas for a pantry app');
+    expect(result).toEqual([]);
+  });
+
+  it('deduplicates repeated references to the same file', () => {
+    const result = detectFileReferences('compare src/index.ts with src/index.ts changes');
+    const indexRefs = result.filter(r => r.path === 'src/index.ts');
+    expect(indexRefs.length).toBe(1);
+  });
+
+  it('filters false positives like "e.g." and "i.e."', () => {
+    const result = detectFileReferences('For example e.g. something, i.e. another thing');
+    const falsePositives = result.filter(r => ['e.g.', 'i.e.'].includes(r.raw));
+    expect(falsePositives.length).toBe(0);
+  });
+});
+
+describe('detectAndResolveFiles', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns empty result when no file references detected', async () => {
+    const result = await detectAndResolveFiles('hello world', 'project-1');
+    expect(result.detected).toEqual([]);
+    expect(result.resolved).toEqual([]);
+    expect(result.contextString).toBe('');
+    expect(result.injectedCount).toBe(0);
+  });
+
+  it('returns empty resolved when workspace is not bound', async () => {
+    (fileSystemStorage.getHandle as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    const result = await detectAndResolveFiles('read README.md', 'project-1');
+    expect(result.detected.length).toBeGreaterThanOrEqual(1);
+    expect(result.resolved).toEqual([]);
+    expect(result.injectedCount).toBe(0);
+  });
+
+  it('returns contextString with file content when workspace bound', async () => {
+    // Mock workspace handle
+    const mockDirHandle = {
+      kind: 'directory',
+      name: 'project',
+      getFileHandle: vi.fn().mockResolvedValue({
+        kind: 'file',
+        name: 'README.md',
+        getFile: vi.fn().mockResolvedValue({
+          text: vi.fn().mockResolvedValue('# My Project\n\nHello world'),
+          size: 28,
+          lastModified: Date.now(),
+        }),
+      }),
+    };
+    (fileSystemStorage.getHandle as ReturnType<typeof vi.fn>).mockResolvedValue({
+      handle: mockDirHandle,
+    });
+
+    // Mock readFileContent to return file content
+    (readFileContent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      content: '# My Project\n\nHello world',
+      name: 'README.md',
+      size: 28,
+      lastModified: Date.now(),
+      type: 'text/markdown',
+    });
+
+    const result = await detectAndResolveFiles('read README.md', 'project-1');
+    expect(result.detected.length).toBeGreaterThanOrEqual(1);
+    expect(result.injectedCount).toBeGreaterThanOrEqual(1);
+    expect(result.contextString).toContain('WORKSPACE FILES');
+    expect(result.contextString).toContain('README.md');
+  });
+});

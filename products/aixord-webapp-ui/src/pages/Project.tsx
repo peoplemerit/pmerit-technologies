@@ -97,8 +97,6 @@ export function Project() {
     file_tree?: string;
     key_files?: Array<{ path: string; content: string }>;
   } | null>(null);
-  const workspaceContextLoadedRef = useRef(false);
-
   // Ribbon state
   const [activeTab, setActiveTab] = useState<string | null>(null);
 
@@ -1074,10 +1072,33 @@ export function Project() {
     let fullContent = content + attachmentContext;
 
     // P0-3: Detect file references and resolve from workspace
+    // S2: Dual injection — message text (Path A) + key_files (Path B)
     try {
       const fileDetection = await detectAndResolveFiles(content, id);
       if (fileDetection.injectedCount > 0) {
+        // Path A: Append formatted context to user message (visible in chat)
         fullContent += fileDetection.contextString;
+
+        // Path B: Also inject into workspace_context.key_files (structured backend path)
+        // This ensures resolved files appear in the system prompt's CODEBASE CONTEXT
+        const resolvedKeyFiles = fileDetection.resolved
+          .filter(r => r.found && r.content)
+          .map(r => ({ path: r.detected.path, content: r.content! }));
+
+        if (resolvedKeyFiles.length > 0 && workspaceContextRef.current) {
+          workspaceContextRef.current = {
+            ...workspaceContextRef.current,
+            key_files: [
+              ...(workspaceContextRef.current.key_files || []),
+              ...resolvedKeyFiles,
+            ],
+          };
+        } else if (resolvedKeyFiles.length > 0) {
+          // No cached context yet — create minimal context with just the resolved files
+          workspaceContextRef.current = {
+            key_files: resolvedKeyFiles,
+          };
+        }
       }
     } catch (err) {
       // File detection is non-blocking — log and continue
@@ -1175,9 +1196,9 @@ export function Project() {
         .slice(-MAX_HISTORY_MESSAGES)
         .map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content }));
 
-      // FIX-WSC: Scan workspace files for proactive context (cached after first scan)
-      if (!workspaceContextLoadedRef.current && workspaceStatus?.bound) {
-        workspaceContextLoadedRef.current = true;
+      // FIX-WSC / S2-T2: Scan workspace files for context on each message
+      // Re-scans each time to pick up files created during the session
+      if (workspaceStatus?.bound) {
         try {
           const linked = await fileSystemStorage.getHandle(id);
           if (linked?.handle) {
@@ -1482,10 +1503,14 @@ export function Project() {
             } catch {
               // Non-blocking — readiness indicator is optional
             }
-          } catch {
+          } catch (parseErr) {
             // Artifact parsing failed — non-blocking, user can retry
-            console.warn('Failed to parse brainstorm artifact from AI response');
+            console.warn('[S2] Failed to parse brainstorm artifact from AI response:', parseErr);
           }
+        } else {
+          // S2-T3: Debug log when in BRAINSTORM phase but AI didn't produce markers
+          // Helps diagnose when AI produces brainstorm content without structured format
+          console.debug('[S2] BRAINSTORM phase response without artifact markers (expected — artifact comes later in conversation)');
         }
       }
 
