@@ -83,6 +83,8 @@ interface WizardIntent {
   templateId: string | null;
   scaffoldCreated: number;
   scaffoldSkipped: number;
+  scaffoldFilesCreated: number;
+  scaffoldFilesSkipped: number;
   timestamp: number;
 }
 
@@ -196,7 +198,13 @@ export function WorkspaceSetupWizard({
       if (intent.step >= 2) setStep(2);
       if (intent.templateId) setSelectedTemplate(intent.templateId);
       if ((intent.scaffoldCreated + (intent.scaffoldSkipped ?? 0)) > 0) {
-        setScaffoldResult({ created: intent.scaffoldCreated, skipped: intent.scaffoldSkipped ?? 0, errors: [] });
+        setScaffoldResult({
+          created: intent.scaffoldCreated,
+          skipped: intent.scaffoldSkipped ?? 0,
+          filesCreated: intent.scaffoldFilesCreated ?? 0,
+          filesSkipped: intent.scaffoldFilesSkipped ?? 0,
+          errors: [],
+        });
       }
       // Note: linkedFolder cannot be serialized (FSAPI handles persist separately via IndexedDB).
       // The folder will be re-detected by FolderPicker's own persistence.
@@ -215,6 +223,8 @@ export function WorkspaceSetupWizard({
         templateId: selectedTemplate,
         scaffoldCreated: scaffoldResult?.created ?? 0,
         scaffoldSkipped: scaffoldResult?.skipped ?? 0,
+        scaffoldFilesCreated: scaffoldResult?.filesCreated ?? 0,
+        scaffoldFilesSkipped: scaffoldResult?.filesSkipped ?? 0,
         timestamp: Date.now(),
       };
       sessionStorage.setItem(WIZARD_INTENT_KEY, JSON.stringify(intent));
@@ -428,7 +438,7 @@ export function WorkspaceSetupWizard({
         : null,
       binding_confirmed: true,
       // Scaffold count reporting (Gap 2)
-      scaffold_item_count: (scaffoldResult?.created ?? 0) + (scaffoldResult?.skipped ?? 0),
+      scaffold_item_count: (scaffoldResult?.filesCreated ?? 0) + (scaffoldResult?.filesSkipped ?? 0),
       scaffold_skipped_count: scaffoldResult?.skipped ?? 0,
       scaffold_error_count: scaffoldResult?.errors.length ?? 0,
       // GitHub sync reporting (GITHUB-SYNC-01)
@@ -1222,7 +1232,7 @@ function StepConfirmation({
                 </div>
                 <p className="text-xs text-gray-400 truncate">{linkedFolder?.name ?? 'Not linked'}</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {scaffoldResult ? `${scaffoldResult.created + scaffoldResult.skipped} items` : '0 items'} · <span className="text-green-400">R/W</span>
+                  {scaffoldResult ? `${(scaffoldResult.filesCreated ?? 0) + (scaffoldResult.filesSkipped ?? 0)} files` : '0 files'} · <span className="text-green-400">R/W</span>
                 </p>
               </div>
               {/* GitHub Environment */}
@@ -1239,8 +1249,8 @@ function StepConfirmation({
             </div>
             {/* T7: Sync Status — enhanced with SYNCED/MISMATCH/NOT_SYNCED logic */}
             {pushResult?.success && scaffoldResult ? (() => {
-              const localTotal = scaffoldResult.created + scaffoldResult.skipped;
-              const isSynced = localTotal === pushResult.filesCommitted;
+              const localFileCount = (scaffoldResult.filesCreated ?? 0) + (scaffoldResult.filesSkipped ?? 0);
+              const isSynced = localFileCount === pushResult.filesCommitted;
               return (
                 <div className={`flex items-center gap-2 p-2 rounded-lg ${
                   isSynced
@@ -1257,8 +1267,8 @@ function StepConfirmation({
                   </span>
                   <span className="text-xs text-gray-500">
                     {isSynced
-                      ? `${pushResult.filesCommitted}/${localTotal} items match`
-                      : `local ${localTotal} / GitHub ${pushResult.filesCommitted}`}
+                      ? `${pushResult.filesCommitted}/${localFileCount} files match`
+                      : `local ${localFileCount} / GitHub ${pushResult.filesCommitted}`}
                     {pushResult.branch && ` · ${pushResult.branch}`}
                     {pushResult.commitSha && ` · ${pushResult.commitSha.slice(0, 7)}`}
                   </span>

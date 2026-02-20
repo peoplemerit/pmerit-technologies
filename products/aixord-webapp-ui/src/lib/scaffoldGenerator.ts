@@ -14,6 +14,10 @@ import type { TemplateNode } from './workspaceTemplates';
 export interface ScaffoldResult {
   created: number;
   skipped: number;
+  /** Number of files created (subset of created — excludes folders) */
+  filesCreated: number;
+  /** Number of files skipped (subset of skipped — excludes folders) */
+  filesSkipped: number;
   errors: string[];
 }
 
@@ -25,7 +29,7 @@ export async function generateScaffold(
   rootHandle: FileSystemDirectoryHandle,
   template: TemplateNode[]
 ): Promise<ScaffoldResult> {
-  const result: ScaffoldResult = { created: 0, skipped: 0, errors: [] };
+  const result: ScaffoldResult = { created: 0, skipped: 0, filesCreated: 0, filesSkipped: 0, errors: [] };
 
   for (const node of template) {
     await processNode(rootHandle, node, '', result);
@@ -66,10 +70,12 @@ async function processNode(
       try {
         await parentHandle.getFileHandle(node.name);
         result.skipped++; // Already exists — don't overwrite
+        result.filesSkipped++;
       } catch {
         // Doesn't exist — create it
         await createFile(parentHandle, node.name, node.content || '');
         result.created++;
+        result.filesCreated++;
       }
     }
   } catch (err) {
