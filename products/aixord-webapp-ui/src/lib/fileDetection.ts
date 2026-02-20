@@ -7,7 +7,7 @@
  * folder, and formats the file contents for injection into the AI context.
  *
  * Constraints:
- * - Max 100KB per file (text content)
+ * - Max 150KB per file (text content)
  * - Max 3 files per message
  * - Text files only (binary files get metadata-only stub)
  * - Graceful degradation: if workspace not bound or permission denied, skip silently
@@ -273,38 +273,45 @@ async function resolveOneFile(
       lastModified: file.lastModified,
     };
   } catch (err) {
-    // File not found at the exact path — try searching by filename only
-    if (segments.length === 1) {
-      // Already was a bare filename, no deeper search
-      return { detected: det, found: false, skipReason: 'not_found' };
-    }
-
-    // Fallback A: Try just the filename in root
+    // File not found at the exact path — try fallback strategies
     const fileName = segments[segments.length - 1];
-    try {
-      const fileHandle = await rootHandle.getFileHandle(fileName);
-      const file = await fileHandle.getFile();
+    console.debug('[FileDetection] resolveOneFile: exact path failed for', det.path, '— trying fallbacks');
 
-      if (file.size > MAX_FILE_SIZE) {
-        return { detected: det, found: true, size: file.size, lastModified: file.lastModified, skipReason: 'too_large' };
-      }
-      if (!isTextFile(det.extension)) {
-        return { detected: det, found: true, size: file.size, lastModified: file.lastModified, skipReason: 'binary' };
-      }
+    // Fallback A: Try just the filename in root (only useful for multi-segment paths)
+    if (segments.length > 1) {
+      try {
+        const fileHandle = await rootHandle.getFileHandle(fileName);
+        const file = await fileHandle.getFile();
 
-      const fileContent = await readFileContent(fileHandle);
-      return { detected: det, found: true, content: fileContent.content, size: file.size, lastModified: file.lastModified };
-    } catch {
-      // Fallback A failed — filename not in root
+        if (file.size > MAX_FILE_SIZE) {
+          return { detected: det, found: true, size: file.size, lastModified: file.lastModified, skipReason: 'too_large' };
+        }
+        if (!isTextFile(det.extension)) {
+          return { detected: det, found: true, size: file.size, lastModified: file.lastModified, skipReason: 'binary' };
+        }
+
+        const fileContent = await readFileContent(fileHandle);
+        console.debug('[FileDetection] resolveOneFile: found', fileName, 'in root via Fallback A');
+        return { detected: det, found: true, content: fileContent.content, size: file.size, lastModified: file.lastModified };
+      } catch {
+        // Fallback A failed — filename not in root
+        console.debug('[FileDetection] resolveOneFile: Fallback A (root) failed for', fileName);
+      }
     }
 
     // Fallback B: Search depth-1 subdirectories for the filename
-    // Handles cases like "AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md" living in "docs/"
+    // Handles bare filenames AND multi-segment paths where root lookup failed
+    // e.g., "AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md" living in "docs/"
     try {
+      console.debug('[FileDetection] resolveOneFile: trying Fallback B (subdirectory search) for', fileName);
       const result = await searchSubdirectories(rootHandle, fileName, det);
-      if (result) return result;
-    } catch {
-      // Search failed — non-fatal
+      if (result) {
+        console.debug('[FileDetection] resolveOneFile: found', fileName, 'in subdirectory via Fallback B');
+        return result;
+      }
+      console.debug('[FileDetection] resolveOneFile: Fallback B found nothing for', fileName);
+    } catch (searchErr) {
+      console.debug('[FileDetection] resolveOneFile: Fallback B error for', fileName, searchErr);
     }
 
     return { detected: det, found: false, skipReason: 'not_found' };
@@ -383,6 +390,7 @@ export async function detectAndResolveFiles(
 ): Promise<FileDetectionResult> {
   // Step 1: Detect file references
   const detected = detectFileReferences(message);
+  console.debug('[FileDetection] Step 1 — detected', detected.length, 'references:', detected.map(d => `${d.path} (${d.matchType}, ${d.confidence})`));
 
   if (detected.length === 0) {
     return { detected: [], resolved: [], contextString: '', injectedCount: 0 };
@@ -391,6 +399,7 @@ export async function detectAndResolveFiles(
   // Step 2: Get workspace folder handle
   try {
     const linkedFolder = await fileSystemStorage.getHandle(projectId);
+    console.debug('[FileDetection] Step 2a — getHandle for project', projectId, ':', linkedFolder ? `got handle "${linkedFolder.handle?.name}"` : 'null (no workspace)');
 
     if (!linkedFolder) {
       // No workspace bound — return detection only, no resolution
@@ -399,20 +408,23 @@ export async function detectAndResolveFiles(
 
     // Verify permission (read-only is sufficient)
     const hasPermission = await verifyPermission(linkedFolder.handle, false);
+    console.debug('[FileDetection] Step 2b — permission:', hasPermission);
     if (!hasPermission) {
       return { detected, resolved: [], contextString: '', injectedCount: 0 };
     }
 
     // Step 3: Resolve files
     const resolved = await resolveFiles(detected, linkedFolder.handle);
+    console.debug('[FileDetection] Step 3 — resolved:', resolved.map(r => `${r.detected.path}: found=${r.found}, content=${!!r.content}, skip=${r.skipReason || 'none'}`));
 
     // Step 4: Format context
     const contextString = formatResolvedFilesForContext(resolved);
     const injectedCount = resolved.filter(r => r.found && r.content).length;
+    console.debug('[FileDetection] Step 4 — injectedCount:', injectedCount, ', contextString length:', contextString.length);
 
     return { detected, resolved, contextString, injectedCount };
   } catch (err) {
-    console.warn('[FileDetection] Failed to resolve files:', err);
+    console.warn('[FileDetection] Pipeline error:', err);
     return { detected, resolved: [], contextString: '', injectedCount: 0 };
   }
 }
@@ -433,16 +445,20 @@ async function searchSubdirectories(
 ): Promise<ResolvedFile | null> {
   const MAX_DIRS_TO_SCAN = 20;
   let scanned = 0;
+  const dirNames: string[] = [];
 
   for await (const entry of rootHandle.values()) {
     if (scanned >= MAX_DIRS_TO_SCAN) break;
     if (entry.kind !== 'directory') continue;
     scanned++;
+    dirNames.push(entry.name);
 
     try {
       const subDir = await rootHandle.getDirectoryHandle(entry.name);
       const fileHandle = await subDir.getFileHandle(fileName);
       const file = await fileHandle.getFile();
+
+      console.debug('[FileDetection] searchSubdirectories: FOUND', fileName, 'in', entry.name, '/', 'size:', file.size);
 
       if (file.size > MAX_FILE_SIZE) {
         return { detected: det, found: true, size: file.size, lastModified: file.lastModified, skipReason: 'too_large' };
@@ -458,6 +474,7 @@ async function searchSubdirectories(
     }
   }
 
+  console.debug('[FileDetection] searchSubdirectories: scanned', scanned, 'dirs:', dirNames, '— file not found:', fileName);
   return null;
 }
 

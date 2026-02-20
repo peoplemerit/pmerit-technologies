@@ -186,4 +186,66 @@ describe('detectAndResolveFiles', () => {
     expect(result.injectedCount).toBeGreaterThanOrEqual(1);
     expect(result.contextString).toContain('Pantry Restock App v2.md');
   });
+
+  it('resolves bare filename from subdirectory via Fallback B', async () => {
+    // File is NOT in root, but IS in a "docs" subdirectory
+    // This tests the exact bug where segments.length===1 skipped Fallback B
+    const mockDocsDir = {
+      kind: 'directory' as const,
+      name: 'docs',
+      getFileHandle: vi.fn().mockResolvedValue({
+        kind: 'file',
+        name: 'AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md',
+        getFile: vi.fn().mockResolvedValue({
+          text: vi.fn().mockResolvedValue('# AIXORD Baseline v4.6'),
+          size: 25,
+          lastModified: Date.now(),
+        }),
+      }),
+    };
+
+    // Root dir: getFileHandle throws (file not in root), but getDirectoryHandle returns docs/
+    const mockDirHandle = {
+      kind: 'directory' as const,
+      name: 'project',
+      getFileHandle: vi.fn().mockRejectedValue(new DOMException('NotFoundError')),
+      getDirectoryHandle: vi.fn().mockResolvedValue(mockDocsDir),
+      // The async iterator for rootHandle.values() yields subdirectories
+      values: vi.fn().mockReturnValue({
+        [Symbol.asyncIterator]: () => {
+          let done = false;
+          return {
+            next: async () => {
+              if (!done) {
+                done = true;
+                return { value: { kind: 'directory' as const, name: 'docs' }, done: false };
+              }
+              return { value: undefined, done: true };
+            },
+          };
+        },
+      }),
+    };
+
+    (fileSystemStorage.getHandle as ReturnType<typeof vi.fn>).mockResolvedValue({
+      handle: mockDirHandle,
+    });
+
+    (readFileContent as ReturnType<typeof vi.fn>).mockResolvedValue({
+      content: '# AIXORD Baseline v4.6',
+      name: 'AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md',
+      size: 25,
+      lastModified: Date.now(),
+      type: 'text/markdown',
+    });
+
+    const result = await detectAndResolveFiles(
+      'review AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md',
+      'project-1'
+    );
+    expect(result.detected.length).toBeGreaterThanOrEqual(1);
+    // This was the bug: previously returned injectedCount=0 because Fallback B was unreachable
+    expect(result.injectedCount).toBeGreaterThanOrEqual(1);
+    expect(result.contextString).toContain('AIXORD_OFFICIAL_ACCEPTABLE_BASELINE_v4_6.md');
+  });
 });
