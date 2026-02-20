@@ -82,6 +82,7 @@ interface WizardIntent {
   folderName: string | null;
   templateId: string | null;
   scaffoldCreated: number;
+  scaffoldSkipped: number;
   timestamp: number;
 }
 
@@ -194,8 +195,8 @@ export function WorkspaceSetupWizard({
       // Restore state and advance to Step 2
       if (intent.step >= 2) setStep(2);
       if (intent.templateId) setSelectedTemplate(intent.templateId);
-      if (intent.scaffoldCreated > 0) {
-        setScaffoldResult({ created: intent.scaffoldCreated, skipped: 0, errors: [] });
+      if ((intent.scaffoldCreated + (intent.scaffoldSkipped ?? 0)) > 0) {
+        setScaffoldResult({ created: intent.scaffoldCreated, skipped: intent.scaffoldSkipped ?? 0, errors: [] });
       }
       // Note: linkedFolder cannot be serialized (FSAPI handles persist separately via IndexedDB).
       // The folder will be re-detected by FolderPicker's own persistence.
@@ -213,6 +214,7 @@ export function WorkspaceSetupWizard({
         folderName: linkedFolder?.name ?? null,
         templateId: selectedTemplate,
         scaffoldCreated: scaffoldResult?.created ?? 0,
+        scaffoldSkipped: scaffoldResult?.skipped ?? 0,
         timestamp: Date.now(),
       };
       sessionStorage.setItem(WIZARD_INTENT_KEY, JSON.stringify(intent));
@@ -231,8 +233,8 @@ export function WorkspaceSetupWizard({
     if (githubConnection.repo_name && githubConnection.repo_name !== 'PENDING') return;
     // Only for WORKSPACE_SYNC mode
     if (githubConnection.github_mode !== 'WORKSPACE_SYNC') return;
-    // Only for greenfield (scaffold was generated)
-    if (!scaffoldResult || scaffoldResult.created === 0) return;
+    // Only for greenfield (scaffold was generated — created or skipped items exist)
+    if (!scaffoldResult || (scaffoldResult.created + scaffoldResult.skipped) === 0) return;
     // Need a project name for the repo
     if (!projectName) return;
 
@@ -426,7 +428,7 @@ export function WorkspaceSetupWizard({
         : null,
       binding_confirmed: true,
       // Scaffold count reporting (Gap 2)
-      scaffold_item_count: scaffoldResult?.created ?? 0,
+      scaffold_item_count: (scaffoldResult?.created ?? 0) + (scaffoldResult?.skipped ?? 0),
       scaffold_skipped_count: scaffoldResult?.skipped ?? 0,
       scaffold_error_count: scaffoldResult?.errors.length ?? 0,
       // GitHub sync reporting (GITHUB-SYNC-01)
@@ -1192,7 +1194,7 @@ function StepConfirmation({
           value={
             scaffoldResult
               ? scaffoldResult.errors.length === 0
-                ? `Generated (${scaffoldResult.created} items)`
+                ? `Generated (${scaffoldResult.created + scaffoldResult.skipped} items${scaffoldResult.skipped > 0 ? `, ${scaffoldResult.skipped} existing` : ''})`
                 : `Partial (${scaffoldResult.errors.length} errors)`
               : selectedTemplate === 'user-controlled'
               ? 'User-controlled'
@@ -1220,7 +1222,7 @@ function StepConfirmation({
                 </div>
                 <p className="text-xs text-gray-400 truncate">{linkedFolder?.name ?? 'Not linked'}</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {scaffoldResult ? `${scaffoldResult.created} items` : '0 items'} · <span className="text-green-400">R/W</span>
+                  {scaffoldResult ? `${scaffoldResult.created + scaffoldResult.skipped} items` : '0 items'} · <span className="text-green-400">R/W</span>
                 </p>
               </div>
               {/* GitHub Environment */}
@@ -1236,29 +1238,34 @@ function StepConfirmation({
               </div>
             </div>
             {/* T7: Sync Status — enhanced with SYNCED/MISMATCH/NOT_SYNCED logic */}
-            {pushResult?.success && scaffoldResult ? (
-              <div className={`flex items-center gap-2 p-2 rounded-lg ${
-                scaffoldResult.created === pushResult.filesCommitted
-                  ? 'bg-green-500/10 border border-green-500/20'
-                  : 'bg-amber-500/10 border border-amber-500/20'
-              }`}>
-                <span className="text-xs">
-                  {scaffoldResult.created === pushResult.filesCommitted ? '✓' : '⚠️'}
-                </span>
-                <span className={`text-xs font-medium ${
-                  scaffoldResult.created === pushResult.filesCommitted ? 'text-green-400' : 'text-amber-400'
+            {pushResult?.success && scaffoldResult ? (() => {
+              const localTotal = scaffoldResult.created + scaffoldResult.skipped;
+              const isSynced = localTotal === pushResult.filesCommitted;
+              return (
+                <div className={`flex items-center gap-2 p-2 rounded-lg ${
+                  isSynced
+                    ? 'bg-green-500/10 border border-green-500/20'
+                    : 'bg-amber-500/10 border border-amber-500/20'
                 }`}>
-                  {scaffoldResult.created === pushResult.filesCommitted ? 'SYNCED' : 'MISMATCH'}
-                </span>
-                <span className="text-xs text-gray-500">
-                  {scaffoldResult.created === pushResult.filesCommitted
-                    ? `${pushResult.filesCommitted}/${scaffoldResult.created} items match`
-                    : `local ${scaffoldResult.created} / GitHub ${pushResult.filesCommitted}`}
-                  {pushResult.branch && ` · ${pushResult.branch}`}
-                  {pushResult.commitSha && ` · ${pushResult.commitSha.slice(0, 7)}`}
-                </span>
-              </div>
-            ) : syncResult && syncResult.synced > 0 && !pushResult ? (
+                  <span className="text-xs">
+                    {isSynced ? '✓' : '⚠️'}
+                  </span>
+                  <span className={`text-xs font-medium ${
+                    isSynced ? 'text-green-400' : 'text-amber-400'
+                  }`}>
+                    {isSynced ? 'SYNCED' : 'MISMATCH'}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {isSynced
+                      ? `${pushResult.filesCommitted}/${localTotal} items match`
+                      : `local ${localTotal} / GitHub ${pushResult.filesCommitted}`}
+                    {pushResult.branch && ` · ${pushResult.branch}`}
+                    {pushResult.commitSha && ` · ${pushResult.commitSha.slice(0, 7)}`}
+                  </span>
+                </div>
+              );
+            })()
+             : syncResult && syncResult.synced > 0 && !pushResult ? (
               <div className="flex items-center gap-2 p-2 rounded-lg bg-green-500/10 border border-green-500/20">
                 <span className="text-xs">📥</span>
                 <span className="text-xs font-medium text-green-400">Synced from GitHub</span>
