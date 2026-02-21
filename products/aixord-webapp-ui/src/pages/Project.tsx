@@ -754,6 +754,13 @@ export function Project() {
           }
         }
 
+        // S4-T0: Refresh TaskBoard after finalize so assignments appear
+        try {
+          await tdl.refreshAll();
+        } catch (refreshErr) {
+          console.warn('[S4] Assignment refresh failed (non-blocking):', refreshErr);
+        }
+
         // Add a system message to the chat
         const overrideNote = overrideOptions ? `\n\n⚠️ Quality warnings overridden: "${overrideOptions.override_reason}"` : '';
         const successMessage: Message = {
@@ -787,7 +794,7 @@ export function Project() {
     } finally {
       setIsFinalizing(false);
     }
-  }, [id, token, fetchState]);
+  }, [id, token, fetchState, tdl]);
 
   // Warning override — Director confirms override with reason
   const handleWarningOverride = useCallback(() => {
