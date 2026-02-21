@@ -5,6 +5,7 @@
  * Includes AIXORD v4.3 Disclaimer Gate (GA:DIS).
  */
 
+import * as Sentry from '@sentry/react';
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
@@ -40,6 +41,7 @@ const Troubleshooting = lazy(() => import('./pages/docs/Troubleshooting').then(m
 
 function App() {
   return (
+    <Sentry.ErrorBoundary fallback={<p>Something went wrong. Please refresh.</p>}>
     <ErrorBoundary>
       <AuthProvider>
         <DisclaimerProvider>
@@ -82,6 +84,7 @@ function App() {
         </DisclaimerProvider>
       </AuthProvider>
     </ErrorBoundary>
+    </Sentry.ErrorBoundary>
   );
 }
 

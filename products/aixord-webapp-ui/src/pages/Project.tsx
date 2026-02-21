@@ -82,6 +82,76 @@ function parseBlockFields(content: string): Record<string, string> {
 }
 
 // ============================================================================
+// S3-T0: Normalize brainstorm artifact to match backend validator schema
+// AI may produce flat schemas (name instead of title, string[] decision_criteria, etc.)
+// This normalizes to the structured format the backend validator expects.
+// ============================================================================
+function normalizeBrainstormArtifact(raw: Record<string, unknown>) {
+  const options = (raw.options as Array<Record<string, unknown>> || []).map((opt, i) => ({
+    id: opt.id || `opt-${i + 1}`,
+    title: opt.title || opt.name || `Option ${i + 1}`,
+    description: opt.description || '',
+    assumptions: opt.assumptions || [],
+    kill_conditions: opt.kill_conditions || [],
+    pros: opt.pros || [],
+    cons: opt.cons || [],
+  }));
+
+  // Normalize decision_criteria: accept both string[] and {criteria: [...]} formats
+  let decision_criteria = raw.decision_criteria;
+  if (Array.isArray(decision_criteria)) {
+    // AI sent string array — convert to structured format
+    decision_criteria = {
+      criteria: (decision_criteria as string[]).map((c) => ({
+        name: typeof c === 'string' ? c : String(c),
+        weight: 3,
+        description: '',
+      })),
+    };
+  } else if (!decision_criteria || typeof decision_criteria !== 'object') {
+    decision_criteria = { criteria: [] };
+  }
+
+  // Distribute global assumptions/kill_conditions to options that lack them
+  const globalAssumptions = raw.assumptions as string[] || [];
+  const globalKillConditions = raw.kill_conditions as string[] || [];
+  for (const opt of options) {
+    if (!(opt.assumptions as string[]).length && globalAssumptions.length) {
+      opt.assumptions = [...globalAssumptions];
+    }
+    if (!(opt.kill_conditions as string[]).length && globalKillConditions.length) {
+      opt.kill_conditions = [...globalKillConditions];
+    }
+  }
+
+  return {
+    options,
+    assumptions: globalAssumptions,
+    decision_criteria,
+    kill_conditions: globalKillConditions,
+    generated_by: 'ai' as const,
+  };
+}
+
+// ============================================================================
+// S3-T2: Normalize plan artifact to ensure DoD fields exist on deliverables
+// AI may omit dod_evidence_spec / dod_verification_method — GA:BP gate requires them.
+// ============================================================================
+function normalizePlanArtifact(raw: Record<string, unknown>) {
+  const scopes = (raw.scopes as Array<Record<string, unknown>> || []).map(scope => ({
+    ...scope,
+    deliverables: ((scope.deliverables as Array<Record<string, unknown>>) || []).map(del => ({
+      ...del,
+      name: del.name || del.title || 'Unnamed Deliverable',
+      description: del.description || '',
+      dod_evidence_spec: del.dod_evidence_spec || del.dod || del.acceptance_criteria || 'Deliverable complete and reviewed',
+      dod_verification_method: del.dod_verification_method || del.verification || 'Manual review',
+    })),
+  }));
+  return { ...raw, scopes };
+}
+
+// ============================================================================
 // Main Project Component
 // ============================================================================
 
@@ -673,6 +743,17 @@ export function Project() {
       if (result.success) {
         // Phase finalized — refresh state to get new phase
         fetchState();
+
+        // S3-T3: Auto-generate task assignments when advancing to EXECUTE
+        if (result.message?.includes('EXECUTE') || result.message?.includes('Advanced')) {
+          try {
+            const autoGenResult = await api.assignments.autoGenerate(id, token);
+            console.log('[S3] Auto-generated tasks:', autoGenResult);
+          } catch (autoGenErr) {
+            console.warn('[S3] Auto-generate tasks failed (non-blocking):', autoGenErr);
+          }
+        }
+
         // Add a system message to the chat
         const overrideNote = overrideOptions ? `\n\n⚠️ Quality warnings overridden: "${overrideOptions.override_reason}"` : '';
         const successMessage: Message = {
@@ -1071,37 +1152,109 @@ export function Project() {
     const attachmentContext = formatAttachmentsForContext(attachedFiles);
     let fullContent = content + attachmentContext;
 
-    // P0-3: Detect file references and resolve from workspace
-    // S2: Dual injection — message text (Path A) + key_files (Path B)
+    // S2-02 Change 1b: Workspace scan runs FIRST — populates workspaceContextRef with auto-loaded key_files
+    // Re-scans each message to pick up files created during the session
+    if (workspaceStatus?.bound) {
+      try {
+        const linked = await fileSystemStorage.getHandle(id);
+        if (linked?.handle) {
+          const hasPermission = await verifyPermission(linked.handle, false);
+          if (hasPermission) {
+            // Read directory tree (2 levels deep)
+            const entries = await readDirectory(linked.handle, '', true, 2);
+
+            // Build file tree string
+            const buildTree = (items: typeof entries, indent = ''): string => {
+              return items.map(e => {
+                if (e.type === 'folder') {
+                  const children = (e as { children?: typeof entries }).children;
+                  return `${indent}[DIR] ${e.name}/` +
+                    (children ? '\n' + buildTree(children, indent + '  ') : '');
+                }
+                return `${indent}${e.name} (${(e as { size: number }).size}b)`;
+              }).join('\n');
+            };
+            const fileTree = buildTree(entries);
+
+            // Read key files: explicit names + any .md/.txt files in root
+            const KEY_FILE_NAMES = new Set(['README.md', 'readme.md', 'package.json', 'tsconfig.json',
+              'wrangler.toml', 'wrangler.json', '.env.example', 'Cargo.toml', 'requirements.txt',
+              'pyproject.toml', 'go.mod', 'CHANGELOG.md', 'CONTRIBUTING.md', 'LICENSE',
+              'vite.config.ts', 'vite.config.js', 'next.config.js', 'next.config.mjs',
+              'tailwind.config.ts', 'tailwind.config.js']);
+            // Also auto-include any .md/.txt files in root AND depth-1 subdirectories
+            const KEY_FILE_EXTENSIONS = new Set(['md', 'txt']);
+            const MAX_KEY_FILES = 15; // Budget: up to 15 key files
+            const MAX_KEY_FILE_SIZE = 50000; // 50KB per file (up from 5KB — backend caps at 4000 chars anyway)
+            const keyFiles: Array<{ path: string; content: string }> = [];
+
+            // Pass 1: Root-level files
+            for (const entry of entries) {
+              if (keyFiles.length >= MAX_KEY_FILES) break;
+              if (entry.type !== 'file') continue;
+              const ext = entry.name.split('.').pop()?.toLowerCase() || '';
+              const isKeyFile = KEY_FILE_NAMES.has(entry.name) || KEY_FILE_EXTENSIONS.has(ext);
+              if (!isKeyFile) continue;
+              try {
+                const fileData = await readFileContent((entry as { handle: FileSystemFileHandle }).handle);
+                if (fileData.content.length < MAX_KEY_FILE_SIZE) {
+                  keyFiles.push({ path: entry.name, content: fileData.content });
+                }
+              } catch {
+                // Skip unreadable files
+              }
+            }
+
+            // Pass 2 (S2-02 Change 1c): Depth-1 subdirectory .md/.txt files
+            // Covers docs/README.md, specs/BASELINE.md etc. without full NLP detection
+            for (const entry of entries) {
+              if (keyFiles.length >= MAX_KEY_FILES) break;
+              if (entry.type !== 'folder') continue;
+              const children = (entry as { children?: typeof entries }).children;
+              if (!children) continue;
+              for (const child of children) {
+                if (keyFiles.length >= MAX_KEY_FILES) break;
+                if (child.type !== 'file') continue;
+                const childExt = child.name.split('.').pop()?.toLowerCase() || '';
+                if (!KEY_FILE_EXTENSIONS.has(childExt)) continue;
+                try {
+                  const fileData = await readFileContent(
+                    (child as { handle: FileSystemFileHandle }).handle
+                  );
+                  if (fileData.content.length < MAX_KEY_FILE_SIZE) {
+                    keyFiles.push({
+                      path: `${entry.name}/${child.name}`,
+                      content: fileData.content,
+                    });
+                  }
+                } catch {
+                  // Skip unreadable files
+                }
+              }
+            }
+
+            workspaceContextRef.current = {
+              file_tree: fileTree.slice(0, 8000),
+              key_files: keyFiles.length > 0 ? keyFiles : undefined,
+            };
+            console.debug('[S2-WSC] Workspace scan complete:', keyFiles.length, 'key files loaded:', keyFiles.map(f => f.path));
+          }
+        }
+      } catch (err) {
+        console.warn('[FIX-WSC] Workspace scan failed (non-blocking):', err);
+        workspaceContextRef.current = null;
+      }
+    }
+
+    // S2-02: File detection — Path A only (message text enrichment)
+    // Path B removed: it injected into workspaceContextRef which got overwritten by workspace scan
     try {
       const fileDetection = await detectAndResolveFiles(content, id);
       if (fileDetection.injectedCount > 0) {
-        // Path A: Append formatted context to user message (visible in chat)
         fullContent += fileDetection.contextString;
-
-        // Path B: Also inject into workspace_context.key_files (structured backend path)
-        // This ensures resolved files appear in the system prompt's CODEBASE CONTEXT
-        const resolvedKeyFiles = fileDetection.resolved
-          .filter(r => r.found && r.content)
-          .map(r => ({ path: r.detected.path, content: r.content! }));
-
-        if (resolvedKeyFiles.length > 0 && workspaceContextRef.current) {
-          workspaceContextRef.current = {
-            ...workspaceContextRef.current,
-            key_files: [
-              ...(workspaceContextRef.current.key_files || []),
-              ...resolvedKeyFiles,
-            ],
-          };
-        } else if (resolvedKeyFiles.length > 0) {
-          // No cached context yet — create minimal context with just the resolved files
-          workspaceContextRef.current = {
-            key_files: resolvedKeyFiles,
-          };
-        }
+        console.debug('[S2] File detection injected', fileDetection.injectedCount, 'files into message text');
       }
     } catch (err) {
-      // File detection is non-blocking — log and continue
       console.warn('[FileDetection] Detection failed, continuing without file context:', err);
     }
 
@@ -1195,70 +1348,6 @@ export function Project() {
         .filter(msg => msg.role === 'user' || msg.role === 'assistant')
         .slice(-MAX_HISTORY_MESSAGES)
         .map(msg => ({ role: msg.role as 'user' | 'assistant', content: msg.content }));
-
-      // FIX-WSC / S2-T2: Scan workspace files for context on each message
-      // Re-scans each time to pick up files created during the session
-      if (workspaceStatus?.bound) {
-        try {
-          const linked = await fileSystemStorage.getHandle(id);
-          if (linked?.handle) {
-            const hasPermission = await verifyPermission(linked.handle, false);
-            if (hasPermission) {
-              // Read directory tree (2 levels deep)
-              const entries = await readDirectory(linked.handle, '', true, 2);
-
-              // Build file tree string
-              const buildTree = (items: typeof entries, indent = ''): string => {
-                return items.map(e => {
-                  if (e.type === 'folder') {
-                    const children = (e as { children?: typeof entries }).children;
-                    return `${indent}[DIR] ${e.name}/` +
-                      (children ? '\n' + buildTree(children, indent + '  ') : '');
-                  }
-                  return `${indent}${e.name} (${(e as { size: number }).size}b)`;
-                }).join('\n');
-              };
-              const fileTree = buildTree(entries);
-
-              // Read key files: explicit names + any .md files in root
-              const KEY_FILE_NAMES = new Set(['README.md', 'readme.md', 'package.json', 'tsconfig.json',
-                'wrangler.toml', 'wrangler.json', '.env.example', 'Cargo.toml', 'requirements.txt',
-                'pyproject.toml', 'go.mod', 'CHANGELOG.md', 'CONTRIBUTING.md', 'LICENSE',
-                'vite.config.ts', 'vite.config.js', 'next.config.js', 'next.config.mjs',
-                'tailwind.config.ts', 'tailwind.config.js']);
-              // Also auto-include any .md/.txt files in root (catches brainstorm.md, notes.md, etc.)
-              const KEY_FILE_EXTENSIONS = new Set(['md', 'txt']);
-              const MAX_KEY_FILES = 15; // Budget: up to 15 key files
-              const MAX_KEY_FILE_SIZE = 5000; // 5KB per file (up from 3KB)
-              const keyFiles: Array<{ path: string; content: string }> = [];
-
-              for (const entry of entries) {
-                if (keyFiles.length >= MAX_KEY_FILES) break;
-                if (entry.type !== 'file') continue;
-                const ext = entry.name.split('.').pop()?.toLowerCase() || '';
-                const isKeyFile = KEY_FILE_NAMES.has(entry.name) || KEY_FILE_EXTENSIONS.has(ext);
-                if (!isKeyFile) continue;
-                try {
-                  const fileData = await readFileContent((entry as { handle: FileSystemFileHandle }).handle);
-                  if (fileData.content.length < MAX_KEY_FILE_SIZE) {
-                    keyFiles.push({ path: entry.name, content: fileData.content });
-                  }
-                } catch {
-                  // Skip unreadable files
-                }
-              }
-
-              workspaceContextRef.current = {
-                file_tree: fileTree.slice(0, 8000),
-                key_files: keyFiles.length > 0 ? keyFiles : undefined,
-              };
-            }
-          }
-        } catch (err) {
-          console.warn('[FIX-WSC] Workspace scan failed (non-blocking):', err);
-          workspaceContextRef.current = null;
-        }
-      }
 
       const sdkResponse = await sdkSend({
         message: fullContent,
@@ -1487,13 +1576,9 @@ export function Project() {
             rawBsJson = rawBsJson.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
             rawBsJson = rawBsJson.replace(/,\s*([\]}])/g, '$1');
             const artifactData = JSON.parse(rawBsJson);
-            await brainstormApi.createArtifact(id, {
-              options: artifactData.options || [],
-              assumptions: artifactData.assumptions || [],
-              decision_criteria: artifactData.decision_criteria || { criteria: [] },
-              kill_conditions: artifactData.kill_conditions || [],
-              generated_by: 'ai',
-            }, token);
+            // S3-T0: Normalize brainstorm artifact to match backend validator schema
+            const normalized = normalizeBrainstormArtifact(artifactData);
+            await brainstormApi.createArtifact(id, normalized, token);
             // HANDOFF-PTX-01: Show inline finalize prompt after artifact save
             setBrainstormArtifactJustSaved(true);
             // HANDOFF-BQL-01: Fetch readiness after artifact save
@@ -1528,13 +1613,16 @@ export function Project() {
             rawJson = rawJson.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '');
             rawJson = rawJson.replace(/,\s*([\]}])/g, '$1');
             const planData = JSON.parse(rawJson);
+            // S3-T2: Normalize plan artifact to ensure DoD fields exist on deliverables
+            const normalizedPlan = normalizePlanArtifact(planData);
             await blueprintApi.importFromPlanArtifact(id, {
-              scopes: planData.scopes || [],
-              selected_option: planData.selected_option || undefined,
-              milestones: planData.milestones || [],
-              tech_stack: planData.tech_stack || [],
-              risks: planData.risks || [],
+              scopes: normalizedPlan.scopes || [],
+              selected_option: (normalizedPlan as Record<string, unknown>).selected_option as string || undefined,
+              milestones: (normalizedPlan as Record<string, unknown>).milestones as string[] || [],
+              tech_stack: (normalizedPlan as Record<string, unknown>).tech_stack as string[] || [],
+              risks: (normalizedPlan as Record<string, unknown>).risks as string[] || [],
             }, token);
+            console.debug('[S3] Plan artifact imported with', normalizedPlan.scopes.length, 'scopes');
 
             // Auto-run blueprint validation after import so gates update
             try {

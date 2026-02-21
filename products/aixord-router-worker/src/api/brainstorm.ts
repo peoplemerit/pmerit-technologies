@@ -22,6 +22,61 @@ const brainstorm = new Hono<{ Bindings: Env }>();
 brainstorm.use('/*', requireAuth);
 
 // ═══════════════════════════════════════════════════════════════════
+// S3-T1: Defensive parsing helpers for brainstorm artifact fields
+// AI may store flat schemas (name instead of title, string[] criteria, etc.)
+// These helpers normalize DB rows to the types validators expect.
+// ═══════════════════════════════════════════════════════════════════
+
+function safeParseOptions(raw: string): BrainstormOption[] {
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((opt: Record<string, unknown>, i: number) => ({
+      id: String(opt.id || `opt-${i + 1}`),
+      title: String(opt.title || opt.name || `Option ${i + 1}`),
+      description: String(opt.description || ''),
+      assumptions: Array.isArray(opt.assumptions) ? opt.assumptions.map(String) : [],
+      kill_conditions: Array.isArray(opt.kill_conditions) ? opt.kill_conditions.map(String) : [],
+      pros: Array.isArray(opt.pros) ? opt.pros.map(String) : [],
+      cons: Array.isArray(opt.cons) ? opt.cons.map(String) : [],
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function safeParseDecisionCriteria(raw: string): BrainstormDecisionCriteria {
+  try {
+    const parsed = JSON.parse(raw || '{}');
+    // AI may send string[] instead of { criteria: [...] }
+    if (Array.isArray(parsed)) {
+      return {
+        criteria: parsed.map((c: unknown) => ({
+          name: typeof c === 'string' ? c : String(c),
+          weight: 3,
+          description: '',
+        })),
+      };
+    }
+    if (parsed.criteria && Array.isArray(parsed.criteria)) {
+      return parsed as BrainstormDecisionCriteria;
+    }
+    return { criteria: [] };
+  } catch {
+    return { criteria: [] };
+  }
+}
+
+function safeParseStringArray(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw || '[]');
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // Validation Engine (Task A2)
 //
 // Two tiers:
@@ -457,10 +512,11 @@ brainstorm.post('/:projectId/brainstorm/validate', async (c) => {
     });
   }
 
-  const options: BrainstormOption[] = JSON.parse(row.options as string || '[]');
-  const assumptions: string[] = JSON.parse(row.assumptions as string || '[]');
-  const decisionCriteria: BrainstormDecisionCriteria = JSON.parse(row.decision_criteria as string || '{}');
-  const killConditions: string[] = JSON.parse(row.kill_conditions as string || '[]');
+  // S3-T1: Use defensive parsing to handle AI-generated schema variations
+  const options: BrainstormOption[] = safeParseOptions(row.options as string);
+  const assumptions: string[] = safeParseStringArray(row.assumptions as string);
+  const decisionCriteria: BrainstormDecisionCriteria = safeParseDecisionCriteria(row.decision_criteria as string);
+  const killConditions: string[] = safeParseStringArray(row.kill_conditions as string);
 
   const result = validateBrainstormArtifact(options, assumptions, decisionCriteria, killConditions);
 
@@ -506,10 +562,11 @@ brainstorm.get('/:projectId/brainstorm/validation', async (c) => {
     });
   }
 
-  const options: BrainstormOption[] = JSON.parse(row.options as string || '[]');
-  const assumptions: string[] = JSON.parse(row.assumptions as string || '[]');
-  const decisionCriteria: BrainstormDecisionCriteria = JSON.parse(row.decision_criteria as string || '{}');
-  const killConditions: string[] = JSON.parse(row.kill_conditions as string || '[]');
+  // S3-T1: Use defensive parsing to handle AI-generated schema variations
+  const options: BrainstormOption[] = safeParseOptions(row.options as string);
+  const assumptions: string[] = safeParseStringArray(row.assumptions as string);
+  const decisionCriteria: BrainstormDecisionCriteria = safeParseDecisionCriteria(row.decision_criteria as string);
+  const killConditions: string[] = safeParseStringArray(row.kill_conditions as string);
 
   const result = validateBrainstormArtifact(options, assumptions, decisionCriteria, killConditions);
 
@@ -550,10 +607,11 @@ brainstorm.get('/:projectId/brainstorm/readiness', async (c) => {
     } satisfies BrainstormReadiness);
   }
 
-  const options: BrainstormOption[] = JSON.parse(row.options as string || '[]');
-  const assumptions: string[] = JSON.parse(row.assumptions as string || '[]');
-  const decisionCriteria: BrainstormDecisionCriteria = JSON.parse(row.decision_criteria as string || '{}');
-  const killConditions: string[] = JSON.parse(row.kill_conditions as string || '[]');
+  // S3-T1: Use defensive parsing to handle AI-generated schema variations
+  const options: BrainstormOption[] = safeParseOptions(row.options as string);
+  const assumptions: string[] = safeParseStringArray(row.assumptions as string);
+  const decisionCriteria: BrainstormDecisionCriteria = safeParseDecisionCriteria(row.decision_criteria as string);
+  const killConditions: string[] = safeParseStringArray(row.kill_conditions as string);
 
   const readiness = computeBrainstormReadiness(options, assumptions, decisionCriteria, killConditions);
 
@@ -565,5 +623,5 @@ brainstorm.get('/:projectId/brainstorm/readiness', async (c) => {
 });
 
 // Export the validateBrainstormArtifact function for use in state.ts finalize
-export { validateBrainstormArtifact, computeBrainstormReadiness };
+export { validateBrainstormArtifact, computeBrainstormReadiness, safeParseOptions, safeParseDecisionCriteria, safeParseStringArray };
 export default brainstorm;

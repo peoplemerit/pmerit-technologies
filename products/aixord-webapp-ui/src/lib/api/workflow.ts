@@ -210,6 +210,18 @@ export interface TaskBoardData {
 }
 
 export const assignmentsApi = {
+  // S3-T3: Auto-generate task assignments from blueprint deliverables
+  async autoGenerate(
+    projectId: string,
+    token: string
+  ): Promise<{ created: number; assignments: TaskAssignmentData[] }> {
+    return request<{ created: number; assignments: TaskAssignmentData[] }>(
+      `/projects/${projectId}/assignments/auto-generate`,
+      { method: 'POST' },
+      token
+    );
+  },
+
   // CRUD
   async assign(
     projectId: string,

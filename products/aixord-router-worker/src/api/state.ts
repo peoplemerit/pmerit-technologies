@@ -15,8 +15,7 @@ import type { Env } from '../types';
 import { requireAuth } from '../middleware/requireAuth';
 import { log } from '../utils/logger';
 import { evaluateAllGates } from '../services/gateRules';
-import { validateBrainstormArtifact } from './brainstorm';
-import type { BrainstormOption, BrainstormDecisionCriteria } from '../types';
+import { validateBrainstormArtifact, safeParseOptions, safeParseDecisionCriteria, safeParseStringArray } from './brainstorm';
 import {
   computeProjectReadiness,
   getConservationSnapshot,
@@ -736,11 +735,11 @@ state.post('/:projectId/phases/:phase/finalize', async (c) => {
         detail: `Brainstorm artifact v${artifactRow.version} (${artifactRow.status})`,
       });
 
-      // Run full validation engine
-      const options: BrainstormOption[] = JSON.parse(artifactRow.options as string || '[]');
-      const assumptions: string[] = JSON.parse(artifactRow.assumptions as string || '[]');
-      const decisionCriteria: BrainstormDecisionCriteria = JSON.parse(artifactRow.decision_criteria as string || '{}');
-      const killConditions: string[] = JSON.parse(artifactRow.kill_conditions as string || '[]');
+      // S3-T1: Use defensive parsing to handle AI-generated schema variations
+      const options = safeParseOptions(artifactRow.options as string);
+      const assumptions = safeParseStringArray(artifactRow.assumptions as string);
+      const decisionCriteria = safeParseDecisionCriteria(artifactRow.decision_criteria as string);
+      const killConditions = safeParseStringArray(artifactRow.kill_conditions as string);
 
       const validation = validateBrainstormArtifact(options, assumptions, decisionCriteria, killConditions);
 
