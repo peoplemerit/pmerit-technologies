@@ -1,0 +1,7 @@
+# PMERIT Technologies — Front Page (Static Site)
+# Deploys the /site/ directory to Cloudflare Pages
+# Domain: technologies.pmerit.com
+
+name = "pmerit-technologies-site"
+compatibility_date = "2025-07-01"
+pages_build_output_dir = "site"
