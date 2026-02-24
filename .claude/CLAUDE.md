@@ -118,6 +118,32 @@ This repository operates under **AIXORD v3.0** governance (Owner Edition).
 
 ---
 
+## D4-CHAT DOCUMENTATION (Standalone Repos)
+
+D4-CHAT docs now live in `C:\dev\pmerit\aixord-router-worker\docs\`.
+
+On `TECH CONTINUE` startup, the root router loads:
+1. `aixord-router-worker/docs/D4-CHAT_PROJECT_PLAN.md` — Manifest (~100 lines)
+2. `aixord-router-worker/docs/d4-modules/STATUS.md` — Current metrics (~184 lines)
+3. `aixord-router-worker/docs/d4-modules/ROADMAP.md` — Next priorities (~38 lines)
+
+### On-Demand Module Loading (Per Task Type)
+
+| Task Type | Additional Modules (from `aixord-router-worker/docs/d4-modules/`) |
+|-----------|------------------------------------------------------------------|
+| API endpoint work | + `API-REFERENCE.md` + `ARCHITECTURE.md` |
+| Schema/migration | + `DATABASE.md` + `ARCHITECTURE.md` |
+| Security/audit | + `GOVERNANCE-IMPL.md` + `RECONCILIATION.md` |
+| Bug fix | + `ISSUES.md` + `ARCHITECTURE.md` |
+| Context recovery | + `SESSION-HISTORY.md` |
+| Onboarding/audit | + `IDENTITY.md` |
+
+**Rules:**
+- **Max ~800 lines** of docs loaded simultaneously
+- **NEVER load IMPLEMENTATION-LOG.md on startup** — it's archival (1,119 lines)
+
+---
+
 ## PRODUCT PORTFOLIO
 
 | Product | Status | Repository |
