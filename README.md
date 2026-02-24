@@ -2,7 +2,7 @@
 
 **For-Profit Product Development** | Subsidiary of PMERIT (PEOPLE MERIT) LLC
 
-> Technology platform development, premium services, AI governance products, and revenue generation for the PMERIT ecosystem.
+> Technology hub for D4-CHAT platform, premium services, and revenue generation for the PMERIT ecosystem.
 
 ---
 
@@ -22,40 +22,29 @@
 
 ## Products
 
-### Active Products
-
-| Product | Description | Status |
-|---------|-------------|--------|
-| **PantryOS** | Smart pantry management PWA with AI features | Live at [pantryos.pmerit.com](https://pantryos.pmerit.com) |
-| **AIXORD Variants** | AI governance framework packages for Claude, ChatGPT, Gemini | Packaged for distribution |
-| **AI for Curious Minds** | Educational AI content product | In development |
-
-### PantryOS
-Consumer-facing PWA with freemium model (Stripe subscriptions). Includes AI cook suggestions, barcode scanning, cloud sync, receipt OCR. Separate repos:
-- Frontend: `PMERIT-PantryOS/`
-- Backend: `pantryos-api/`
-
-### AIXORD Variants
-Packaged AI governance frameworks sold as digital products. Variants exist for multiple AI platforms (Claude Code, ChatGPT, Gemini). Located in `products/AIXORD-Variants/`.
+| Product | Description | Status | Repository |
+|---------|-------------|--------|-----------|
+| **D4-CHAT** | AI-powered conversational platform (AIXORD implementation) | Active | [`aixord-webapp-ui`](https://github.com/pmerit-foundation/aixord-webapp-ui) + [`aixord-router-worker`](https://github.com/pmerit-foundation/aixord-router-worker) |
+| **PantryOS** | Smart pantry management PWA with AI features | Live | [`PMERIT-PantryOS`](https://github.com/pmerit-foundation/PMERIT-PantryOS) + [`pantryos-api`](https://github.com/pmerit-foundation/pantryos-api) |
+| **AIXORD Companion** | Chrome extension for AIXORD governance | In Development | `products/aixord-companion/` (this repo) |
 
 ---
 
-## Repository Structure
+## This Repository
+
+This repo serves as the **Technologies hub** — hosting the marketing site and the AIXORD Companion Chrome extension.
 
 ```
 pmerit-technologies/
 ├── products/
-│   ├── AIXORD-Variants/          # AIXORD governance packages
-│   │   └── mcp-server/           # KDP MCP server
-│   ├── ai-for-curious-minds/     # Educational AI product
-│   ├── aixord-companion/         # AIXORD companion app
-│   ├── aixord-webapp-ui/         # AIXORD web interface
-│   ├── variant-bundles/          # Packaged bundles for sale
-│   └── pantryos/                 # PantryOS product assets
-├── Product-Stock/                # Product inventory/assets
-├── REVIEW-FEEDBACK-OUTPUT/       # Customer feedback data
-├── templates/                    # Product templates
-├── docs/                         # Documentation
+│   └── aixord-companion/         # AIXORD Companion Chrome extension
+├── site/                         # technologies.pmerit.com front page
+│   ├── index.html
+│   ├── _headers
+│   └── _redirects
+├── wrangler.toml                 # Deploys site/ to Cloudflare Pages
+├── .claude/                      # Claude Code configuration
+├── CONTRIBUTING.md
 └── README.md                     # This file
 ```
 
@@ -65,8 +54,7 @@ pmerit-technologies/
 
 | Stream | Source | Entity |
 |--------|--------|--------|
-| Premium Subscriptions | PantryOS (Stripe) | Technologies LLC |
-| Digital Product Sales | AIXORD variant packages | Technologies LLC |
+| Premium Subscriptions | D4-CHAT + PantryOS (Stripe) | Technologies LLC |
 | Government Contracts | SBIR/STTR (future) | Technologies LLC |
 | Licensing | IP licenses to Foundation | Technologies LLC |
 
@@ -76,20 +64,12 @@ pmerit-technologies/
 
 | Repository | Entity | Purpose |
 |------------|--------|---------|
+| `aixord-webapp-ui/` | Technologies | D4-CHAT frontend (React + Vite) |
+| `aixord-router-worker/` | Technologies | D4-CHAT backend (Hono + Workers) |
 | `PMERIT-PantryOS/` | Technologies | PantryOS frontend PWA |
 | `pantryos-api/` | Technologies | PantryOS backend API |
 | `pmerit-ai-platform/` | Foundation | Free educational platform |
 | `pmerit-api-worker/` | Foundation | Platform backend API |
-
----
-
-## Government Readiness
-
-| Item | Status |
-|------|--------|
-| SAM.gov Registration | Pending (requires EIN) |
-| SBIR/STTR Eligibility | Pending |
-| NAICS Codes | 611420, 611430, 541511, 541519 |
 
 ---
 
