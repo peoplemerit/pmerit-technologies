@@ -1,30 +1,30 @@
 /**
- * D4-CHAT Sync Panel Component
+ * AIXORD Sync Panel Component
  *
  * Provides UI for:
- * - Login to D4-CHAT platform
+ * - Login to AIXORD platform
  * - Link/unlink projects
  * - Sync state to/from cloud
  */
 
 import React, { useState } from 'react';
 import { styles, colors } from '../styles';
-import type { D4ChatSyncState, D4ChatSyncActions } from '../hooks/useD4ChatSync';
+import type { AixordSyncState, AixordSyncActions } from '../hooks/useAixordSync';
 import type { CompanionState } from '../../types';
 
-interface D4ChatSyncProps {
-  syncState: D4ChatSyncState;
-  syncActions: D4ChatSyncActions;
+interface AixordSyncProps {
+  syncState: AixordSyncState;
+  syncActions: AixordSyncActions;
   companionState: CompanionState;
   onStateImported: (state: CompanionState) => void;
 }
 
-export function D4ChatSync({
+export function AixordSync({
   syncState,
   syncActions,
   companionState,
   onStateImported,
-}: D4ChatSyncProps) {
+}: AixordSyncProps) {
   const [showLogin, setShowLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +45,7 @@ export function D4ChatSync({
     try {
       await syncActions.syncToRemote(companionState);
     } catch (error) {
-      console.error('[D4ChatSync] Sync to cloud failed:', error);
+      console.error('[AixordSync] Sync to cloud failed:', error);
     }
   };
 
@@ -72,7 +72,7 @@ export function D4ChatSync({
   if (syncState.authLoading) {
     return (
       <section style={styles.section}>
-        <div style={styles.sectionTitle}>D4-CHAT Sync</div>
+        <div style={styles.sectionTitle}>AIXORD Sync</div>
         <div style={{ textAlign: 'center', padding: '12px', color: colors.textMuted }}>
           Loading...
         </div>
@@ -84,12 +84,12 @@ export function D4ChatSync({
   if (!syncState.isAuthenticated) {
     return (
       <section style={styles.section}>
-        <div style={styles.sectionTitle}>D4-CHAT Sync</div>
+        <div style={styles.sectionTitle}>AIXORD Sync</div>
 
         {!showLogin ? (
           <div style={{ textAlign: 'center' }}>
             <p style={{ fontSize: '11px', color: colors.textMuted, marginBottom: '12px' }}>
-              Connect to D4-CHAT to sync your progress to the cloud.
+              Connect to AIXORD to sync your progress to the cloud.
             </p>
             <button
               onClick={() => setShowLogin(true)}
@@ -100,7 +100,7 @@ export function D4ChatSync({
                 width: '100%',
               }}
             >
-              Login to D4-CHAT
+              Login to AIXORD
             </button>
           </div>
         ) : (
@@ -177,7 +177,7 @@ export function D4ChatSync({
           marginBottom: '8px',
         }}
       >
-        <div style={styles.sectionTitle}>D4-CHAT Sync</div>
+        <div style={styles.sectionTitle}>AIXORD Sync</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '10px', color: colors.success }}>●</span>
           <span style={{ fontSize: '10px', color: colors.textMuted }}>

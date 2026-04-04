@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react';
 import { useStorage } from './hooks/useStorage';
-import { useD4ChatSync } from './hooks/useD4ChatSync';
+import { useAixordSync } from './hooks/useAixordSync';
 import {
   Header,
   ProjectSetup,
@@ -9,14 +9,14 @@ import {
   PromptTemplates,
   SessionNotes,
   HandoffGenerator,
-  D4ChatSync,
+  AixordSync,
 } from './components';
 import { styles, colors } from './styles';
 import type { Phase, GateID, ProjectState, PromptTemplate, CompanionState } from '../types';
 
 export function App() {
   const { state, loading, error, saveState, resetState, generateHandoff } = useStorage();
-  const [syncState, syncActions] = useD4ChatSync();
+  const [syncState, syncActions] = useAixordSync();
 
   const updateState = useCallback(
     (updates: Partial<CompanionState>) => {
@@ -92,7 +92,7 @@ export function App() {
     [state, saveState]
   );
 
-  // Handle state imported from D4-CHAT cloud
+  // Handle state imported from AIXORD cloud
   const handleStateImported = useCallback(
     (importedState: CompanionState) => {
       saveState(importedState);
@@ -178,8 +178,8 @@ export function App() {
 
       <HandoffGenerator onGenerate={generateHandoff} />
 
-      {/* D4-CHAT Cloud Sync */}
-      <D4ChatSync
+      {/* AIXORD Cloud Sync */}
+      <AixordSync
         syncState={syncState}
         syncActions={syncActions}
         companionState={state}

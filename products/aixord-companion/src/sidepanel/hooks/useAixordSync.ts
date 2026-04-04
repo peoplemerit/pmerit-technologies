@@ -1,7 +1,7 @@
 /**
- * D4-CHAT Sync Hook
+ * AIXORD Sync Hook
  *
- * Manages authentication and synchronization with D4-CHAT platform.
+ * Manages authentication and synchronization with AIXORD platform.
  * - Login/logout
  * - Project sync
  * - State sync
@@ -11,11 +11,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { api, type User, type Project, type ProjectState } from '../../lib/api';
 import type { CompanionState, Phase, GateID, GateStatus } from '../../types';
 
-const STORAGE_KEY_TOKEN = 'aixord_d4chat_token';
-const STORAGE_KEY_USER = 'aixord_d4chat_user';
-const STORAGE_KEY_PROJECT_ID = 'aixord_d4chat_project_id';
+const STORAGE_KEY_TOKEN = 'aixord_aixord_token';
+const STORAGE_KEY_USER = 'aixord_aixord_user';
+const STORAGE_KEY_PROJECT_ID = 'aixord_aixord_project_id';
 
-export interface D4ChatSyncState {
+export interface AixordSyncState {
   // Auth
   isAuthenticated: boolean;
   user: User | null;
@@ -36,7 +36,7 @@ export interface D4ChatSyncState {
   projects: Project[];
 }
 
-export interface D4ChatSyncActions {
+export interface AixordSyncActions {
   // Auth
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -54,8 +54,8 @@ export interface D4ChatSyncActions {
   createAndLinkProject: (name: string, objective?: string) => Promise<void>;
 }
 
-export function useD4ChatSync(): [D4ChatSyncState, D4ChatSyncActions] {
-  const [state, setState] = useState<D4ChatSyncState>({
+export function useAixordSync(): [AixordSyncState, AixordSyncActions] {
+  const [state, setState] = useState<AixordSyncState>({
     isAuthenticated: false,
     user: null,
     authLoading: true,
@@ -118,7 +118,7 @@ export function useD4ChatSync(): [D4ChatSyncState, D4ChatSyncActions] {
         setState((prev) => ({ ...prev, authLoading: false }));
       }
     } catch (error) {
-      console.error('[D4ChatSync] Error loading stored auth:', error);
+      console.error('[AixordSync] Error loading stored auth:', error);
       setState((prev) => ({ ...prev, authLoading: false }));
     }
   };
@@ -128,7 +128,7 @@ export function useD4ChatSync(): [D4ChatSyncState, D4ChatSyncActions] {
       const { projects } = await api.listProjects();
       setState((prev) => ({ ...prev, projects }));
     } catch (error) {
-      console.error('[D4ChatSync] Error loading projects:', error);
+      console.error('[AixordSync] Error loading projects:', error);
     }
   };
 
@@ -144,7 +144,7 @@ export function useD4ChatSync(): [D4ChatSyncState, D4ChatSyncActions] {
         remoteState,
       }));
     } catch (error) {
-      console.error('[D4ChatSync] Error loading linked project:', error);
+      console.error('[AixordSync] Error loading linked project:', error);
       // Unlink if project not found
       setState((prev) => ({
         ...prev,
@@ -399,7 +399,7 @@ export function useD4ChatSync(): [D4ChatSyncState, D4ChatSyncActions] {
     }
   }, [state.linkedProjectId]);
 
-  const actions: D4ChatSyncActions = {
+  const actions: AixordSyncActions = {
     login,
     logout,
     linkProject,

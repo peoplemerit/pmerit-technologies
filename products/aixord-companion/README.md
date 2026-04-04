@@ -7,7 +7,7 @@ Free Chrome Side Panel Extension for AI Governance Workflows.
 - **Project Setup**: Define and track your project context
 - **Phase Selector**: Navigate through BRAINSTORM, PLAN, EXECUTE, REVIEW phases
 - **Gate Tracker**: Visual progress through the 17-gate AIXORD v4.3 system
-- **D4-CHAT Cloud Sync**: Authenticate and sync projects, state, and decisions with the D4-CHAT platform
+- **AIXORD Cloud Sync**: Authenticate and sync projects, state, and decisions with the AIXORD platform
 - **Prompt Templates**: Quick prompts and custom templates per phase
 - **Session Notes**: Capture decisions and context for continuity
 - **HANDOFF Generator**: Generate markdown handoffs for session continuity
@@ -55,10 +55,10 @@ npm run watch
 aixord-companion/
 ├── src/
 │   ├── background/          # Service worker
-│   ├── lib/                 # D4-CHAT API client
+│   ├── lib/                 # AIXORD API client
 │   ├── sidepanel/          # React side panel app
 │   │   ├── components/     # UI components (8 modules)
-│   │   ├── hooks/          # React hooks (useStorage, useD4ChatSync)
+│   │   ├── hooks/          # React hooks (useStorage, useAixordSync)
 │   │   ├── App.tsx         # Main app
 │   │   └── styles.ts       # Theme styles
 │   └── types/              # TypeScript types
@@ -104,9 +104,9 @@ aixord-companion/
 - **EXECUTE**: Setup Gates + FX, PD, PR, BP, MS
 - **REVIEW**: All 17 Gates
 
-## D4-CHAT Integration
+## AIXORD Integration
 
-The extension syncs with the D4-CHAT platform backend:
+The extension syncs with the AIXORD platform backend:
 
 - **Authentication**: Email/password login with Bearer token
 - **Project sync**: Create, list, and update projects

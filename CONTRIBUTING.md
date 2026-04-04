@@ -1,6 +1,6 @@
-# Contributing to D4-CHAT
+# Contributing to AIXORD
 
-Welcome to the D4-CHAT development guide. This document covers everything you need to set up your development environment, understand the architecture, write tests, and deploy changes.
+Welcome to the AIXORD development guide. This document covers everything you need to set up your development environment, understand the architecture, write tests, and deploy changes.
 
 ---
 
@@ -53,7 +53,7 @@ pmerit-technologies/
 │       └── vitest.config.ts      # Test configuration
 │
 ├── docs/
-│   └── d4-modules/               # Modular documentation
+│   └── aixord-modules/               # Modular documentation
 │       ├── ARCHITECTURE.md       # Directory structure + tech stack
 │       ├── API-REFERENCE.md      # Endpoint documentation
 │       ├── API-VERSIONING.md     # Versioning strategy
@@ -365,13 +365,13 @@ Frontend maps error codes to recovery actions via `ChatErrorMessage.tsx`.
 
 ## Need Help?
 
-- **Architecture questions**: See `docs/d4-modules/ARCHITECTURE.md`
-- **API endpoints**: See `docs/d4-modules/API-REFERENCE.md`
-- **Database schema**: See `docs/d4-modules/DATABASE.md`
-- **Security concerns**: See `docs/d4-modules/SECURITY-AUDIT.md`
-- **Deployment**: See `docs/d4-modules/DEPLOYMENT.md`
+- **Architecture questions**: See `docs/aixord-modules/ARCHITECTURE.md`
+- **API endpoints**: See `docs/aixord-modules/API-REFERENCE.md`
+- **Database schema**: See `docs/aixord-modules/DATABASE.md`
+- **Security concerns**: See `docs/aixord-modules/SECURITY-AUDIT.md`
+- **Deployment**: See `docs/aixord-modules/DEPLOYMENT.md`
 
 ---
 
-*D4-CHAT Contributing Guide — Phase 6.4 Enterprise Hardening*
+*AIXORD Contributing Guide — Phase 6.4 Enterprise Hardening*
 *Last Updated: 2026-02-17*

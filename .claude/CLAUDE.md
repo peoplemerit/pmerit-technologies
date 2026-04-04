@@ -33,17 +33,17 @@ You should now follow the TECH-specific instructions below.
 
 ## REPO STRUCTURE (Post-Restructure)
 
-D4-CHAT has been extracted to standalone repos. This repo is now a **hub** for:
+AIXORD has been extracted to standalone repos. This repo is now a **hub** for:
 1. The technologies.pmerit.com marketing site
 2. The AIXORD Companion Chrome extension
 
-### D4-CHAT Repos (Standalone)
+### AIXORD Repos (Standalone)
 
 | Component | Repository | Path |
 |-----------|-----------|------|
-| **D4-CHAT Frontend** | `pmerit-foundation/aixord-webapp-ui` | `C:\dev\pmerit\aixord-webapp-ui\` |
-| **D4-CHAT Backend** | `pmerit-foundation/aixord-router-worker` | `C:\dev\pmerit\aixord-router-worker\` |
-| **D4-CHAT Docs** | In backend repo | `aixord-router-worker/docs/` |
+| **AIXORD Frontend** | `pmerit-technologies/aixord-webapp-ui` | `C:\dev\pmerit\aixord-webapp-ui\` |
+| **AIXORD Backend** | `pmerit-technologies/aixord-router-worker` | `C:\dev\pmerit\aixord-router-worker\` |
+| **AIXORD Docs** | In backend repo | `aixord-router-worker/docs/` |
 
 ### This Repository Contains
 
@@ -114,22 +114,22 @@ This repository operates under **AIXORD v3.0** governance (Owner Edition).
 | Command | Action |
 |---------|--------|
 | `TECH CONTINUE` | Resume from current state |
-| `PRODUCT STATUS` | Show D4-CHAT status + companion status |
+| `PRODUCT STATUS` | Show AIXORD status + companion status |
 
 ---
 
-## D4-CHAT DOCUMENTATION (Standalone Repos)
+## AIXORD DOCUMENTATION (Standalone Repos)
 
-D4-CHAT docs now live in `C:\dev\pmerit\aixord-router-worker\docs\`.
+AIXORD docs now live in `C:\dev\pmerit\aixord-router-worker\docs\`.
 
 On `TECH CONTINUE` startup, the root router loads:
-1. `aixord-router-worker/docs/D4-CHAT_PROJECT_PLAN.md` — Manifest (~100 lines)
-2. `aixord-router-worker/docs/d4-modules/STATUS.md` — Current metrics (~184 lines)
-3. `aixord-router-worker/docs/d4-modules/ROADMAP.md` — Next priorities (~38 lines)
+1. `aixord-router-worker/docs/AIXORD_PROJECT_PLAN.md` — Manifest (~100 lines)
+2. `aixord-router-worker/docs/aixord-modules/STATUS.md` — Current metrics (~184 lines)
+3. `aixord-router-worker/docs/aixord-modules/ROADMAP.md` — Next priorities (~38 lines)
 
 ### On-Demand Module Loading (Per Task Type)
 
-| Task Type | Additional Modules (from `aixord-router-worker/docs/d4-modules/`) |
+| Task Type | Additional Modules (from `aixord-router-worker/docs/aixord-modules/`) |
 |-----------|------------------------------------------------------------------|
 | API endpoint work | + `API-REFERENCE.md` + `ARCHITECTURE.md` |
 | Schema/migration | + `DATABASE.md` + `ARCHITECTURE.md` |
@@ -148,7 +148,7 @@ On `TECH CONTINUE` startup, the root router loads:
 
 | Product | Status | Repository |
 |---------|--------|-----------|
-| **D4-CHAT** (AIXORD) | ACTIVE | `aixord-webapp-ui` + `aixord-router-worker` |
+| **AIXORD** (AIXORD) | ACTIVE | `aixord-webapp-ui` + `aixord-router-worker` |
 | **AIXORD Companion** | Chrome Extension | `pmerit-technologies/products/aixord-companion/` |
 | ~~AIXORD Variants~~ | ARCHIVED | Tag: `archive/aixord-variants-final` |
 | ~~AI for Curious Minds~~ | ARCHIVED | Tag: `archive/aixord-variants-final` |
@@ -160,8 +160,8 @@ On `TECH CONTINUE` startup, the root router loads:
 
 | Repository | Entity | Purpose |
 |------------|--------|---------|
-| `aixord-webapp-ui/` | Technologies LLC | D4-CHAT Frontend (React + Vite) |
-| `aixord-router-worker/` | Technologies LLC | D4-CHAT Backend (Hono + Workers) |
+| `aixord-webapp-ui/` | Technologies LLC | AIXORD Frontend (React + Vite) |
+| `aixord-router-worker/` | Technologies LLC | AIXORD Backend (Hono + Workers) |
 | `pmerit-ai-platform/` | Foundation | Free educational platform (Frontend) |
 | `pmerit-api-worker/` | Foundation | Free educational platform (Backend) |
 | `PMERIT-PantryOS/` | Foundation | PantryOS Frontend |

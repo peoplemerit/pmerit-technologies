@@ -1,7 +1,7 @@
 /**
- * D4-CHAT API Client for AIXORD Companion
+ * AIXORD API Client for AIXORD Companion
  *
- * Enables the browser extension to sync with the D4-CHAT platform.
+ * Enables the browser extension to sync with the AIXORD platform.
  * - Authentication via stored token
  * - Project sync (create, list, update)
  * - State sync (phase, gates)
@@ -69,9 +69,9 @@ export interface AuthResponse {
 }
 
 /**
- * D4-CHAT API Client
+ * AIXORD API Client
  */
-export class D4ChatApi {
+export class AixordApi {
   private token: string | null = null;
 
   constructor() {
@@ -295,4 +295,4 @@ export class D4ChatApi {
 }
 
 // Singleton instance
-export const api = new D4ChatApi();
+export const api = new AixordApi();
